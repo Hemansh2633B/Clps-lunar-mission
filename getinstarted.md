@@ -2,7 +2,7 @@
 
 > **NASA Space Apps Challenge 2026** 
 
-Hey there! This is our project for the 2026 NASA Space Apps Challenge. We built a visual browser tool to help team members, educators, and anyone interested in space quickly figure out where and when to land payloads on the Moon’s South Pole.
+Hey there! This is our project for the 2026 NASA Space Apps Challenge. We will build a visual browser tool to help team members, educators, and anyone interested in space quickly figure out where and when to land payloads on the Moon’s South Pole.
 
 Instead of messing around with messy datasets and hard-to-read command-line tools, our app gives you quick visual answers for **solar power availability** and **direct communications back to Earth**.
 
@@ -18,7 +18,7 @@ Our tool lets you pick spots and dates to quickly check:
 
 ##  Data Sources We Used
 
-We pulled together data from different space agencies across the globe so our calculations actually make sense:
+We will pull together data from different space agencies across the globe so our calculations actually make sense:
 
 * **NASA:**
 
