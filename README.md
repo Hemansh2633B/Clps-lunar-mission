@@ -1,0 +1,78 @@
+# 🚀 Moon Landing Simulator - System Architecture & Game Plan
+
+Yo, here is how our NASA Space Apps project actually fits together. Kept it super simple so nobody loses their mind trying to parse this.
+
+---
+
+## 🧱 The Big Picture Architecture
+
+```
+                    ┌────────────────────────┐
+                    │    Frontend UI / UX    │
+                    │   (Buttons & Controls) │
+                    └───────────┬────────────┘
+                                │
+                                ▼
+                    ┌────────────────────────┐
+                    │   Global App State     │
+                    │   (What day? What site?)│
+                    └───────┬────────┬───────┘
+                            │        │
+             Site Info      │        │ Sun/Earth Coords
+                            ▼        ▼
+                    ┌────────────────────────┐
+                    │     The Math Brain     │
+                    │ (Checks if stuff's blocked)│
+                    └───────────┬────────────┘
+                                │
+                                ▼
+                    ┌────────────────────────┐
+                    │    Dashboard & Visuals │
+                    │ (Canvas sky plot & bars)│
+                    └────────────────────────┘
+```
+
+---
+
+## 🛠️ The 3 Main Parts
+
+### 1. Data Stuff (`/data`)
+Where we dump all our raw files.
+* **`sites_data.json`**: List of cool spots on the Moon (Shackleton Rim, Malapert Mountain, etc.) + 360° mountain height outlines so we know where the peaks are.
+* **`celestial_positions.json`**: A giant list of where the Sun and Earth are sitting in the sky for every day/hour of our 30-day lunar cycle.
+* **Maps & Visuals**: Rough background images from NASA, ISRO, and ESA to make the landing spot selector look nice.
+
+### 2. The Logic & Calculation Engine (`/logic`)
+The actual code running under the hood to calculate if your lander dies or stays alive:
+* **Occlusion Checker**: Takes the Sun/Earth coordinates and checks if they are hiding behind a local mountain. If it's behind a mountain = pitch black / no signal.
+* **Solar Calculator**: Figures out how much juice the panels are getting based on Sun angle ($0\%\text{--}100\%$).
+* **Comms Link Checker**: Checks if Earth is in line-of-sight. High enough = `CONNECTED`, blocked = `BLACKOUT`.
+* **Overlap Window Finder**: Finds sweet spots in time where you have **BOTH** power and signal working together.
+
+### 3. Visuals & User Dashboard (`/ui`)
+The pretty stuff that the user actually clicks on:
+* **Control Bar**: Site selector dropdown + day slider ($1\text{--}30\text{ days}$) to scrub through time.
+* **Skyplot Canvas**: A radical custom visual showing the horizon line, mountain silhouettes, and Sun (yellow dot) + Earth (blue dot) moving around.
+* **Telemetry Displays**: Big readable status indicators, battery percentage gauges, and comms connection meters.
+* **Site Comparison View**: Slaps two sites next to each other so you can quickly flex which site is better.
+
+---
+
+## 📅 Roadmap / Game Plan (Phases)
+
+### Phase 1: Heavy Lifting & Data Prep
+* [ ] Lock down the JSON formats for site coordinates and celestial paths.
+* [ ] Write basic JS/TS functions to compare Sun/Earth angles against mountain heights.
+* [ ] Test the math to make sure the numbers actually make sense.
+
+### Phase 2: Building the Main Interface
+* [ ] Build the site selector UI and timeline slider.
+* [ ] Draw the canvas Skyplot (mountains outline + Sun/Earth dots moving around).
+* [ ] Wire up real-time telemetry readouts (Power bar, Comms status badge).
+* [ ] Draw the dual-status timeline showing green/red operational windows.
+
+### Phase 3: Cool Extras & Polish
+* [ ] Add side-by-side comparison mode for candidate landing sites.
+* [ ] Throw in ISRO/ESA visual maps for site backgrounds.
+* [ ] Make sure the slider feels smooth and doesn't lag out the browser.
+* [ ] Bug fixes, quick UI cleanup, and final demo testing.
