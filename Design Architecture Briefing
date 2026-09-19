@@ -1,0 +1,16 @@
+### 📥 Block 1: The Data Layer (The Foundation)
+This layer holds raw numbers in simple formats.
+*   **`sites_data.json`**: Holds coordinates for landing sites (like Shackleton Crater at the South Pole) and the height profiles of the surrounding crater walls.
+*   **`lunar_angles.json`**: A day-by-day matrix tracking the elevation angle of the Sun and Earth relative to the horizon for a 30-day lunar cycle.
+
+### 🧠 Block 2: The Logic Layer (The Math Brain)
+This script processes the data using three main rules:
+1.  **Sun Visibility Check**: Compares the Sun's daily angle against the surrounding hills. If the angle is below the hills, it outputs `Status = Night`.
+2.  **Solar Power Calculator**: If it is day, it calculates solar panel efficiency based on how high the Sun is in the sky. It outputs a value from `0%` to `100%`.
+3.  **Direct-to-Earth Link Solver**: Checks if the Earth is high enough in the sky to clear local mountain peaks. If yes, it sets `Comms = Connected`. If no, it sets `Comms = Blackout`.
+
+### 🎨 Block 3: The Graphics & UI Layer (The Dashboard View)
+This code renders the visual interface inside the user's web browser:
+*   **Site Picker & Timeline Slider**: Interactive inputs allowing users to switch landing locations and scrub across days 1–30.
+*   **The Horizon Chart**: A custom canvas plot that displays a horizontal ground line with a moving yellow Sun icon and blue Earth icon to visualize tracking elevations.
+*   **Telemetry Readouts**: Circular progress bars and signal bars that update in real-time, changing from green to flashing red when power or communication drops.
