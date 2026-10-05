@@ -1,0 +1,9 @@
+{
+  "name": "lunar-terrain-simulator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node scripts/test_geometry.mjs", "test:browser": "node scripts/browser_test.mjs" },
+  "dependencies": { "three": "0.180.0" },
+  "devDependencies": { "@playwright/test": "1.56.1" }
+}

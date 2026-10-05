@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0a0d12">
+  <title>Polar Recon / Lunar Terrain Prototype</title>
+  <link rel="stylesheet" href="/prototype/styles.css">
+  <script type="importmap">{"imports":{"three":"/vendor/three/build/three.module.js","three/addons/":"/vendor/three/examples/jsm/"}}</script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Return to Lunar Terrain application"><span class="brand-mark">◒</span><span>LUNAR<span class="brand-slash"> / </span>SURFACE</span></a>
+    <div class="top-title"><span class="eyebrow">MISSION PLANNING / 01</span><strong>Polar reconnaissance</strong></div>
+    <div class="top-right"><span class="prototype-tag"><i></i>INTERFACE PROTOTYPE</span><a class="exit-link" href="/" title="Return to established terrain viewer">Exit prototype <span>↗</span></a></div>
+  </header>
+
+  <main class="layout">
+    <aside class="mission-panel">
+      <section class="panel-section">
+        <div class="section-heading"><span class="section-number">01</span><h1>Site parameters</h1></div>
+        <p class="intro">Define the landing area and build its elevation model.</p>
+        <label class="field-label" for="mode">Elevation source</label>
+        <select id="mode"><option value="real">Real lunar DEM</option><option value="synthetic">Synthetic demo</option></select>
+        <p id="dem-status" class="source-status">Reading local DEM…</p>
+        <div class="coordinates">
+          <div><label class="field-label" for="latitude">Latitude <span>°</span></label><input id="latitude" type="number" min="-90" max="90" step="any" value="-89.5"></div>
+          <div><label class="field-label" for="longitude">Longitude <span>° E</span></label><input id="longitude" type="number" min="-180" max="360" step="any" value="45"></div>
+        </div>
+        <label class="field-label" for="radius">Analysis radius <span id="radius-value">5 km</span></label>
+        <input id="radius" type="range" min="0.5" max="20" step="0.5" value="5">
+        <button id="build" class="primary-button" type="button"><span>Build terrain model</span><span>↗</span></button>
+        <p class="helper">DEM coverage varies by source. Out-of-coverage samples remain visible as gaps.</p>
+      </section>
+
+      <section class="panel-section compact-section">
+        <div class="section-heading"><span class="section-number">02</span><h2>Mesh resolution</h2></div>
+        <label class="field-label" for="quality">Surface grid</label>
+        <select id="quality"><option value="low">Low · 129²</option><option value="medium" selected>Medium · 257²</option><option value="high">High · 513²</option></select>
+        <div class="label-with-value"><label class="field-label" for="exaggeration">Vertical relief</label><output id="exaggeration-value">1×</output></div>
+        <input id="exaggeration" type="range" min="1" max="10" step="0.5" value="1">
+        <p id="scale-note" class="helper">True vertical scale · curvature included</p>
+      </section>
+
+      <section class="panel-section compact-section lighting-section">
+        <div class="section-heading"><span class="section-number">03</span><h2>Solar direction</h2></div>
+        <div class="label-with-value"><label class="field-label" for="azimuth">Azimuth · from north</label><output id="azimuth-value">103°</output></div>
+        <input id="azimuth" type="range" min="0" max="360" step="1" value="103">
+        <div class="label-with-value"><label class="field-label" for="elevation">Elevation · above horizon</label><output id="elevation-value">2.5°</output></div>
+        <input id="elevation" type="range" min="-10" max="90" step="0.1" value="2.5">
+        <label class="shadow-toggle" for="shadows"><span><b>Terrain shadows</b><small>Directional light · mesh self-shadowing</small></span><input id="shadows" type="checkbox" checked><span class="toggle-track"></span></label>
+        <p class="helper solar-caveat">Manual sunlight preview. Surrounding terrain outside the DEM crop is not included.</p>
+      </section>
+      <footer class="panel-footer"><span class="live-dot"></span>LOCAL DATA SESSION <span class="footer-divider">/</span> NO API KEY</footer>
+    </aside>
+
+    <section class="terrain-column" aria-label="Interactive lunar terrain preview">
+      <div class="scene-heading">
+        <div><span class="eyebrow">SURFACE MODEL / 3D</span><h2 id="site-title">Choose a landing area</h2></div>
+        <span id="source-badge" class="source-badge">CHECKING SOURCE</span>
+      </div>
+      <div id="viewport" class="viewport">
+        <div class="viewport-grid"></div>
+        <div id="synthetic-alert" class="synthetic-alert" hidden>◈ &nbsp; SYNTHETIC TERRAIN — NOT REAL LUNAR DATA</div>
+        <div id="viewport-loading" class="loading-overlay" hidden><span class="spinner"></span><span>Reading local DEM and building mesh</span></div>
+        <div id="viewport-empty" class="empty-state"><span class="empty-icon">◒</span><strong>No surface model loaded</strong><span>Set the site parameters and build terrain.</span></div>
+        <div id="site-tag" class="site-tag" hidden>LANDING SITE</div>
+        <div class="terrain-caption"><span>LOCAL LUNAR TANGENT FRAME</span><span>X / EAST &nbsp;·&nbsp; Y / NORTH &nbsp;·&nbsp; ELEVATION / UP</span></div>
+        <button id="recenter" class="recenter-button" type="button" title="Recenter the terrain view" hidden>⌖ &nbsp; Recenter view</button>
+        <div class="camera-help">DRAG ORBIT <i>·</i> SHIFT + DRAG PAN <i>·</i> SCROLL ZOOM</div>
+      </div>
+      <div class="scene-bottom"><span id="scene-note">Terrain displays locally from the selected elevation source.</span><span>THREE.JS / LOCAL RENDER</span></div>
+    </section>
+
+    <aside class="readout-panel">
+      <section class="readout-block site-block">
+        <div class="readout-heading"><span class="eyebrow">SITE TELEMETRY</span><span id="model-state" class="state-indicator"><i></i>WAITING</span></div>
+        <div class="site-coordinate"><span id="read-lat">—</span><span id="read-lon">—</span></div>
+        <span class="telemetry-label">LATITUDE &nbsp; / &nbsp; LONGITUDE E</span>
+        <div class="landing-elevation"><div><span class="telemetry-label">LANDING ELEVATION</span><strong id="read-landing">—</strong></div><span class="unit-chip">METERS</span></div>
+      </section>
+
+      <section class="readout-block">
+        <div class="readout-heading"><span class="eyebrow">ELEVATION PROFILE</span><span id="coverage" class="coverage-chip">— COVERAGE</span></div>
+        <div class="range-track"><span id="range-fill" class="range-fill"></span><i id="range-marker" class="range-marker"></i></div>
+        <div class="elevation-extrema"><div><span class="telemetry-label">MINIMUM</span><strong id="read-min">—</strong></div><div class="extrema-right"><span class="telemetry-label">MAXIMUM</span><strong id="read-max">—</strong></div></div>
+        <div class="range-row"><span>LOCAL RELIEF</span><strong id="read-range">—</strong></div>
+      </section>
+
+      <section class="readout-block inspect-block">
+        <div class="readout-heading"><span class="eyebrow">POINT INSPECTOR</span><span id="pin-state" class="pin-state">HOVER / CLICK TO PIN</span></div>
+        <div class="inspect-values"><div><span class="telemetry-label">EAST</span><strong id="inspect-east">—</strong></div><div><span class="telemetry-label">NORTH</span><strong id="inspect-north">—</strong></div><div><span class="telemetry-label">ELEVATION</span><strong id="inspect-height">—</strong></div><div><span class="telemetry-label">RANGE FROM SITE</span><strong id="inspect-distance">—</strong></div></div>
+        <div class="inspect-coordinate"><span id="inspect-lat">Hover over the terrain to read a point.</span><span id="inspect-lon"></span></div>
+      </section>
+
+      <section class="readout-block source-block">
+        <div class="readout-heading"><span class="eyebrow">DATA PROVENANCE</span><span class="source-lock">LOCAL</span></div>
+        <strong id="source-name" class="source-name">Waiting for configured DEM</strong>
+        <p id="source-description" class="source-description">The selected file and its lunar coordinate and elevation reference appear here after extraction.</p>
+      </section>
+
+      <div id="error-panel" class="error-panel" role="alert" hidden></div>
+      <p class="science-note">MISSION PLANNING PROTOTYPE<br><span>Review DEM datum, map coverage, and illumination model before use.</span></p>
+    </aside>
+  </main>
+  <script type="module" src="/prototype/app.js"></script>
+</body>
+</html>

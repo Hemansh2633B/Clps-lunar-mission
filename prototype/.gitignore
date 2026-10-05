@@ -1,0 +1,10 @@
+.venv/
+node_modules/
+__pycache__/
+.pytest_cache/
+*.pyc
+data/*
+!data/README.md
+dem_config.json
+artifacts/
+test-results/

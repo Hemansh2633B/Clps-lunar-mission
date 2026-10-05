@@ -1,0 +1,9 @@
+{
+  "dem_path": "data/lunar_south_pole_dem.tif",
+  "vertical_unit": "m",
+  "value_kind": "elevation",
+  "elevation_reference": "REPLACE with the elevation datum confirmed in your DEM product label",
+  "lunar_reference_frame": "REPLACE with the lunar body-fixed reference frame and realization confirmed by the product documentation",
+  "elevation_reference_radius_m": 1737400.0,
+  "notes": "Example only. Confirm radius, datum, scaling, offsets, and units for your specific product. Omit scale/offset to use GDAL band metadata."
+}

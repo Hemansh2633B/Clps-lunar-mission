@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b1015">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='24' fill='%23d5f29a'/%3E%3C/svg%3E">
+  <title>Lunar Terrain / Mission Planning</title>
+  <link rel="stylesheet" href="/frontend/styles.css">
+  <script type="importmap">{"imports":{"three":"/vendor/three/build/three.module.js","three/addons/":"/vendor/three/examples/jsm/"}}</script>
+</head>
+<body>
+  <header><a class="brand" href="/">◒ <strong>LUNAR / TERRAIN</strong></a><span>South-pole mission planning · Development MVP</span><span class="header-tag">LOCAL DEM EXPLORER</span></header>
+  <main>
+    <aside>
+      <div class="panel-heading"><span class="eyebrow">01 / MISSION AREA</span><h1>Explore the surface.</h1><p>Choose a landing coordinate and inspect the surrounding lunar terrain.</p></div>
+      <form id="terrain-form">
+        <fieldset><legend>Data source</legend>
+          <label for="mode">Terrain mode</label><select id="mode"><option value="real">Real lunar DEM</option><option value="synthetic">Synthetic Demo Mode</option></select>
+          <p id="source-status" class="help">Checking local DEM…</p>
+        </fieldset>
+        <fieldset><legend>Location</legend>
+          <div class="input-row"><div><label for="latitude">Latitude <span>°</span></label><input id="latitude" type="number" min="-90" max="90" step="any" value="-89.5" required></div><div><label for="longitude">Longitude <span>° E</span></label><input id="longitude" type="number" min="-180" max="360" step="any" value="45" required></div></div>
+          <label for="radius">Analysis radius <span>km</span></label><input id="radius" type="number" min="0.5" max="20" step="any" value="5" required>
+          <p class="help">Planetocentric latitude · east-positive longitude.<br>Input −180…180 or 0…360; output −180…180.</p>
+        </fieldset>
+        <fieldset><legend>Terrain</legend>
+          <label for="quality">Terrain quality</label><select id="quality"><option value="low">Low · 129 × 129</option><option value="medium" selected>Medium · 257 × 257</option><option value="high">High · 513 × 513</option></select>
+          <label for="exaggeration">Vertical exaggeration <output id="exaggeration-value">1×</output></label><input id="exaggeration" type="range" min="1" max="10" step="0.5" value="1">
+          <p class="help" id="exaggeration-note">True vertical scale. Lunar curvature included.</p>
+        </fieldset>
+        <button id="generate" type="submit">Generate / update terrain <span>↗</span></button>
+      </form>
+      <fieldset class="lighting-controls"><legend>Lighting / manual Sun</legend>
+        <label for="sun-azimuth">Sun azimuth <output id="sun-azimuth-value">103°</output></label><input id="sun-azimuth" type="range" min="0" max="360" step="1" value="103">
+        <label for="sun-elevation">Sun elevation <output id="sun-elevation-value">2.5°</output></label><input id="sun-elevation" type="range" min="-10" max="90" step="0.1" value="2.5">
+        <label class="checkbox-row" for="shadows"><span>Show terrain shadows</span><input id="shadows" type="checkbox" checked></label>
+        <p class="help" id="sun-note">Azimuth clockwise from local north.<br>Local geometry only; terrain outside the crop can cast additional shadows.</p>
+      </fieldset>
+      <p id="error" role="alert" hidden></p>
+      <div class="science-note">EXPLORATION, NOT FLIGHT VALIDATION<br><span>Verify source metadata and elevations before making mission decisions.</span></div>
+    </aside>
+    <section class="workspace" aria-label="Interactive terrain viewer">
+      <div class="viewport-top"><div><span class="eyebrow">02 / SURFACE VIEW</span><h2 id="view-title">Landing-site terrain</h2></div><span id="render-status" class="status-pill">Awaiting terrain</span></div>
+      <div id="viewport"><div id="source-banner" hidden></div><div id="loading" hidden>Extracting terrain…</div><div id="empty">Generate a terrain model to begin.</div><div id="landing-label" hidden><span>LANDING SITE</span></div><div id="view-metadata" hidden></div><button id="reset-view" type="button" title="Reset camera to the landing site" hidden>Reset view</button><div class="view-guide">DRAG to orbit <b>·</b> RIGHT DRAG to pan <b>·</b> SCROLL to zoom</div><div id="inspection"><span class="eyebrow">SURFACE INSPECTOR</span><p id="inspection-text">Hover on terrain · click to pin a sample.</p></div></div>
+      <div class="stats" id="stats"><div><span>Landing elevation</span><strong>—</strong></div><div><span>Minimum</span><strong>—</strong></div><div><span>Maximum</span><strong>—</strong></div><div><span>Terrain range</span><strong>—</strong></div><div><span>Analysis radius</span><strong>—</strong></div><div><span>Grid</span><strong>—</strong></div></div>
+      <p class="help" id="data-details">Elevation values and metadata appear after terrain extraction.</p>
+    </section>
+  </main>
+  <script type="module" src="/frontend/app.js"></script>
+</body>
+</html>
