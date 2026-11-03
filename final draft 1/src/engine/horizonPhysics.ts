@@ -42,9 +42,10 @@ export function flatProfile(label = 'Idealized spherical horizon'): TerrainProfi
 
 export function terrainElevationAt(profile: TerrainProfile, azimuthDeg: number): number {
   const az = wrap360(azimuthDeg);
+  const count = profile.elevations.length;
   const idx = az / profile.resolutionDeg;
-  const i0 = Math.floor(idx) % 360;
-  const i1 = (i0 + 1) % 360;
+  const i0 = Math.floor(idx) % count;
+  const i1 = (i0 + 1) % count;
   const f = idx - Math.floor(idx);
   return profile.elevations[i0] * (1 - f) + profile.elevations[i1] * f;
 }

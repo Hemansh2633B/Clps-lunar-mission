@@ -18,16 +18,17 @@ This document maps every working capability from the repository’s `prototype/`
 | Optional NASA LOLA COG subset downloader | `backend/download_lola_subset.py` | Range-read probe, native-resolution crop, provenance JSON, SHA-256, landing-elevation preservation check. |
 | DEM configuration template | `dem_config.example.json`, `data/README.md` | Unfilled `REPLACE` fields rejected. |
 | Python API/coordinate/crop/downloader tests | `tests/python/` | 67 tests, including new horizon-mask tests. |
-| Node geometry checks | `scripts/geometry-check.ts` | Curvature, pole coordinates, Sun directions, mesh topology, NoData, synthetic demo, horizon ray-marching. |
-| Browser/WebGL integration checks | `scripts/browser-test.mjs` | Mission console + Terrain Lab: inspection, exaggeration, shadow pixel change, manual Sun, horizon, real-mode safeguard. |
+| Node geometry checks | `scripts/geometry-check.ts` | Curvature, pole coordinates, Sun directions, mesh topology, NoData, synthetic demo, horizon ray-marching, edge-inset coverage. |
+| Browser/WebGL integration checks | `scripts/browser-test.mjs` | Mission console + Terrain Lab: orbit drag, keyboard orbit, camera presets, inspection, exaggeration, shadow pixel brightening, Sun extremes, all grid qualities, radius, horizon import, real-mode safeguard, mobile layout. |
 | Isolated planning-console prototype UI | `TerrainLab.tsx` | Re-homed into the SELENE aerospace design system rather than served as a separate page. |
 
 ## New integration beyond the prototype
 
-- **360° horizon ray-marching** from the loaded DEM grid (`backend/horizon.py`, `src/terrain/horizon.ts`), with per-ray coverage and CSV export.
-- **Send DEM horizon to mission planner**: creates a custom landing site whose terrain mask is derived from the DEM, with an explicit source-frame warning.
+- **360° horizon ray-marching** from the loaded DEM grid (`backend/horizon.py`, `src/terrain/horizon.ts`), with configurable azimuth bins / eye height, per-ray coverage, disclosed edge inset, CSV export, and TypeScript↔Python parity tests.
+- **Sample-preserving mission import**: creates a `kind: 'dem'` landing site whose terrain elevations are the ray-marched samples verbatim — no illustrative re-synthesis. Incomplete real masks are blocked; synthetic imports stay labeled.
 - **Educator story** “From DEM to Horizon Mask” in the Field Guide.
-- **Single-command full stack**: `npm run dev:full` starts the Flask API and Vite console together.
+- **Single-command full stack**: `npm run dev:full` starts the Flask API and Vite console together and forwards `--dem`, `--dem-config`, `--api-port`, `--web-port`.
+- **Real-DEM verification fixture**: `scripts/fetch-lola-verification-fixture.py` + `npm run test:real-dem` exercise projected lunar GeoTIFF loading without NASA network access. See `docs/VERIFICATION.md` for caveats.
 
 ## Scientific boundary
 

@@ -22,7 +22,11 @@ Optional full stack with the real-DEM Terrain Lab backend:
 python3 -m venv .venv
 .venv/bin/python -m pip install -r backend/requirements.txt -r requirements-dev.txt
 npm run dev:full     # Flask terrain API on :8000 + Vite console on :5173
+# Alternate ports / DEM:
+npm run dev:full -- --api-port 8002 --web-port 5174 --dem-config data/verification/lola_verification_config.json
 ```
+
+`dev:full` forwards `--dem` / `--dem-config` to Flask and points Vite’s `/api` proxy at the chosen API port. `npm run dev:api -- --port 8001` also works; set `SELENE_API_PORT=8001` for a separately started Vite dev/preview server.
 
 `npm run dev` alone still works: the mission console is fully functional, and Terrain Lab falls back to a clearly labeled built-in synthetic demo when the API is offline. Real DEM mode requires the backend and never silently falls back.
 
@@ -30,12 +34,22 @@ Production build and checks:
 
 ```bash
 npm run build        # tsc + vite build
-npm test             # Vitest engine / physics / export unit tests
-npm run test:python  # 67 backend/DEM/horizon/downloader tests
+npm test             # 16 Vitest engine / physics / DEM-profile / export tests
+npm run test:python  # 68 backend/DEM/horizon/downloader tests
 npm run test:geometry# Three.js geometry / synthetic / horizon checks
-npm run test:browser # Playwright mission console + Terrain Lab E2E
-npm run test:all     # unit + python + geometry
+npm run test:parity  # TypeScript ↔ Python horizon ray-marcher parity
+npm run test:browser # Playwright mission console + Terrain Lab E2E (incl. mobile)
+npm run test:all     # unit + python + geometry + parity
 npm run typecheck
+```
+
+Optional real-DEM verification fixture (small public LOLA-derived grid; **software verification only**, gap-filled downsample):
+
+```bash
+.venv/bin/python scripts/fetch-lola-verification-fixture.py
+npm run build
+.venv/bin/python -m backend.server --dem-config data/verification/lola_verification_config.json --port 8001
+npm run test:real-dem   # in another terminal; tests http://localhost:8001
 ```
 
 > Paths contain a space (`final draft 1`). Always quote them in shell commands.
@@ -62,7 +76,9 @@ The dev server is configured with `allowedHosts: true` so it works behind Arena 
 | Inspect real/synthetic DEMs in 3D with orbit/pan/zoom | **Terrain Lab** (`T`) |
 | Hover/click surface samples, exaggerate relief, toggle shadows | Terrain Lab inspector |
 | Ray-march a 360° DEM horizon and send it to the mission planner | Terrain Lab → Compute horizon → Use in mission |
+| Preserve DEM horizon samples verbatim in mission sites (no illustrative ripple) | DEM-derived custom sites + Site context provenance |
 | Load prototype example locations or the selected mission site | Terrain Lab examples / Load selected site |
+| Keyboard-orbit the 3D viewport, top/oblique presets, zoom buttons | Focus canvas: arrows / + / − / Home |
 
 ### Keyboard shortcuts
 
@@ -79,8 +95,10 @@ The repository’s original prototype has been integrated as **Terrain Lab** (`T
 - **Real DEM backend** — Flask + Rasterio/GDAL + PyProj. Loads single-band lunar GeoTIFF/PDS rasters, validates lunar CRS, spherical radius, vertical datum, units, scale/offset, and body-frame metadata. Extracts a bounded, bilinear, landing-centered grid (0.5–20 km; 129/257/513 samples). NoData remains a gap.
 - **Synthetic demo** — available from the backend and as a built-in client fallback so the lab is never empty. Always labeled `SYNTHETIC TERRAIN — NOT REAL LUNAR DATA`.
 - **3D inspector** — Three.js mesh with OrbitControls, exact landing marker, analysis boundary, hover/click sample inspection (east/north/elevation/distance/lat/lon), 1×–10× relief exaggeration, manual Sun az/el, real ephemeris Sun preview, and terrain self-shadowing.
-- **Horizon ray-marching** — computes a 360° terrain horizon from the loaded grid with per-ray coverage, exports CSV, and can create a custom mission site from the mask. Source-frame alignment is explicitly warned.
+- **Horizon ray-marching** — computes a 360° terrain horizon from the loaded grid with configurable azimuth bins (1–15°) and eye height (0–50 m), per-ray coverage, CSV export, and mission import. A conservative `sqrt(2)`-spacing edge inset keeps bilinear stencils inside the analysis disk; the excluded annulus is disclosed as `horizon_radius_km` / `edge_inset_m`, never filled.
+- **Sample-preserving mission import** — DEM horizons become `kind: 'dem'` terrain profiles with the exact ray elevations, resolution, coverage, source file/frame, and eye height. No illustrative ripple, base offset, or ±14° clamp is applied. Incomplete real masks are blocked; synthetic imports remain clearly labeled as demo data.
 - **Examples** — south-pole example (−89.5°, 45°, 5 km), near-pole (−89.9°, 0°, 2 km), exact pole (−90°, 45°, 1 km), north-pole reference (+89.5°, 45°, 5 km), plus “Load selected site”.
+- **Responsive / accessible viewport** — mobile layout stacks controls below the canvas, keyboard orbit/zoom, top/oblique presets, and no horizontal overflow at 390 px.
 
 ### Configure a real DEM
 
@@ -98,6 +116,12 @@ npm run dev:api -- --dem-config data/lola_example_config.json
 ```
 
 The downloader preserves native pixels, CRS, NoData, and records source URL, pixel window, UTC time, SHA-256, and a landing-elevation preservation check. It refuses full-raster fallback.
+
+### Sandbox real-DEM verification fixture
+
+NASA PGDA is not reachable from this sandbox, so `scripts/fetch-lola-verification-fixture.py` downloads a small public 512×512 LOLA-derived south-pole grid from GitHub and wraps it as a lunar polar-stereographic GeoTIFF. It is **only** for exercising the real projected-DEM software path: the third-party derivative is a bilinear downsample and fills invalid source pixels, so it does not preserve NoData coverage and is not flight data. Provenance and SHA-256 hashes are written to `data/verification/PROVENANCE.json` (raster ignored by Git).
+
+Verified with this fixture at −89.5°, 45° E, radius 5 km: landing elevation ≈ **−387.3 m**, sampled disk ≈ **−904.2 … +711.4 m**, 100% coverage, horizon max ≈ **12.2°**. See [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
 
 ### Terrain API
 
@@ -119,10 +143,11 @@ final draft 1/
 ├── data/                       # Local DEMs (ignored) + README
 ├── dem_config.example.json
 ├── docs/PROTOTYPE_PORT.md      # Prototype → SELENE feature map
+├── docs/VERIFICATION.md        # Test evidence + real-DEM fixture caveats
 ├── public/assets/              # LROC south-pole mosaic + provenance
-├── scripts/                    # dev-full, browser/geometry/python tests
+├── scripts/                    # dev-full, browser/geometry/python/parity/fixture
 ├── screenshots/                # Captured during verification
-├── tests/python/               # 67 backend tests
+├── tests/python/               # 68 backend tests
 ├── src/
 │   ├── main.tsx / App.tsx      # Entry + state orchestration
 │   ├── types/mission.ts        # Domain interfaces
@@ -139,7 +164,7 @@ final draft 1/
 │   │   └── simulationClient.ts # Cached worker request broker
 │   ├── hooks/useSimulation.ts
 │   ├── terrain/                # Three.js mesh, lighting, coordinates,
-│   │                           # synthetic demo, horizon, API client
+│   │                           # synthetic demo, horizon, mission profile, API client
 │   ├── components/             # Header, catalog, panorama, map, telemetry,
 │   │                           # timeline, comparison, educator, TerrainLab, modals
 │   ├── utils/export.ts         # CSV / JSON report generation
@@ -181,8 +206,9 @@ Heavy window simulations run in a dedicated Web Worker with an LRU result cache,
 
 ### Terrain Lab limitations
 - GPU shadow maps are a **visualization**, not a validated illumination solver. Grazing angles can show aliasing/bias artifacts.
-- The DEM crop does not include occluders outside its radius. Horizon ray-marching reports NoData coverage and never invents terrain.
+- The DEM crop does not include occluders outside its radius. Horizon ray-marching reports NoData coverage and never invents terrain; a disclosed edge inset avoids artificial boundary NoData.
 - DEM body-frame realizations (e.g. `MOON_ME / DE421`) are **not automatically reconciled** with the console’s IAU 2015 ephemeris frame. Sites created from DEM masks carry a frame-check warning.
+- DEM horizon import preserves azimuth samples, but vertical accuracy is not inferred from DEM metadata. The displayed ± value for DEM masks is azimuth sampling half-width, not a certified elevation error.
 
 ### Verified behaviors (unit tests)
 - **Apollo 11**: ~14-day sunlit / ~14-day night cycle, peak Sun > 75°, Earth always > 45°, 100% DTE.
@@ -190,8 +216,10 @@ Heavy window simulations run in a dedicated Web Worker with an LRU result cache,
 - **Chang’e 4 (far side)**: Earth permanently below −30°, 0% DTE, `RELAY REQUIRED`.
 - Libration sweeps > 9° latitude and > 11° longitude over 60 days.
 - Terrain blocks objects that are geometrically above 0°; crossing refinement is sub-minute.
+- **DEM horizon import**: samples preserved verbatim, no clamp/ripple, periodic interpolation at native bin resolution, synthetic labeling, incomplete-real-mask blocking, provenance in JSON/CSV exports.
+- **Horizon parity**: TypeScript and Python ray-marchers agree on synthetic grids, coverage, edge inset, and obstacle ranges.
 
-> **This is a planning and education tool, not a flight-certified analysis.** Replace the illustrative masks with measured LOLA DTMs and use SPICE/DE ephemerides before any operational decision.
+> **This is a planning and education tool, not a flight-certified analysis.** Use measured LOLA DTMs with verified frame/datum metadata and SPICE/DE ephemerides before any operational decision.
 
 ---
 

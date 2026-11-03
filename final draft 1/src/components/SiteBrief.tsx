@@ -23,8 +23,14 @@ export function SiteBrief({ site, current, onHorizonTable, onPin }: Props) {
         </div>
         <p style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.6, margin: 0 }}>{site.description}</p>
         <div>
-          <div className="panel-title" style={{ marginBottom: 6 }}><Mountain size={12} /> Horizon features</div>
-          {site.terrain.features.length === 0 ? (
+          <div className="panel-title" style={{ marginBottom: 6 }}><Mountain size={12} /> {site.terrain.kind === 'dem' ? 'DEM horizon provenance' : 'Horizon features'}</div>
+          {site.terrain.kind === 'dem' ? (
+            <div style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.6 }}>
+              <div>{site.terrain.synthetic ? 'Synthetic demo samples — NOT real lunar data.' : 'Measured/sample elevations preserved; no illustrative ripple added.'}</div>
+              <div className="mono">Source {site.terrain.sourceFile ?? 'unknown'} · {site.terrain.gridSize ?? '?'}² grid · {site.terrain.samplingDeg ?? site.terrain.resolutionDeg}° bins</div>
+              <div className="mono">Coverage {site.terrain.coveragePercent?.toFixed(1) ?? '?'}% · radius {site.terrain.radiusKm ?? '?'} km · horizon {site.terrain.horizonRadiusKm ?? '?'} km · eye {site.terrain.eyeHeightM} m</div>
+            </div>
+          ) : site.terrain.features.length === 0 ? (
             <div style={{ fontSize: 11, color: 'var(--dim)' }}>Idealized flat / spherical horizon. No terrain occlusion modeled.</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -51,10 +57,12 @@ export function SiteBrief({ site, current, onHorizonTable, onPin }: Props) {
           <button className="btn sm" onClick={onHorizonTable}><Table2 size={12} /> Horizon table</button>
           <button className="btn sm primary" onClick={onPin}><Pin size={12} /> Pin scenario</button>
         </div>
-        <div style={{ fontSize: 9, color: site.terrain.sourceFrame ? 'var(--solar)' : 'var(--dim)', lineHeight: 1.5 }}>
-          {site.terrain.sourceFrame
-            ? `DEM-derived horizon · source frame ${site.terrain.sourceFrame}. Verify frame alignment with the IAU 2015 ephemeris before operational use (±${site.terrain.uncertaintyDeg.toFixed(2)}°).`
-            : `Terrain mask is LOLA-inspired and illustrative (±${site.terrain.uncertaintyDeg.toFixed(2)}°). Coordinates are real; elevations are representative. Not for flight certification.`}
+        <div style={{ fontSize: 9, color: site.terrain.kind === 'dem' || site.terrain.sourceFrame ? 'var(--solar)' : 'var(--dim)', lineHeight: 1.5 }}>
+          {site.terrain.kind === 'dem'
+            ? `${site.terrain.synthetic ? 'Synthetic demo' : 'DEM-derived'} horizon · source frame ${site.terrain.sourceFrame ?? 'unspecified'}. Verify frame alignment with the IAU 2015 ephemeris. Azimuth sampling half-width ±${site.terrain.uncertaintyDeg.toFixed(2)}°; ${site.terrain.accuracyNote ?? 'vertical accuracy unverified.'}`
+            : site.terrain.sourceFrame
+              ? `DEM-derived horizon · source frame ${site.terrain.sourceFrame}. Verify frame alignment with the IAU 2015 ephemeris before operational use (±${site.terrain.uncertaintyDeg.toFixed(2)}°).`
+              : `Terrain mask is LOLA-inspired and illustrative (±${site.terrain.uncertaintyDeg.toFixed(2)}°). Coordinates are real; elevations are representative. Not for flight certification.`}
         </div>
       </div>
     </section>

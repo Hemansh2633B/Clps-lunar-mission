@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
-const python = existsSync('.venv/bin/python') ? '.venv/bin/python' : (process.platform === 'win32' ? 'python' : 'python3');
-const child = spawn(python, ['-m', 'pytest', '-q'], { stdio: 'inherit' });
+import { pythonBin } from './python-bin.mjs';
+
+const child = spawn(pythonBin(), ['-m', 'pytest', '-q', ...process.argv.slice(2)], { stdio: 'inherit' });
+child.on('error', (err) => { console.error(err.message); process.exit(1); });
 child.on('exit', (code) => process.exit(code ?? 0));

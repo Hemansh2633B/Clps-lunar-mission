@@ -28,7 +28,7 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
   }, []);
   const utc = new Date(timeMs).toISOString();
   return (
-    <header style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '0 14px', height: 52, borderBottom: '1px solid var(--border)', background: 'linear-gradient(180deg,#10141c,#0b0e13)', flexShrink: 0 }}>
+    <header className="app-header" style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '0 14px', height: 52, borderBottom: '1px solid var(--border)', background: 'linear-gradient(180deg,#10141c,#0b0e13)', flexShrink: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid #2a3441', background: '#0c1017', display: 'grid', placeItems: 'center', position: 'relative' }}>
           <Moon size={16} color="#F59E0B" strokeWidth={1.75} />

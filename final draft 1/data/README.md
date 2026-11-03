@@ -35,4 +35,15 @@ The downloader retains original pixel values, CRS, and NoData in a cropped GeoTI
 
 The example subset covers one region only. A larger analysis radius or another location needs a corresponding DEM. Missing coverage is shown as a gap; real mode does not generate missing terrain. Without a DEM, select the explicitly labeled Synthetic Demo Mode.
 
-See the root README for Windows instructions, scientific conventions, coordinate handling, tests, limitations, and future SPICE integration.
+## Sandbox verification fixture
+
+`scripts/fetch-lola-verification-fixture.py` writes a small LOLA-derived 512×512 south-pole GeoTIFF plus config/provenance into `data/verification/` (ignored by Git). It is a **software verification fixture only**: a third-party bilinear downsample of NASA `LDEM_80S_20MPP_ADJ.TIF` whose invalid pixels were filled by the derivative author. It does not preserve NoData coverage and must not be used for scientific illumination studies.
+
+```bash
+.venv/bin/python scripts/fetch-lola-verification-fixture.py
+npm run build
+.venv/bin/python -m backend.server --dem-config data/verification/lola_verification_config.json --port 8001
+npm run test:real-dem
+```
+
+See the root README and `docs/VERIFICATION.md` for Windows instructions, scientific conventions, coordinate handling, tests, limitations, and frame caveats.

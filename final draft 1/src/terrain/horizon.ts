@@ -17,14 +17,30 @@ function sampleHeight(data: TerrainData, east: number, north: number): number | 
   return h0 * (1 - u) * (1 - v) + h1 * u * (1 - v) + h2 * (1 - u) * v + h3 * u * v;
 }
 
-/** Ray-marched horizon from the loaded grid; NoData rays are reported, never filled. */
+/**
+ * Ray-marched horizon from the loaded grid; NoData rays are reported, never filled.
+ *
+ * A conservative edge inset of sqrt(2) grid spacings guarantees that every
+ * bilinear stencil lies inside the analysis disk, so a fully covered DEM does
+ * not report artificial NoData at the circular boundary. The excluded annulus
+ * is disclosed as `edge_inset_m` / `horizon_radius_km`; it is not filled.
+ */
 export function horizonFromGrid(data: TerrainData, azStepDeg = 2, eyeHeightM = 2): HorizonMask {
+  if (!Number.isInteger(azStepDeg) || azStepDeg < 1 || azStepDeg > 15 || 360 % azStepDeg !== 0) {
+    throw new Error('az_step_deg must be an integer between 1 and 15 that divides 360.');
+  }
+  if (!Number.isFinite(eyeHeightM) || eyeHeightM < 0 || eyeHeightM > 50) {
+    throw new Error('eye_height_m must be between 0 and 50 meters.');
+  }
   const azimuths: number[] = [];
   const elevations: number[] = [];
   const coverage: number[] = [];
   const ranges: number[] = [];
   const radiusM = data.radius_km * 1000;
   const spacing = data.grid.spacing_m;
+  const edgeInsetM = spacing * Math.SQRT2;
+  const horizonRadiusM = Math.max(spacing, radiusM - edgeInsetM);
+  const samplingStepM = Math.max(spacing * 0.5, 1);
   const lunarRadius = data.source.lunar_radius_m;
   const datumRadius = data.source.elevation_reference_radius_m;
   const observerHeight = data.landing_elevation_m + eyeHeightM;
@@ -34,7 +50,7 @@ export function horizonFromGrid(data: TerrainData, azStepDeg = 2, eyeHeightM = 2
     let bestRange = 0;
     let valid = 0;
     let total = 0;
-    for (let distance = spacing; distance <= radiusM + 1e-6; distance += Math.max(spacing * 0.5, 1)) {
+    for (let distance = spacing; distance <= horizonRadiusM + 1e-6; distance += samplingStepM) {
       total++;
       const h = sampleHeight(data, distance * Math.sin(bearing), distance * Math.cos(bearing));
       if (h == null) continue;
@@ -59,6 +75,11 @@ export function horizonFromGrid(data: TerrainData, azStepDeg = 2, eyeHeightM = 2
     latitude: data.latitude,
     longitude: data.longitude,
     radius_km: data.radius_km,
+    horizon_radius_km: Math.round((horizonRadiusM / 1000) * 10000) / 10000,
+    edge_inset_m: Math.round(edgeInsetM * 1000) / 1000,
+    sampling_step_m: Math.round(samplingStepM * 1000) / 1000,
+    grid_size: data.grid.size,
+    grid_spacing_m: spacing,
     eye_height_m: eyeHeightM,
     azimuth_step_deg: azStepDeg,
     azimuths_deg: azimuths,
@@ -68,7 +89,7 @@ export function horizonFromGrid(data: TerrainData, azStepDeg = 2, eyeHeightM = 2
     mean_coverage_percent: Math.round((coverage.reduce((a, b) => a + b, 0) / coverage.length) * 100) / 100,
     synthetic: data.synthetic,
     source: data.source,
-    model: 'Ray-marched DEM grid horizon in the landing tangent frame; spherical curvature included. NoData rays are reported, never filled.',
+    model: 'Ray-marched DEM grid horizon in the landing tangent frame; spherical curvature included. A conservative edge inset keeps bilinear stencils inside the analysis disk. NoData rays are reported, never filled.',
     frame_note: 'Verify the DEM lunar_reference_frame matches the ephemeris body frame before using this mask for mission visibility.',
   };
 }

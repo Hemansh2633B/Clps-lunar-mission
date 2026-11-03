@@ -69,6 +69,12 @@ export interface HorizonMask {
   latitude: number;
   longitude: number;
   radius_km: number;
+  /** Outer annulus excluded so bilinear stencils never cross the analysis-disk edge. */
+  horizon_radius_km: number;
+  edge_inset_m: number;
+  sampling_step_m: number;
+  grid_size: number;
+  grid_spacing_m: number;
   eye_height_m: number;
   azimuth_step_deg: number;
   azimuths_deg: number[];

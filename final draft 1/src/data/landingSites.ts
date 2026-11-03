@@ -1,5 +1,7 @@
 import type { LandingSite, TerrainFeature, TerrainProfile } from '../types/mission';
+import type { HorizonMask } from '../terrain/types';
 import { buildTerrainProfile, flatProfile } from '../engine/horizonPhysics';
+import { terrainProfileFromHorizon } from '../terrain/missionProfile';
 import { wrap360 } from '../engine/constants';
 
 interface SiteSeed {
@@ -254,11 +256,15 @@ export function makeCustomSite(input: {
   sectors?: number[];
   terrainLabel?: string;
   sourceFrame?: string;
+  horizon?: HorizonMask;
 }): LandingSite {
-  const terrain = customTerrain(input.preset, input.sectors);
+  const terrain = input.horizon ? terrainProfileFromHorizon(input.horizon) : customTerrain(input.preset, input.sectors);
   if (input.terrainLabel) terrain.label = input.terrainLabel;
   if (input.sourceFrame) terrain.sourceFrame = input.sourceFrame;
-  if (input.terrainLabel) terrain.uncertaintyDeg = 1.5;
+  if (!input.horizon && input.terrainLabel) terrain.uncertaintyDeg = 1.5;
+  const demDescription = input.horizon?.synthetic
+    ? 'Synthetic demo horizon from Terrain Lab. Elevations are procedural, NOT real lunar data; use for interface exploration only.'
+    : 'Terrain Lab DEM horizon preserved sample-for-sample. Verify the DEM body-frame realization against the IAU ephemeris frame and confirm coverage before operational use.';
   return {
     id: `custom-${Date.now().toString(36)}`,
     name: input.name || 'Custom site',
@@ -268,8 +274,8 @@ export function makeCustomSite(input: {
     elevationM: input.elevationM,
     category: Math.abs(input.latitude) >= 80 ? 'polar' : 'reference',
     region: 'User-defined coordinates',
-    description: input.terrainLabel
-      ? 'Synthesized from a Terrain Lab DEM horizon. Verify the DEM body-frame realization against the IAU ephemeris frame before operational use.'
+    description: input.horizon ? demDescription : input.terrainLabel
+      ? 'Synthesized from a Terrain Lab horizon. Verify source frame and coverage before operational use.'
       : 'Synthesized site. Horizon is an illustrative preset or user-edited 8-sector mask, not a measured DEM.',
     terrain,
     accent: '#10B981',

@@ -13,13 +13,22 @@ export interface TerrainFeature {
 
 export interface TerrainProfile {
   label: string;
-  kind: 'illustrative' | 'flat';
+  kind: 'illustrative' | 'flat' | 'dem';
   resolutionDeg: number;
   elevations: number[];
   features: TerrainFeature[];
+  /** For illustrative masks: assumed angular uncertainty. For DEM masks: azimuth sampling half-width, not vertical accuracy. */
   uncertaintyDeg: number;
   eyeHeightM: number;
   sourceFrame?: string;
+  sourceFile?: string;
+  synthetic?: boolean;
+  coveragePercent?: number;
+  radiusKm?: number;
+  horizonRadiusKm?: number;
+  gridSize?: number;
+  samplingDeg?: number;
+  accuracyNote?: string;
 }
 
 export interface LandingSite {

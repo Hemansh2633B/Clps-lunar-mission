@@ -28,10 +28,15 @@ export function toCSV(rows: Record<string, unknown>[]): string {
 }
 
 export function missionReportJSON(site: LandingSite, config: MissionConfig, sim: SimulationResult | null, current: EvaluatedSample) {
+  const terrainDisclaimer = site.terrain.kind === 'dem'
+    ? site.terrain.synthetic
+      ? 'Terrain: synthetic demo horizon from Terrain Lab, NOT real lunar data.'
+      : `Terrain: DEM-derived horizon preserved from ${site.terrain.sourceFile ?? 'local DEM'}; source frame ${site.terrain.sourceFrame ?? 'unspecified'}; coverage ${site.terrain.coveragePercent ?? 'unknown'}%. Verify frame alignment and vertical accuracy before operational use.`
+    : 'Terrain: LOLA-inspired illustrative masks, NOT flight-certified DEM.';
   return JSON.stringify({
     product: 'SELENE mission planning report',
     generatedAt: new Date().toISOString(),
-    disclaimer: 'Ephemeris: astronomy-engine + IAU 2015 Moon rotation. Terrain: LOLA-inspired illustrative masks, NOT flight-certified DEM. Power: idealized cosine model with system derate. Center-of-disk LOS; no atmospheric refraction.',
+    disclaimer: `Ephemeris: astronomy-engine + IAU 2015 Moon rotation. ${terrainDisclaimer} Power: idealized cosine model with system derate. Center-of-disk LOS; no atmospheric refraction.`,
     site,
     config,
     current: { ...current, mjd: mjd(current.timeMs) },
@@ -67,7 +72,8 @@ export function timeseriesCSV(sim: SimulationResult): string {
 }
 
 export function horizonCSV(site: LandingSite, current: EvaluatedSample): string {
-  return toCSV(horizonTable(site, current, 5).map((r) => ({
+  const step = site.terrain.kind === 'dem' ? site.terrain.resolutionDeg : 5;
+  return toCSV(horizonTable(site, current, step).map((r) => ({
     azimuth_deg: r.azimuthDeg,
     terrain_elevation_deg: r.terrainElevationDeg.toFixed(4),
     sun_clearance_deg: r.sunClearanceDeg == null ? '' : r.sunClearanceDeg.toFixed(4),

@@ -8,18 +8,21 @@ import { terrainApi } from '../terrain/api';
 import { syntheticTerrain, SYNTHETIC_WARNING } from '../terrain/synthetic';
 import { horizonFromGrid } from '../terrain/horizon';
 import { createTerrain, disposeTerrain, setExaggeration, createAnnotations, disposeAnnotations, interpolateSample, type TerrainMesh } from '../terrain/terrainMesh';
-import { LightingController } from '../terrain/lighting';
+import { LightingController, sunDirection } from '../terrain/lighting';
+import { horizonImportBlocked } from '../terrain/missionProfile';
 import { sampleLonLat } from '../terrain/coordinates';
 import { computeEphemeris } from '../engine/ephemeris';
 import { formatCoord, formatUTC } from '../engine/constants';
 import { download, toCSV } from '../utils/export';
 import type { CustomSiteInput } from './Modals';
 
+export type TerrainSiteInput = CustomSiteInput & { horizon: HorizonMask };
+
 interface Props {
   site: LandingSite;
   timeMs: number;
   mode: AppMode;
-  onCreateSite: (input: CustomSiteInput & { terrainLabel?: string; sourceFrame?: string }) => void;
+  onCreateSite: (input: TerrainSiteInput) => void;
   notify: (msg: string) => void;
 }
 
@@ -33,6 +36,9 @@ interface Ctx {
   annotations: THREE.Group | null;
   requestRender: () => void;
   resetCamera: () => void;
+  setCameraPreset: (preset: 'top' | 'oblique') => void;
+  orbitBy: (azDeg: number, elDeg: number) => void;
+  zoomBy: (factor: number) => void;
   rebuildAnnotations: () => void;
   updateLighting: () => void;
 }
@@ -48,8 +54,9 @@ declare global {
   interface Window {
     __SELENE_TERRAIN__?: {
       mode: string; gridSize: number; triangles: number; landingPosition: number[] | null;
-      exaggeration: number; shadows: boolean; sun: SunPosition | null; camera: number[];
+      exaggeration: number; shadows: boolean; sun: SunPosition | null; sunDirection: number[]; camera: number[];
       shadowMapSize: number[]; calls: number;
+      horizon: { bins: number; coverage: number; importBlocked: string | null } | null;
     };
   }
 }
@@ -80,6 +87,10 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
   const [inspection, setInspection] = useState<SurfaceInspection | null>(null);
   const [horizon, setHorizon] = useState<HorizonMask | null>(null);
   const [horizonLoading, setHorizonLoading] = useState(false);
+  const [azStep, setAzStep] = useState(2);
+  const [eyeHeight, setEyeHeight] = useState(2);
+  const [autoReal, setAutoReal] = useState(false);
+  const buildSeqRef = useRef(0);
 
   dataRef.current = data;
   exaggerationRef.current = exaggeration;
@@ -123,6 +134,9 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.maxPolarAngle = Math.PI * 0.495;
+    renderer.domElement.tabIndex = 0;
+    renderer.domElement.setAttribute('aria-label', '3D terrain viewport. Arrow keys orbit, plus and minus zoom, Home resets the view.');
+    renderer.domElement.style.outline = 'none';
     const lighting = new LightingController(scene, renderer);
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
@@ -149,6 +163,10 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
         labelRef.current.style.top = `${((1 - p.y) / 2) * container.clientHeight}px`;
       }
       renderer.render(scene, camera);
+      if (window.__SELENE_TERRAIN__) {
+        window.__SELENE_TERRAIN__.camera = camera.position.toArray();
+        window.__SELENE_TERRAIN__.calls = renderer.info.render.calls;
+      }
       if (changed) requestRender();
     };
     const requestRender = () => {
@@ -170,6 +188,51 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
       controls.update();
       requestRender();
     };
+    const setCameraPreset = (preset: 'top' | 'oblique') => {
+      const d = dataRef.current;
+      if (!d) return;
+      if (preset === 'oblique') { resetCamera(); return; }
+      const distance = Math.max(d.radius_km * 2.2, (d.statistics.range_m / 1000) * exaggerationRef.current);
+      controls.enableDamping = false;
+      controls.update();
+      controls.enableDamping = true;
+      camera.position.set(0, distance, 0.0001);
+      controls.target.set(0, 0, 0);
+      controls.update();
+      requestRender();
+    };
+    const orbitBy = (azDeg: number, elDeg: number) => {
+      const offset = camera.position.clone().sub(controls.target);
+      const spherical = new THREE.Spherical().setFromVector3(offset);
+      spherical.theta += THREE.MathUtils.degToRad(azDeg);
+      spherical.phi = THREE.MathUtils.clamp(spherical.phi + THREE.MathUtils.degToRad(elDeg), 0.05, controls.maxPolarAngle);
+      offset.setFromSpherical(spherical);
+      camera.position.copy(controls.target).add(offset);
+      controls.update();
+      requestRender();
+    };
+    const zoomBy = (factor: number) => {
+      const offset = camera.position.clone().sub(controls.target);
+      const length = THREE.MathUtils.clamp(offset.length() * factor, controls.minDistance, controls.maxDistance);
+      offset.setLength(length);
+      camera.position.copy(controls.target).add(offset);
+      controls.update();
+      requestRender();
+    };
+    const onCanvasKey = (event: KeyboardEvent) => {
+      const step = event.shiftKey ? 15 : 5;
+      if (event.key === 'ArrowLeft') orbitBy(-step, 0);
+      else if (event.key === 'ArrowRight') orbitBy(step, 0);
+      else if (event.key === 'ArrowUp') orbitBy(0, -step);
+      else if (event.key === 'ArrowDown') orbitBy(0, step);
+      else if (event.key === '+' || event.key === '=') zoomBy(0.85);
+      else if (event.key === '-' || event.key === '_') zoomBy(1.18);
+      else if (event.key === 'Home') resetCamera();
+      else return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    renderer.domElement.addEventListener('keydown', onCanvasKey);
     const rebuildAnnotations = () => {
       const ctx = ctxRef.current;
       const d = dataRef.current;
@@ -185,14 +248,14 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
       ctx.lighting.applySunPosition(ctx.mesh, d, sunRef.current, shadowsRef.current);
       requestRender();
     };
-    const ctx: Ctx = { renderer, scene, camera, controls, lighting, mesh: null, annotations: null, requestRender, resetCamera, rebuildAnnotations, updateLighting };
+    const ctx: Ctx = { renderer, scene, camera, controls, lighting, mesh: null, annotations: null, requestRender, resetCamera, setCameraPreset, orbitBy, zoomBy, rebuildAnnotations, updateLighting };
     ctxRef.current = ctx;
 
     controls.addEventListener('change', requestRender);
     const resize = () => {
       const w = container.clientWidth;
       const h = container.clientHeight;
-      renderer.setSize(w, h);
+      renderer.setSize(w, h, false);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       requestRender();
@@ -237,6 +300,7 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
       renderer.domElement.removeEventListener('pointerdown', onDown);
       renderer.domElement.removeEventListener('click', onClick);
       renderer.domElement.removeEventListener('pointerleave', onLeave);
+      renderer.domElement.removeEventListener('keydown', onCanvasKey);
       if (ctx.mesh) { scene.remove(ctx.mesh); disposeTerrain(ctx.mesh); }
       if (ctx.annotations) { scene.remove(ctx.annotations); disposeAnnotations(ctx.annotations); }
       renderer.dispose();
@@ -281,6 +345,7 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
         setBackend(config);
         setBackendOnline(true);
         setForm((f) => ({ ...f, mode: config.dem_ready ? 'real' : 'synthetic' }));
+        if (config.dem_ready) setAutoReal(true);
         try {
           const ex = await terrainApi.examples();
           if (active && ex.examples?.length) setExamples(ex.examples);
@@ -292,6 +357,7 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
 
   const build = useCallback(async (override?: Partial<typeof form>) => {
     const f = { ...form, ...override };
+    const seq = ++buildSeqRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -302,15 +368,22 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
         if (!backendOnline) throw new Error('Real lunar DEM requires the local backend. Run npm run dev:api (or npm run dev:full), then retry. Real mode never falls back to synthetic data.');
         result = await terrainApi.terrain({ latitude: f.latitude, longitude: f.longitude, radius_km: f.radius, quality: f.quality, mode: 'real' });
       }
+      if (seq !== buildSeqRef.current) return; // a newer request won
       setData(result);
       setHorizon(null);
       setForm(f);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (seq === buildSeqRef.current) setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      if (seq === buildSeqRef.current) setLoading(false);
     }
   }, [form, backendOnline]);
+
+  useEffect(() => {
+    if (!autoReal || !backendOnline) return;
+    setAutoReal(false);
+    void build({ mode: 'real' });
+  }, [autoReal, backendOnline, build]);
 
   useEffect(() => {
     // Initial demo model so the lab is never an empty placeholder.
@@ -318,15 +391,22 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const computeHorizon = useCallback(() => {
+  const computeHorizon = useCallback(async () => {
     if (!data) return;
     setHorizonLoading(true);
+    setError(null);
     try {
-      setHorizon(horizonFromGrid(data, 2, 2));
+      const quality: TerrainQuality = data.grid.size <= 129 ? 'low' : data.grid.size <= 257 ? 'medium' : 'high';
+      const mask = data.mode === 'real' && backendOnline
+        ? await terrainApi.horizon({ latitude: data.latitude, longitude: data.longitude, radius_km: data.radius_km, quality, mode: 'real', az_step_deg: azStep, eye_height_m: eyeHeight })
+        : horizonFromGrid(data, azStep, eyeHeight);
+      setHorizon(mask);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setHorizonLoading(false);
     }
-  }, [data]);
+  }, [data, backendOnline, azStep, eyeHeight]);
 
   const exportHorizon = useCallback(() => {
     if (!horizon) return;
@@ -341,20 +421,14 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
   }, [horizon, notify]);
 
   const sendToMission = useCallback(() => {
-    if (!data || !horizon) return;
-    const sectors = [0, 45, 90, 135, 180, 225, 270, 315].map((az) => {
-      const idx = Math.round(az / horizon.azimuth_step_deg) % horizon.elevations_deg.length;
-      return horizon.elevations_deg[idx];
-    });
+    if (!data || !horizon || horizonImportBlocked(horizon)) return;
     onCreateSite({
-      name: `DEM ${data.latitude.toFixed(2)}° ${data.longitude.toFixed(1)}°`,
+      name: `${horizon.synthetic ? 'Demo' : 'DEM'} ${data.latitude.toFixed(2)}° ${data.longitude.toFixed(1)}°`,
       latitude: data.latitude,
       longitude: data.longitude,
       elevationM: data.landing_elevation_m,
       preset: 'flat',
-      sectors,
-      terrainLabel: `DEM-derived horizon · ${data.source.filename}`,
-      sourceFrame: data.source.lunar_reference_frame,
+      horizon,
     });
   }, [data, horizon, onCreateSite]);
 
@@ -371,14 +445,17 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
       exaggeration,
       shadows,
       sun: sunPosition,
+      sunDirection: sunDirection(sunPosition.azimuthDeg, sunPosition.elevationDeg).toArray(),
       camera: ctx?.camera.position.toArray() ?? [],
       shadowMapSize: ctx?.lighting.sun.shadow.mapSize.toArray() ?? [],
       calls: ctx?.renderer.info.render.calls ?? 0,
+      horizon: horizon ? { bins: horizon.elevations_deg.length, coverage: horizon.mean_coverage_percent, importBlocked: horizonImportBlocked(horizon) } : null,
     };
-  }, [data, exaggeration, shadows, sunPosition, inspection]);
+  }, [data, exaggeration, shadows, sunPosition, inspection, horizon]);
 
   const educator = mode === 'educator';
   const stats = data?.statistics;
+  const importBlock = horizon ? horizonImportBlocked(horizon) : null;
 
   return (
     <section className="panel terrain-lab" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
@@ -390,25 +467,25 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'flex-end', background: 'var(--panel-2)' }}>
-        <div className="field"><label>Source</label>
-          <select className="input" style={{ width: 150 }} value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value as TerrainMode })}>
+      <div className="terrain-lab-toolbar" style={{ display: 'flex', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'flex-end', background: 'var(--panel-2)' }}>
+        <div className="field"><label htmlFor="terrain-mode">Source</label>
+          <select id="terrain-mode" className="input" style={{ width: 150 }} value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value as TerrainMode })}>
             <option value="synthetic">Synthetic demo</option>
             <option value="real">Real lunar DEM</option>
           </select>
         </div>
-        <div className="field"><label>Latitude °</label><input className="input mono" style={{ width: 90 }} type="number" step="any" value={form.latitude} onChange={(e) => setForm({ ...form, latitude: Number(e.target.value) })} /></div>
-        <div className="field"><label>Longitude °E</label><input className="input mono" style={{ width: 90 }} type="number" step="any" value={form.longitude} onChange={(e) => setForm({ ...form, longitude: Number(e.target.value) })} /></div>
-        <div className="field"><label>Radius km</label><input className="input mono" style={{ width: 80 }} type="number" min={0.5} max={20} step={0.5} value={form.radius} onChange={(e) => setForm({ ...form, radius: Number(e.target.value) })} /></div>
-        <div className="field"><label>Grid</label>
-          <select className="input" style={{ width: 130 }} value={form.quality} onChange={(e) => setForm({ ...form, quality: e.target.value as TerrainQuality })}>
+        <div className="field"><label htmlFor="terrain-lat">Latitude °</label><input id="terrain-lat" className="input mono" style={{ width: 90 }} type="number" step="any" value={form.latitude} onChange={(e) => setForm({ ...form, latitude: Number(e.target.value) })} /></div>
+        <div className="field"><label htmlFor="terrain-lon">Longitude °E</label><input id="terrain-lon" className="input mono" style={{ width: 90 }} type="number" step="any" value={form.longitude} onChange={(e) => setForm({ ...form, longitude: Number(e.target.value) })} /></div>
+        <div className="field"><label htmlFor="terrain-radius">Radius km</label><input id="terrain-radius" className="input mono" style={{ width: 80 }} type="number" min={0.5} max={20} step={0.5} value={form.radius} onChange={(e) => setForm({ ...form, radius: Number(e.target.value) })} /></div>
+        <div className="field"><label htmlFor="terrain-quality">Grid</label>
+          <select id="terrain-quality" className="input" style={{ width: 130 }} value={form.quality} onChange={(e) => setForm({ ...form, quality: e.target.value as TerrainQuality })}>
             <option value="low">Low · 129²</option>
             <option value="medium">Medium · 257²</option>
             <option value="high">High · 513²</option>
           </select>
         </div>
         <button className="btn primary" disabled={loading || !!webglError} onClick={() => void build()}><Play size={13} /> {loading ? 'Building…' : 'Build terrain'}</button>
-        <button className="btn" onClick={() => void build({ latitude: site.latitude, longitude: site.longitude, radius: 5 })}><MapPin size={13} /> Load selected site</button>
+        <button className="btn" disabled={loading} onClick={() => void build({ latitude: site.latitude, longitude: site.longitude, radius: 5 })}><MapPin size={13} /> Load selected site</button>
         <button className="btn ghost" onClick={() => ctxRef.current?.resetCamera()}><RotateCcw size={13} /> Reset view</button>
       </div>
 
@@ -421,7 +498,7 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
             <div className="panel-title" style={{ marginBottom: 6 }}>Example locations</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {examples.map((ex) => (
-                <button key={ex.label} className="btn sm ghost" style={{ justifyContent: 'flex-start', height: 'auto', padding: '6px 8px', textAlign: 'left' }} title={ex.notes}
+                <button key={ex.label} className="btn sm ghost" disabled={loading} style={{ justifyContent: 'flex-start', height: 'auto', padding: '6px 8px', textAlign: 'left' }} title={ex.notes}
                   onClick={() => void build({ latitude: ex.latitude, longitude: ex.longitude, radius: ex.radius_km })}>
                   <span>{ex.label}<br /><span className="mono" style={{ fontSize: 9, color: 'var(--dim)' }}>{ex.latitude}°, {ex.longitude}° · {ex.radius_km} km</span></span>
                 </button>
@@ -437,8 +514,8 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
             </div>
             {sunMode === 'manual' ? (
               <>
-                <div className="field"><label>Azimuth · {manualAz}°</label><input type="range" className="solar" min={0} max={360} step={1} value={manualAz} onChange={(e) => setManualAz(Number(e.target.value))} /></div>
-                <div className="field" style={{ marginTop: 6 }}><label>Elevation · {manualEl.toFixed(1)}°</label><input type="range" className="solar" min={-10} max={90} step={0.1} value={manualEl} onChange={(e) => setManualEl(Number(e.target.value))} /></div>
+                <div className="field"><label htmlFor="terrain-sun-az">Azimuth · {manualAz}°</label><input id="terrain-sun-az" type="range" className="solar" min={0} max={360} step={1} value={manualAz} onChange={(e) => setManualAz(Number(e.target.value))} /></div>
+                <div className="field" style={{ marginTop: 6 }}><label htmlFor="terrain-sun-el">Elevation · {manualEl.toFixed(1)}°</label><input id="terrain-sun-el" type="range" className="solar" min={-10} max={90} step={0.1} value={manualEl} onChange={(e) => setManualEl(Number(e.target.value))} /></div>
               </>
             ) : (
               <div style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.5 }}>
@@ -453,7 +530,7 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
 
           <div>
             <div className="panel-title" style={{ marginBottom: 6 }}><Layers size={12} /> Vertical relief · {exaggeration}×</div>
-            <input type="range" min={1} max={10} step={0.5} value={exaggeration} onChange={(e) => setExaggerationState(Number(e.target.value))} />
+            <input aria-label="Vertical relief exaggeration" type="range" min={1} max={10} step={0.5} value={exaggeration} onChange={(e) => setExaggerationState(Number(e.target.value))} />
             <div style={{ fontSize: 10, color: exaggeration > 1 ? 'var(--solar)' : 'var(--dim)', marginTop: 4 }}>
               {exaggeration === 1 ? 'True vertical scale. Lunar curvature included.' : `${exaggeration}× relief. Reported elevations remain unchanged.`}
             </div>
@@ -461,7 +538,17 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
 
           <div>
             <div className="panel-title" style={{ marginBottom: 6 }}><Mountain size={12} /> Horizon mask</div>
-            <button className="btn sm" style={{ width: '100%' }} disabled={!data || horizonLoading} onClick={computeHorizon}>{horizonLoading ? 'Ray-marching…' : 'Compute 360° horizon'}</button>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 6 }}>
+              <div className="field"><label htmlFor="terrain-az-step">Azimuth bin</label>
+                <select id="terrain-az-step" className="input" value={azStep} onChange={(e) => setAzStep(Number(e.target.value))}>
+                  {[1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15].map((s) => <option key={s} value={s}>{s}° · {360 / s} rays</option>)}
+                </select>
+              </div>
+              <div className="field"><label htmlFor="terrain-eye-height">Eye height m</label>
+                <input id="terrain-eye-height" className="input mono" type="number" min={0} max={50} step={0.5} value={eyeHeight} onChange={(e) => setEyeHeight(Number(e.target.value))} />
+              </div>
+            </div>
+            <button className="btn sm" style={{ width: '100%' }} disabled={!data || horizonLoading} onClick={() => void computeHorizon()}>{horizonLoading ? 'Ray-marching…' : 'Compute 360° horizon'}</button>
             {horizon && (
               <div style={{ marginTop: 8 }}>
                 <svg viewBox="0 0 360 80" style={{ width: '100%', height: 70, background: '#0c1017', borderRadius: 4 }}>
@@ -476,10 +563,13 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
                   <text x={2} y={76} fontSize={7} fill="#5C6675" fontFamily="JetBrains Mono">−10°</text>
                 </svg>
                 <div style={{ fontSize: 9, color: 'var(--dim)', marginTop: 4 }}>Ray coverage {horizon.mean_coverage_percent.toFixed(1)}% · eye {horizon.eye_height_m} m · {horizon.azimuth_step_deg}° bins</div>
+                <div style={{ fontSize: 9, color: 'var(--dim)', marginTop: 2 }}>Horizon radius {horizon.horizon_radius_km.toFixed(3)} km · edge inset {horizon.edge_inset_m.toFixed(1)} m · step {horizon.sampling_step_m.toFixed(1)} m</div>
                 <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
                   <button className="btn sm" onClick={exportHorizon}><Download size={11} /> CSV</button>
-                  <button className="btn sm primary" onClick={sendToMission}>Use in mission</button>
+                  <button className="btn sm primary" disabled={!!importBlock} onClick={sendToMission}>Use in mission</button>
                 </div>
+                {importBlock && <div role="alert" style={{ fontSize: 9, color: 'var(--blocked)', marginTop: 6, lineHeight: 1.4 }}>{importBlock}</div>}
+                {horizon.synthetic && <div style={{ fontSize: 9, color: 'var(--solar)', marginTop: 6, lineHeight: 1.4 }}>Synthetic demo mask — importing it creates a clearly labeled demo site, not a real DEM site.</div>}
                 <div style={{ fontSize: 9, color: 'var(--solar)', marginTop: 6, lineHeight: 1.4 }}>{horizon.frame_note}</div>
               </div>
             )}
@@ -492,7 +582,13 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
             {loading && <div className="terrain-loading pulse">Extracting terrain…</div>}
             {!data && !loading && <div className="terrain-loading">Build a terrain model to begin.</div>}
             <div ref={labelRef} className="terrain-landing-label" style={{ display: 'none' }}>LANDING SITE</div>
-            <div className="terrain-guide">DRAG orbit · RIGHT DRAG pan · SCROLL zoom · CLICK pin sample</div>
+            <div className="terrain-view-tools">
+              <button className="btn sm ghost" onClick={() => ctxRef.current?.setCameraPreset('top')} title="Top-down view">Top</button>
+              <button className="btn sm ghost" onClick={() => ctxRef.current?.setCameraPreset('oblique')} title="Oblique view">Oblique</button>
+              <button className="btn sm ghost" onClick={() => ctxRef.current?.zoomBy(0.85)} title="Zoom in">+</button>
+              <button className="btn sm ghost" onClick={() => ctxRef.current?.zoomBy(1.18)} title="Zoom out">−</button>
+            </div>
+            <div className="terrain-guide">DRAG orbit · RIGHT DRAG pan · SCROLL zoom · CLICK pin sample · ARROWS orbit · +/− zoom · HOME reset</div>
             {inspection && (
               <div className="terrain-inspection mono">
                 <div style={{ color: inspection.pinned ? 'var(--nominal)' : 'var(--muted)', fontSize: 9, letterSpacing: '.08em' }}>{inspection.pinned ? 'PINNED · CLICK TO RELEASE' : 'SURFACE INSPECTOR'}</div>

@@ -15,6 +15,7 @@ import { TelemetryPanel } from './components/TelemetryPanel';
 import { TimelineScrubber } from './components/TimelineScrubber';
 import { ComparisonMatrix } from './components/ComparisonMatrix';
 const TerrainLab = lazy(() => import('./components/TerrainLab').then((m) => ({ default: m.TerrainLab })));
+import type { TerrainSiteInput } from './components/TerrainLab';
 import { EducatorOverlay } from './components/EducatorOverlay';
 import { CustomSiteModal, SettingsModal, HorizonTableModal, ShortcutsModal, type CustomSiteInput } from './components/Modals';
 import { download, missionReportJSON, timeseriesCSV, horizonCSV, summaryCSV, comparisonCSV, type ComparisonRow } from './utils/export';
@@ -121,12 +122,14 @@ export default function App() {
     notify(`Created ${s.name}`);
   }, [notify]);
 
-  const createTerrainSite = useCallback((input: CustomSiteInput & { terrainLabel?: string; sourceFrame?: string }) => {
+  const createTerrainSite = useCallback((input: TerrainSiteInput) => {
     const s = makeCustomSite(input);
     setSites((prev) => [...prev, s]);
     setSelectedId(s.id);
     setTerrainView(false);
-    notify(`DEM horizon sent to mission planner${input.sourceFrame ? ` · frame ${input.sourceFrame} — verify against IAU ephemeris` : ''}`);
+    notify(input.horizon.synthetic
+      ? 'Synthetic demo horizon sent to mission planner — not real lunar data'
+      : `DEM horizon preserved sample-for-sample · frame ${s.terrain.sourceFrame ?? 'unspecified'} — verify against IAU ephemeris`);
   }, [notify]);
 
   const applyGuided = useCallback((s: GuidedScenario) => {
