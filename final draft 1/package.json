@@ -1,6 +1,6 @@
 {
   "name": "selene-mission-control",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,15 +9,22 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "test:browser": "node scripts/browser-test.mjs",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "dev:api": "node scripts/dev-api.mjs",
+    "dev:full": "node scripts/dev-full.mjs",
+    "test:python": "node scripts/python-test.mjs",
+    "test:geometry": "tsx scripts/geometry-check.ts",
+    "test:all": "npm test && npm run test:python && npm run test:geometry"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
+    "@types/three": "^0.187.0",
     "astronomy-engine": "^2.1.19",
     "lucide-react": "^0.468.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "three": "^0.187.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",

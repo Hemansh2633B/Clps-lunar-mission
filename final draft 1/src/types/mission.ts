@@ -19,6 +19,7 @@ export interface TerrainProfile {
   features: TerrainFeature[];
   uncertaintyDeg: number;
   eyeHeightM: number;
+  sourceFrame?: string;
 }
 
 export interface LandingSite {
@@ -168,5 +169,5 @@ export interface GuidedScenario {
   durationDays: number;
   slipDays: number;
   arrayMode: ArrayMode;
-  steps: { title: string; body: string; action?: 'compare' | 'slip' | 'panorama' | 'map' }[];
+  steps: { title: string; body: string; action?: 'compare' | 'slip' | 'panorama' | 'map' | 'terrain' }[];
 }

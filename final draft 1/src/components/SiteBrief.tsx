@@ -51,8 +51,10 @@ export function SiteBrief({ site, current, onHorizonTable, onPin }: Props) {
           <button className="btn sm" onClick={onHorizonTable}><Table2 size={12} /> Horizon table</button>
           <button className="btn sm primary" onClick={onPin}><Pin size={12} /> Pin scenario</button>
         </div>
-        <div style={{ fontSize: 9, color: 'var(--dim)', lineHeight: 1.5 }}>
-          Terrain mask is LOLA-inspired and illustrative (±{site.terrain.uncertaintyDeg.toFixed(2)}°). Coordinates are real; elevations are representative. Not for flight certification.
+        <div style={{ fontSize: 9, color: site.terrain.sourceFrame ? 'var(--solar)' : 'var(--dim)', lineHeight: 1.5 }}>
+          {site.terrain.sourceFrame
+            ? `DEM-derived horizon · source frame ${site.terrain.sourceFrame}. Verify frame alignment with the IAU 2015 ephemeris before operational use (±${site.terrain.uncertaintyDeg.toFixed(2)}°).`
+            : `Terrain mask is LOLA-inspired and illustrative (±${site.terrain.uncertaintyDeg.toFixed(2)}°). Coordinates are real; elevations are representative. Not for flight certification.`}
         </div>
       </div>
     </section>

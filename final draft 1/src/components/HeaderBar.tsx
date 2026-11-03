@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, Columns2, Download, Keyboard, Moon, Settings2, GraduationCap, Gauge } from 'lucide-react';
+import { BookOpen, Box, Columns2, Download, Keyboard, Moon, Settings2, GraduationCap, Gauge } from 'lucide-react';
 import type { AppMode } from '../types/mission';
 import { mjd } from '../engine/constants';
 
@@ -9,6 +9,8 @@ interface Props {
   onMode: (m: AppMode) => void;
   compareMode: boolean;
   onCompare: () => void;
+  terrainActive: boolean;
+  onTerrain: () => void;
   onGuide: () => void;
   onSettings: () => void;
   onShortcuts: () => void;
@@ -16,7 +18,7 @@ interface Props {
   playing: boolean;
 }
 
-export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, onGuide, onSettings, onShortcuts, onExport, playing }: Props) {
+export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrainActive, onTerrain, onGuide, onSettings, onShortcuts, onExport, playing }: Props) {
   const [exportOpen, setExportOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -57,7 +59,8 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, onGuid
         <button className={`btn ghost sm ${mode === 'planner' ? 'active' : ''}`} style={{ borderRadius: 0, border: 'none' }} onClick={() => onMode('planner')}><Gauge size={13} /> Planner</button>
         <button className={`btn ghost sm ${mode === 'educator' ? 'active' : ''}`} style={{ borderRadius: 0, border: 'none' }} onClick={() => onMode('educator')}><GraduationCap size={13} /> Educator</button>
       </div>
-      <button className={`btn ${compareMode ? 'active' : ''}`} onClick={onCompare}><Columns2 size={14} /> Compare <span className="kbd">C</span></button>
+      <button className={`btn ${terrainActive ? 'active' : ''}`} onClick={onTerrain}><Box size={14} /> Terrain Lab <span className="kbd">T</span></button>
+      <button className={`btn ${compareMode && !terrainActive ? 'active' : ''}`} onClick={onCompare}><Columns2 size={14} /> Compare <span className="kbd">C</span></button>
       <button className="btn" onClick={onGuide}><BookOpen size={14} /> Field guide <span className="kbd">G</span></button>
       <div ref={ref} style={{ position: 'relative' }}>
         <button className="btn" onClick={() => setExportOpen((v) => !v)}><Download size={14} /> Export</button>

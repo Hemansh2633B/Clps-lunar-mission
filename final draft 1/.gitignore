@@ -5,3 +5,12 @@ coverage/
 test-results/
 playwright-report/
 .vite/
+
+.venv/
+data/*.tif
+data/*.tiff
+data/*config.json
+!data/README.md
+__pycache__/
+.pytest_cache/
+artifacts/

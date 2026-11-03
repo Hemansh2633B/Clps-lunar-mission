@@ -252,7 +252,13 @@ export function makeCustomSite(input: {
   elevationM: number;
   preset: CustomTerrainPreset;
   sectors?: number[];
+  terrainLabel?: string;
+  sourceFrame?: string;
 }): LandingSite {
+  const terrain = customTerrain(input.preset, input.sectors);
+  if (input.terrainLabel) terrain.label = input.terrainLabel;
+  if (input.sourceFrame) terrain.sourceFrame = input.sourceFrame;
+  if (input.terrainLabel) terrain.uncertaintyDeg = 1.5;
   return {
     id: `custom-${Date.now().toString(36)}`,
     name: input.name || 'Custom site',
@@ -262,8 +268,10 @@ export function makeCustomSite(input: {
     elevationM: input.elevationM,
     category: Math.abs(input.latitude) >= 80 ? 'polar' : 'reference',
     region: 'User-defined coordinates',
-    description: 'Synthesized site. Horizon is an illustrative preset or user-edited 8-sector mask, not a measured DEM.',
-    terrain: customTerrain(input.preset, input.sectors),
+    description: input.terrainLabel
+      ? 'Synthesized from a Terrain Lab DEM horizon. Verify the DEM body-frame realization against the IAU ephemeris frame before operational use.'
+      : 'Synthesized site. Horizon is an illustrative preset or user-edited 8-sector mask, not a measured DEM.',
+    terrain,
     accent: '#10B981',
     custom: true,
   };

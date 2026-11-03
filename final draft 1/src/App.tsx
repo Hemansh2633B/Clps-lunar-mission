@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { GraduationCap, BookOpen } from 'lucide-react';
 import type { AppMode, GuidedScenario, LandingSite, MissionConfig, Scenario } from './types/mission';
 import { LANDING_SITES, makeCustomSite } from './data/landingSites';
@@ -14,6 +14,7 @@ import { SiteBrief } from './components/SiteBrief';
 import { TelemetryPanel } from './components/TelemetryPanel';
 import { TimelineScrubber } from './components/TimelineScrubber';
 import { ComparisonMatrix } from './components/ComparisonMatrix';
+const TerrainLab = lazy(() => import('./components/TerrainLab').then((m) => ({ default: m.TerrainLab })));
 import { EducatorOverlay } from './components/EducatorOverlay';
 import { CustomSiteModal, SettingsModal, HorizonTableModal, ShortcutsModal, type CustomSiteInput } from './components/Modals';
 import { download, missionReportJSON, timeseriesCSV, horizonCSV, summaryCSV, comparisonCSV, type ComparisonRow } from './utils/export';
@@ -33,6 +34,7 @@ export default function App() {
   const [speed, setSpeed] = useState(3600);
   const [mode, setMode] = useState<AppMode>('planner');
   const [compareMode, setCompareMode] = useState(false);
+  const [terrainView, setTerrainView] = useState(false);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [panorama, setPanorama] = useState<PanoramaOptions>({ showTracks: true, showTerrain: true, sector: 'full' });
   const [mapLayers, setMapLayers] = useState<MapLayers>({ grid: true, lighting: true, earthVector: true });
@@ -92,7 +94,8 @@ export default function App() {
       else if (e.key === ']') setTimeMs((t) => clamp(t + DAY_MS, win.startMs, win.endMs));
       else if (e.key === 'ArrowLeft') setTimeMs((t) => clamp(t - HOUR_MS, win.startMs, win.endMs));
       else if (e.key === 'ArrowRight') setTimeMs((t) => clamp(t + HOUR_MS, win.startMs, win.endMs));
-      else if (e.key.toLowerCase() === 'c') setCompareMode((v) => !v);
+      else if (e.key.toLowerCase() === 'c') { setTerrainView(false); setCompareMode((v) => !v); }
+      else if (e.key.toLowerCase() === 't') setTerrainView((v) => !v);
       else if (e.key.toLowerCase() === 'e') setMode((m) => (m === 'planner' ? 'educator' : 'planner'));
       else if (e.key.toLowerCase() === 'g') setGuideOpen((v) => !v);
       else if (e.key.toLowerCase() === 'p') pinCurrent();
@@ -118,6 +121,14 @@ export default function App() {
     notify(`Created ${s.name}`);
   }, [notify]);
 
+  const createTerrainSite = useCallback((input: CustomSiteInput & { terrainLabel?: string; sourceFrame?: string }) => {
+    const s = makeCustomSite(input);
+    setSites((prev) => [...prev, s]);
+    setSelectedId(s.id);
+    setTerrainView(false);
+    notify(`DEM horizon sent to mission planner${input.sourceFrame ? ` · frame ${input.sourceFrame} — verify against IAU ephemeris` : ''}`);
+  }, [notify]);
+
   const applyGuided = useCallback((s: GuidedScenario) => {
     setSelectedId(s.siteId);
     setBaselineMs(s.startMs);
@@ -128,6 +139,7 @@ export default function App() {
     setTourStep(0);
     setTimeMs(s.startMs + 2 * DAY_MS);
     setViewDays(s.durationDays > 14 ? 90 : 30);
+    setTerrainView(s.id === 'terrain-lab');
     notify(`Loaded scenario: ${s.title}`);
   }, [notify]);
 
@@ -152,7 +164,8 @@ export default function App() {
     <div className="app-shell">
       <HeaderBar
         timeMs={timeMs} mode={mode} onMode={setMode} compareMode={compareMode}
-        onCompare={() => setCompareMode((v) => !v)} onGuide={() => setGuideOpen(true)}
+        onCompare={() => { setTerrainView(false); setCompareMode((v) => !v); }}
+        terrainActive={terrainView} onTerrain={() => setTerrainView((v) => !v)} onGuide={() => setGuideOpen(true)}
         onSettings={() => setSettingsOpen(true)} onShortcuts={() => setShortcutsOpen(true)}
         onExport={handleExport} playing={playing}
       />
@@ -162,14 +175,18 @@ export default function App() {
           <button className="btn sm ghost" style={{ color: '#6ee7b7', marginLeft: 'auto' }} onClick={() => setGuideOpen(true)}><BookOpen size={12} /> Open guided stories</button>
         </div>
       )}
-      <div className={`workspace ${compareMode ? 'compare' : ''}`}>
+      <div className={`workspace ${compareMode && !terrainView ? 'compare' : ''} ${terrainView ? 'terrain' : ''}`}>
         <aside className="site-rail">
           <SiteCatalog sites={sites} selectedId={site.id} onSelect={setSelectedId}
             onCustom={() => { setCustomInitial(undefined); setCustomOpen(true); }}
             onHorizonTable={() => setHorizonOpen(true)} onPin={pinCurrent} compareMode={compareMode} />
         </aside>
         <main className="center-stack">
-          {compareMode ? (
+          {terrainView ? (
+            <Suspense fallback={<div className="panel" style={{ flex: 1, display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>Loading Terrain Lab…</div>}>
+              <TerrainLab site={site} timeMs={timeMs} mode={mode} onCreateSite={createTerrainSite} notify={notify} />
+            </Suspense>
+          ) : compareMode ? (
             <ComparisonMatrix scenarios={scenarios} sites={sites}
               onUpdate={(id, patch) => setScenarios((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)))}
               onRemove={(id) => setScenarios((prev) => prev.filter((s) => s.id !== id))}
@@ -201,7 +218,7 @@ export default function App() {
         <span><span className="dot" style={{ background: 'var(--solar)' }} />TERRAIN · LOLA-inspired illustrative masks (not flight DEM)</span>
         <span>LOS · center-of-disk, no refraction</span>
         <span>{activeSim.data ? `${activeSim.data.summary.sampleCount} samples · ${activeSim.data.computeMs.toFixed(0)} ms` : 'computing…'}</span>
-        <span style={{ marginLeft: 'auto' }}>Space play · [ ] days · C compare · E educator · G guide · ? help</span>
+        <span style={{ marginLeft: 'auto' }}>Space play · [ ] days · C compare · T terrain · E educator · G guide · ? help</span>
       </footer>
 
       {customOpen && <CustomSiteModal onClose={() => setCustomOpen(false)} onCreate={createCustom} initial={customInitial} />}

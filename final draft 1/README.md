@@ -16,12 +16,25 @@ npm install
 npm run dev          # http://localhost:5173  (binds 0.0.0.0)
 ```
 
+Optional full stack with the real-DEM Terrain Lab backend:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r backend/requirements.txt -r requirements-dev.txt
+npm run dev:full     # Flask terrain API on :8000 + Vite console on :5173
+```
+
+`npm run dev` alone still works: the mission console is fully functional, and Terrain Lab falls back to a clearly labeled built-in synthetic demo when the API is offline. Real DEM mode requires the backend and never silently falls back.
+
 Production build and checks:
 
 ```bash
-npm run build        # tsc --noEmit + vite build
+npm run build        # tsc + vite build
 npm test             # Vitest engine / physics / export unit tests
-npm run test:browser # Playwright end-to-end interaction smoke test
+npm run test:python  # 67 backend/DEM/horizon/downloader tests
+npm run test:geometry# Three.js geometry / synthetic / horizon checks
+npm run test:browser # Playwright mission console + Terrain Lab E2E
+npm run test:all     # unit + python + geometry
 npm run typecheck
 ```
 
@@ -46,12 +59,55 @@ The dev server is configured with `allowedHosts: true` so it works behind Arena 
 | Switch between Planner telemetry and Educator plain-English | Header mode switch (`E`) |
 | Walk guided stories + glossary | **Field guide** (`G`) |
 | Export mission report, timeseries, horizon mask, comparison | **Export** menu |
+| Inspect real/synthetic DEMs in 3D with orbit/pan/zoom | **Terrain Lab** (`T`) |
+| Hover/click surface samples, exaggerate relief, toggle shadows | Terrain Lab inspector |
+| Ray-march a 360° DEM horizon and send it to the mission planner | Terrain Lab → Compute horizon → Use in mission |
+| Load prototype example locations or the selected mission site | Terrain Lab examples / Load selected site |
 
 ### Keyboard shortcuts
 
-`Space` play/pause · `[` / `]` ±1 day · `←` / `→` ±1 hour · `C` compare · `E` educator · `G` field guide · `P` pin scenario · `?` help · `Esc` close overlays.
+`Space` play/pause · `[` / `]` ±1 day · `←` / `→` ±1 hour · `C` compare · `T` Terrain Lab · `E` educator · `G` field guide · `P` pin scenario · `?` help · `Esc` close overlays.
 
 ---
+
+## Terrain Lab · ported from `prototype/`
+
+The repository’s original prototype has been integrated as **Terrain Lab** (`T`). See [`docs/PROTOTYPE_PORT.md`](docs/PROTOTYPE_PORT.md) for the full feature map.
+
+![Terrain Lab](screenshots/06-terrain-lab.png)
+
+- **Real DEM backend** — Flask + Rasterio/GDAL + PyProj. Loads single-band lunar GeoTIFF/PDS rasters, validates lunar CRS, spherical radius, vertical datum, units, scale/offset, and body-frame metadata. Extracts a bounded, bilinear, landing-centered grid (0.5–20 km; 129/257/513 samples). NoData remains a gap.
+- **Synthetic demo** — available from the backend and as a built-in client fallback so the lab is never empty. Always labeled `SYNTHETIC TERRAIN — NOT REAL LUNAR DATA`.
+- **3D inspector** — Three.js mesh with OrbitControls, exact landing marker, analysis boundary, hover/click sample inspection (east/north/elevation/distance/lat/lon), 1×–10× relief exaggeration, manual Sun az/el, real ephemeris Sun preview, and terrain self-shadowing.
+- **Horizon ray-marching** — computes a 360° terrain horizon from the loaded grid with per-ray coverage, exports CSV, and can create a custom mission site from the mask. Source-frame alignment is explicitly warned.
+- **Examples** — south-pole example (−89.5°, 45°, 5 km), near-pole (−89.9°, 0°, 2 km), exact pole (−90°, 45°, 1 km), north-pole reference (+89.5°, 45°, 5 km), plus “Load selected site”.
+
+### Configure a real DEM
+
+```bash
+cp dem_config.example.json dem_config.json
+# Edit dem_config.json with values verified from your product label.
+npm run dev:api -- --dem data/your_dem.tif --dem-config dem_config.json
+```
+
+Optional small NASA LOLA south-pole subset (requires outbound access to NASA PGDA):
+
+```bash
+.venv/bin/python -m backend.download_lola_subset --latitude -89.5 --longitude 45 --radius 5
+npm run dev:api -- --dem-config data/lola_example_config.json
+```
+
+The downloader preserves native pixels, CRS, NoData, and records source URL, pixel window, UTC time, SHA-256, and a landing-elevation preservation check. It refuses full-raster fallback.
+
+### Terrain API
+
+| Route | Purpose |
+|---|---|
+| `GET /api/health` | API liveness |
+| `GET /api/config` | DEM readiness, source metadata, limits, conventions |
+| `GET /api/examples` | Prototype example locations |
+| `POST /api/terrain` | Extract `{latitude, longitude, radius_km, quality, mode}` grid |
+| `POST /api/horizon` | Ray-marched horizon mask for the same request + `az_step_deg`, `eye_height_m` |
 
 ## Architecture
 
@@ -59,9 +115,14 @@ The dev server is configured with `allowedHosts: true` so it works behind Arena 
 final draft 1/
 ├── index.html
 ├── package.json / vite.config.ts / tsconfig.json
+├── backend/                    # Flask DEM API (ported from prototype)
+├── data/                       # Local DEMs (ignored) + README
+├── dem_config.example.json
+├── docs/PROTOTYPE_PORT.md      # Prototype → SELENE feature map
 ├── public/assets/              # LROC south-pole mosaic + provenance
-├── scripts/browser-test.mjs    # Playwright E2E smoke test
+├── scripts/                    # dev-full, browser/geometry/python tests
 ├── screenshots/                # Captured during verification
+├── tests/python/               # 67 backend tests
 ├── src/
 │   ├── main.tsx / App.tsx      # Entry + state orchestration
 │   ├── types/mission.ts        # Domain interfaces
@@ -77,14 +138,16 @@ final draft 1/
 │   │   ├── simulation.worker.ts# Off-main-thread simulation
 │   │   └── simulationClient.ts # Cached worker request broker
 │   ├── hooks/useSimulation.ts
+│   ├── terrain/                # Three.js mesh, lighting, coordinates,
+│   │                           # synthetic demo, horizon, API client
 │   ├── components/             # Header, catalog, panorama, map, telemetry,
-│   │                           # timeline, comparison, educator, modals
+│   │                           # timeline, comparison, educator, TerrainLab, modals
 │   ├── utils/export.ts         # CSV / JSON report generation
 │   └── styles/index.css        # Aerospace design tokens + layout
 └── tests/engine.test.ts        # Scientific sanity + unit tests
 ```
 
-**Stack:** Vite 7 · React 19 · TypeScript 5.8 · Tailwind CSS 4 · `astronomy-engine` · `lucide-react` · HTML5 Canvas / SVG · Web Workers. Fonts are self-hosted (`@fontsource/inter`, `@fontsource/jetbrains-mono`).
+**Stack:** Vite 7 · React 19 · TypeScript 5.8 · Tailwind CSS 4 · `astronomy-engine` · `three` · `lucide-react` · HTML5 Canvas / SVG / WebGL · Web Workers · Flask/Rasterio/PyProj backend. Fonts are self-hosted (`@fontsource/inter`, `@fontsource/jetbrains-mono`).
 
 Heavy window simulations run in a dedicated Web Worker with an LRU result cache, so time scrubbing and playback stay responsive. The instantaneous telemetry sample is computed synchronously on the main thread (sub-millisecond).
 
@@ -115,6 +178,11 @@ Heavy window simulations run in a dedicated Web Worker with an LRU result cache,
   - Vertical mast (fixed): `cos(elevation) × cos(azimuth offset)`.
 - Battery state-of-charge integrates net power with 92% charge / 95% discharge efficiency. Depletion drives a **SURVIVAL RISK** verdict.
 - Feasibility score weights combined visibility (45%), illumination (20%), DTE (15%), and survival (20%). Verdicts: `NOMINAL`, `CONDITIONAL`, `HIGH RISK`, `SURVIVAL RISK`, `RELAY REQUIRED`.
+
+### Terrain Lab limitations
+- GPU shadow maps are a **visualization**, not a validated illumination solver. Grazing angles can show aliasing/bias artifacts.
+- The DEM crop does not include occluders outside its radius. Horizon ray-marching reports NoData coverage and never invents terrain.
+- DEM body-frame realizations (e.g. `MOON_ME / DE421`) are **not automatically reconciled** with the console’s IAU 2015 ephemeris frame. Sites created from DEM masks carry a frame-check warning.
 
 ### Verified behaviors (unit tests)
 - **Apollo 11**: ~14-day sunlit / ~14-day night cycle, peak Sun > 75°, Earth always > 45°, 100% DTE.

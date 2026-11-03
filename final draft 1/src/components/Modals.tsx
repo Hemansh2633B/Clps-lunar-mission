@@ -141,6 +141,7 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
     ['[ / ]', 'Step −1 / +1 day'],
     ['← / →', 'Step −1 / +1 hour'],
     ['C', 'Toggle comparison mode'],
+    ['T', 'Toggle Terrain Lab (3D DEM inspector)'],
     ['E', 'Toggle educator / planner mode'],
     ['G', 'Open field guide'],
     ['P', 'Pin current scenario'],

@@ -30,10 +30,17 @@ const browser = await pw.launch({
   env: { ...process.env, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH || '/tmp/al2023/lib', FONTCONFIG_PATH: '/tmp/fonts' },
 });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
-const errors = [];
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-page.on('pageerror', (e) => errors.push(String(e)));
+const consoleErrors = [];
+const pageErrors = [];
+page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
+page.on('pageerror', (e) => pageErrors.push(String(e)));
 const assert = (cond, msg) => { if (!cond) throw new Error(`ASSERT FAILED: ${msg}`); };
+const setRange = (locator, value) => locator.evaluate((el, v) => {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  setter.call(el, String(v));
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}, value);
+
 
 try {
   await page.goto(BASE, { waitUntil: 'networkidle' });
@@ -89,8 +96,62 @@ try {
   assert(await page.locator('text=RUNNING').count() > 0, 'playback runs');
   await page.keyboard.press('Space');
 
-  assert(errors.length === 0, `console errors: ${errors.join(' | ')}`);
-  console.log('BROWSER TESTS PASSED · screenshots in', OUT);
+  // Terrain Lab: ported prototype capabilities.
+  await page.keyboard.press('t');
+  await page.waitForFunction(() => window.__SELENE_TERRAIN__ && window.__SELENE_TERRAIN__.gridSize === 257, null, { timeout: 30000 });
+  await page.waitForTimeout(800);
+  const initialTerrain = await page.evaluate(() => window.__SELENE_TERRAIN__);
+  assert(initialTerrain.mode === 'synthetic', 'terrain lab starts in labeled synthetic mode');
+  assert(JSON.stringify(initialTerrain.landingPosition) === JSON.stringify([0, 0, 0]), 'landing vertex is exact origin');
+  assert(initialTerrain.triangles > 100000 && initialTerrain.triangles < 135000, 'medium grid triangle budget');
+  assert(await page.locator('.terrain-synthetic-banner').isVisible(), 'synthetic warning visible');
+  await page.screenshot({ path: `${OUT}/06-terrain-lab.png` });
+
+  const canvas = page.locator('.terrain-viewport canvas');
+  const box = await canvas.boundingBox();
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
+  await page.waitForTimeout(300);
+  await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
+  await page.waitForTimeout(200);
+  assert(await page.locator('.terrain-inspection').innerText().then((t) => t.includes('PINNED')), 'surface inspection pins');
+
+  const ranges = page.locator('.terrain-lab-controls input[type="range"]');
+  await setRange(ranges.nth(2), 4);
+  await page.waitForTimeout(200);
+  const exaggerated = await page.evaluate(() => window.__SELENE_TERRAIN__);
+  assert(exaggerated.exaggeration === 4, 'exaggeration updates');
+  assert(JSON.stringify(exaggerated.landingPosition) === JSON.stringify([0, 0, 0]), 'exaggeration preserves landing origin');
+  await setRange(ranges.nth(2), 1);
+
+  assert((await page.evaluate(() => window.__SELENE_TERRAIN__)).shadows === true, 'shadows default on');
+  const shadowOn = await canvas.screenshot();
+  await page.locator('.terrain-lab-controls input[type="checkbox"]').uncheck();
+  await page.waitForTimeout(350);
+  assert((await page.evaluate(() => window.__SELENE_TERRAIN__)).shadows === false, 'shadow toggle works');
+  const shadowOff = await canvas.screenshot();
+  assert(!shadowOn.equals(shadowOff), 'shadow toggle changes rendered terrain pixels');
+  await page.locator('.terrain-lab-controls input[type="checkbox"]').check();
+  await setRange(ranges.nth(0), 283);
+  await page.waitForTimeout(200);
+  assert((await page.evaluate(() => window.__SELENE_TERRAIN__)).sun.azimuthDeg === 283, 'manual Sun azimuth works');
+
+  await page.getByRole('button', { name: /Compute 360° horizon/ }).click();
+  await page.waitForSelector('.terrain-lab-controls svg rect');
+  assert(await page.locator('text=Ray coverage').count() > 0, 'horizon mask computed');
+
+  await page.locator('.terrain-lab select').first().selectOption('real');
+  await page.getByRole('button', { name: /Build terrain/ }).click();
+  await page.waitForSelector('text=No DEM configured');
+  assert(await page.locator('[role="alert"]').innerText().then((t) => t.includes('No DEM configured')), 'real mode never silently falls back');
+  await page.locator('.terrain-lab select').first().selectOption('synthetic');
+  await page.getByRole('button', { name: /Build terrain/ }).click();
+  await page.waitForFunction(() => window.__SELENE_TERRAIN__ && window.__SELENE_TERRAIN__.gridSize === 257);
+  await page.keyboard.press('t');
+
+  const unexpectedConsole = consoleErrors.filter((e) => !e.includes('status of 400')); // real-DEM-without-DEM 400 is an expected, tested safeguard
+  assert(pageErrors.length === 0, `page errors: ${pageErrors.join(' | ')}`);
+  assert(unexpectedConsole.length === 0, `console errors: ${unexpectedConsole.join(' | ')}`);
+  console.log('BROWSER TESTS PASSED · mission console + Terrain Lab · screenshots in', OUT);
 } finally {
   await browser.close();
 }

@@ -51,6 +51,23 @@ export const GUIDED_SCENARIOS: GuidedScenario[] = [
       { title: 'Compare the energy budget', body: 'Pin both configurations in Compare. The vertical mast can turn a survival-risk mission into a nominal one without moving the lander.', action: 'compare' },
     ],
   },
+  {
+    id: 'terrain-lab',
+    title: 'From DEM to Horizon Mask',
+    kicker: 'Terrain Lab',
+    description: 'Use the ported 3D terrain inspector to build a local elevation model, ray-march its horizon, and send that mask into the mission planner.',
+    siteId: 'shackleton-rim',
+    startMs: DEC,
+    durationDays: 10,
+    slipDays: 0,
+    arrayMode: 'vertical-tracking',
+    steps: [
+      { title: 'Open Terrain Lab', body: 'Press T or use the header button. The lab starts in a clearly labeled synthetic demo. Choose “Real lunar DEM” only after configuring a local DEM backend.', action: 'terrain' },
+      { title: 'Inspect the surface', body: 'Drag to orbit, scroll to zoom, and click the mesh to pin a sample. The inspector reports east/north position, elevation, distance, and latitude/longitude.', action: 'terrain' },
+      { title: 'Compute the horizon', body: 'Press “Compute 360° horizon”. The tool ray-marches the loaded grid and reports coverage. NoData rays are flagged, never filled with invented terrain.', action: 'terrain' },
+      { title: 'Send it to the mission planner', body: '“Use in mission” creates a custom site with the DEM-derived mask. Check the source frame warning: DEM MOON_ME/DE421 and the IAU ephemeris frame must be reconciled before operational use.', action: 'terrain' },
+    ],
+  },
 ];
 
 export const GLOSSARY: { term: string; definition: string }[] = [
