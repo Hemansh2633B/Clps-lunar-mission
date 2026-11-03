@@ -154,30 +154,35 @@ def constant_corrections(start_year: int = 2020, end_year: int = 2035) -> dict:
 # Recognized source-frame tokens (case-insensitive, normalized). ME and PA are
 # transformable to the ephemeris IAU frame; an explicitly IAU frame needs no
 # correction. Anything else is unverified and blocked from quantitative use.
-_ME_TOKENS = {"MOON_ME", "MOON_ME_DE421", "ME", "ME_DE421", "IAU_ME"}
-_PA_TOKENS = {"MOON_PA", "MOON_PA_DE421", "PA", "PA_DE421"}
-_IAU_TOKENS = {"IAU", "IAU_MOON", "IAU2015", "IAU_2015", "MOON_IAU", "IAU_MOON_2015"}
+
 
 
 def _normalize(frame: Optional[str]) -> str:
     if not frame:
         return ""
-    return "".join(ch for ch in frame.upper() if ch.isalnum() or ch == "_").strip("_")
+    return "".join(ch for ch in frame.upper() if ch.isalnum())
 
 
 def classify_frame(frame: Optional[str]) -> dict:
     """Return {recognized, transform, note} for a declared DEM frame.
 
-    transform is one of 'me', 'pa', 'iau', or None (unrecognized).
+    transform is one of 'me', 'pa', 'iau', or None (unrecognized). Matching mirrors
+    the frontend (src/engine/lunarFrame.ts): ME/PA are matched on the MOONME/MOONPA
+    stems (or bare ME/PA tokens), tolerant of parenthetical ephemeris qualifiers such
+    as 'MOON_ME (JPL DE421)'. A bare 'ME'/'PA' substring inside an unrelated word is
+    never matched. Unknown frames are left UNVERIFIED.
     """
-    norm = _normalize(frame)
-    if norm in _ME_TOKENS:
+    n = _normalize(frame)
+    is_me = "MOONME" in n or n in ("ME", "MEDE421") or n.startswith("MEDE")
+    is_pa = "MOONPA" in n or n in ("PA", "PADE421") or n.startswith("PADE")
+    is_iau = "IAU" in n
+    if is_me:
         return {"recognized": True, "transform": "me",
                 "note": "MOON_ME (DE421). Compatible with the IAU 2015 ephemeris frame after a verified <=0.004 deg correction."}
-    if norm in _PA_TOKENS:
+    if is_pa:
         return {"recognized": True, "transform": "pa",
                 "note": "MOON_PA (DE421). Converted to the IAU 2015 ephemeris frame via the fixed 0.0288 deg PA->ME rotation plus a verified <=0.004 deg residual."}
-    if norm in _IAU_TOKENS:
+    if is_iau:
         return {"recognized": True, "transform": "iau",
                 "note": "Already an IAU Moon frame; no correction required (verify the report version matches IAU 2015)."}
     return {"recognized": False, "transform": None,

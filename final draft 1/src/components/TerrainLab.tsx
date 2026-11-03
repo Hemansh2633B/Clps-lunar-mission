@@ -10,6 +10,7 @@ import { horizonFromGrid } from '../terrain/horizon';
 import { createTerrain, disposeTerrain, setExaggeration, createAnnotations, disposeAnnotations, interpolateSample, type TerrainMesh } from '../terrain/terrainMesh';
 import { LightingController, sunDirection } from '../terrain/lighting';
 import { horizonImportBlocked } from '../terrain/missionProfile';
+import { classifyFrame } from '../engine/lunarFrame';
 import { sampleLonLat } from '../terrain/coordinates';
 import { computeEphemeris } from '../engine/ephemeris';
 import { formatCoord, formatUTC } from '../engine/constants';
@@ -628,6 +629,16 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
               <Crosshair size={10} style={{ display: 'inline', marginRight: 4 }} />
               {data.source.filename} · {data.grid.spacing_m.toFixed(1)} m spacing · CRS sphere {(data.source.lunar_radius_m / 1000).toFixed(3)} km · Frame {data.source.lunar_reference_frame || 'demo'} · Datum: {data.source.elevation_reference}
               {!backendOnline && <span style={{ color: 'var(--solar)' }}> · Backend offline: start npm run dev:api for real DEM loading.</span>}
+              {!data.synthetic && (() => {
+                const cls = classifyFrame(data.source.lunar_reference_frame);
+                return (
+                  <div style={{ marginTop: 3, color: cls.recognized ? 'var(--nominal)' : 'var(--blocked)' }}>
+                    {cls.recognized
+                      ? `Frame compatibility: ${cls.note}`
+                      : `Frame compatibility: UNVERIFIED — ${cls.note}`}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

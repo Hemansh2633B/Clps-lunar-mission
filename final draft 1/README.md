@@ -34,8 +34,8 @@ Production build and checks:
 
 ```bash
 npm run build        # tsc + vite build
-npm test             # 31 Vitest engine / physics / DEM-profile / export / vehicle tests
-npm run test:python  # 70 backend/DEM/horizon/downloader/API-error tests
+npm test             # 77 Vitest tests: engine, SPICE ephemeris validation, frame gating, sampling/battery, catalogue, export integrity, DEM-profile, vehicles
+npm run test:python  # 88 backend/DEM/horizon/downloader/API-error/lunar-frame tests
 npm run test:geometry# Three.js geometry / synthetic / horizon checks
 npm run test:parity  # TypeScript ↔ Python horizon ray-marcher parity
 npm run test:browser # Playwright console + Terrain Lab + Space views E2E (incl. mobile)
@@ -55,6 +55,41 @@ npm run test:real-dem   # in another terminal; tests http://localhost:8001
 > Paths contain a space (`final draft 1`). Always quote them in shell commands.
 
 The dev server is configured with `allowedHosts: true` so it works behind Arena / e2b preview proxies.
+
+---
+
+## Scientific integrity (audit)
+
+This console was audited end-to-end for scientific and engineering correctness. The full
+method, validation evidence, and limitations are in **[docs/SCIENTIFIC_METHOD.md](docs/SCIENTIFIC_METHOD.md)**.
+Highlights:
+
+- **Reference frames never mixed silently.** The ephemeris uses IAU 2015; LOLA DEMs are
+  MOON_ME (DE421). A SPICE-verified constant correction (residual ≤0.0039°, disclosed) rotates
+  recognized frames into IAU. **Unrecognized frames are blocked from quantitative mission
+  visibility** (viewable in Terrain Lab only). See `backend/lunar_frame.py`,
+  `scripts/generate-frame-constants.py`, `src/engine/lunarFrame.ts`.
+- **Independent SPICE validation** of Sun/Earth az+el, sub-Earth/sub-solar points, and the IAU
+  frame across 9 epochs × 6 sites (incl. exact pole): max errors ≤0.007° (`tests/ephemeris-validation.test.ts`).
+- **Correct sampling**: the 20,000-sample cap coarsens the step *uniformly* (full span + both
+  endpoints preserved, effective step reported); transitions are refined adaptively; percentages
+  and gaps integrate refined crossings and converge.
+- **Honest labels**: geometric Earth line-of-sight ≠ RF link budget; instantaneous power ≠ net
+  energy; battery energy-balance ≠ thermal survival; the feasibility score is a disclosed
+  application-defined heuristic, and data confidence is separated from performance.
+- **Persistent provenance indicator** reflects the real computation state (synthetic demo /
+  illustrative / real-DEM frame-verified / frame-unverified / incomplete coverage).
+- **Catalogue**: the nine Artemis III candidate regions (NASA Oct-2024) as approximate region
+  centers with source + uncertainty — never invented precise points; Apollo/Chang'e kept separate.
+- **Reproducible exports**: UTC interval, ephemeris/frame, terrain metadata, sampling,
+  power/battery assumptions, score methodology, and warnings; exports blocked while computing.
+
+To regenerate the frame constants and validation reference (requires SPICE kernels):
+
+```bash
+.venv/bin/python scripts/fetch-spice-kernels.py        # downloads kernels + PROVENANCE.json
+.venv/bin/python scripts/generate-frame-constants.py   # writes lunarFrameData.ts + frame-reference.json
+```
 
 ---
 

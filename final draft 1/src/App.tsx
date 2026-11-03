@@ -143,7 +143,7 @@ export default function App() {
     setTerrainView(false);
     notify(input.horizon.synthetic
       ? 'Synthetic demo horizon sent to mission planner — not real lunar data'
-      : `DEM horizon preserved sample-for-sample · frame ${s.terrain.sourceFrame ?? 'unspecified'} — verify against IAU ephemeris`);
+      : `DEM horizon preserved + rotated to IAU 2015 · frame ${s.terrain.sourceFrame ?? 'unspecified'} ${s.terrain.frameVerified ? '(verified; residual disclosed)' : '(UNVERIFIED — blocked from mission visibility)'}`);
   }, [notify]);
 
   const applyGuided = useCallback((s: GuidedScenario) => {

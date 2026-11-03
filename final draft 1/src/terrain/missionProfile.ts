@@ -64,7 +64,7 @@ export function terrainProfileFromHorizon(mask: HorizonMask): TerrainProfile {
     horizonRadiusKm: mask.horizon_radius_km,
     gridSize: mask.grid_size,
     samplingDeg: mask.azimuth_step_deg,
-    accuracyNote: 'Azimuth sampling half-width is shown; vertical accuracy is not provided by the DEM metadata and is not certified.',
+    accuracyNote: `Azimuth sampling half-width is shown; vertical accuracy is not provided by the DEM metadata and is not certified. Local analysis only: the horizon is ray-marched within the ${mask.radius_km} km crop (obstructions beyond ${mask.horizon_radius_km.toFixed(2)} km are not captured) — this is NOT a regional distant-horizon model. Azimuth-bin resolution is not vertical accuracy.`,
     frameVerified,
     frameTransform,
     frameNote,

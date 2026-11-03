@@ -123,6 +123,9 @@ try {
   await page.waitForTimeout(200);
   assert(await page.locator('[role="dialog"]').count() === 0, 'Escape closes the modal');
 
+  // Export is intentionally blocked while the mission window is computing (never
+  // stale), so wait for the active scenario to resolve before exporting.
+  await page.waitForSelector('text=How this score is computed', { timeout: 30000 });
   const [download] = await Promise.all([
     page.waitForEvent('download'),
     (async () => {
@@ -340,6 +343,44 @@ try {
   await page.waitForTimeout(400);
   assert(await page.locator('.planet-viewport').count() === 0, 'Space views close back to the console');
   assert(await page.locator('.app-header .display').innerText().then((t) => t.includes('CHANDRA')), 'brand survives view switching');
+
+  // ---- Audit features: Artemis catalogue, UTC selector, provenance, score transparency ----
+  await page.locator('.site-item', { hasText: 'Shackleton Rim' }).click();
+  await page.waitForTimeout(600);
+
+  // Artemis III tab lists exactly the nine NASA Oct-2024 candidate regions.
+  await page.getByRole('button', { name: 'Artemis III', exact: true }).click();
+  await page.waitForTimeout(300);
+  const artemisCount = await page.locator('.site-item').count();
+  assert(artemisCount === 9, `Artemis III tab shows nine regions (got ${artemisCount})`);
+  for (const region of ['Cabeus B', 'Haworth', 'Malapert', 'Mouton', 'Nobile', 'de Gerlache', 'Slater']) {
+    assert(await page.locator('.site-item', { hasText: region }).count() > 0, `Artemis region present: ${region}`);
+  }
+  assert(await page.locator('.site-item', { hasText: 'region approx.' }).count() > 0, 'Artemis regions labeled region-approximate, not surveyed');
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/12-artemis-catalogue.png` });
+  await page.getByRole('button', { name: 'all', exact: true }).click();
+  await page.waitForTimeout(200);
+
+  // Persistent provenance indicator reflects the illustrative default site.
+  assert(await page.locator('.provenance').count() > 0, 'provenance indicator present');
+  assert(await page.locator('text=ILLUSTRATIVE TERRAIN').count() > 0, 'illustrative provenance state shown');
+
+  // UTC mission-start selector exists and drives a recompute (no stale results).
+  const startInput = page.getByLabel('Mission start date and time (UTC)');
+  assert(await startInput.count() === 1, 'UTC mission-start selector present');
+  await startInput.fill('2027-03-01T00:00');
+  await startInput.dispatchEvent('change');
+  await page.waitForSelector('text=How this score is computed', { timeout: 30000 });
+  assert(await startInput.inputValue() === '2027-03-01T00:00', 'UTC start selector retains the chosen value');
+  assert(await page.locator('text=SAMPLING').count() > 0, 'sampling disclosure strip present');
+
+  // Score transparency: expand the heuristic breakdown and check components + confidence.
+  await page.locator('text=How this score is computed').click();
+  await page.waitForTimeout(300);
+  assert(await page.locator('text=Simultaneous Sun + Earth visibility').count() > 0, 'score components shown');
+  assert(await page.locator('text=Application-defined heuristic').count() > 0, 'score disclosed as heuristic');
+  assert(await page.locator('text=not an RF link budget').count() > 0, 'geometric LOS != RF disclosed');
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/13-provenance-score.png` });
 
   const unexpectedConsole = consoleErrors.filter((e) => !e.includes('status of 400')); // real-DEM-without-DEM 400 is an expected, tested safeguard
   assert(pageErrors.length === 0, `page errors: ${pageErrors.join(' | ')}`);
