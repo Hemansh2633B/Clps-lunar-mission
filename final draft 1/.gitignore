@@ -1,0 +1,19 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+test-results/
+playwright-report/
+.vite/
+
+.venv/
+data/*.tif
+data/*.tiff
+data/*config.json
+!data/README.md
+__pycache__/
+.pytest_cache/
+artifacts/
+
+# Local verification DEM fixtures (large raster data)
+data/verification/
