@@ -1,4 +1,4 @@
-# Prototype → SELENE feature port
+# Prototype → CHANDRA feature port
 
 This document maps every working capability from the repository’s `prototype/` directory into the integrated application in `final draft 1/`. The original prototype is left untouched; the new console keeps its mission-planning workspace and adds the prototype’s terrain tooling as **Terrain Lab**.
 
@@ -20,7 +20,7 @@ This document maps every working capability from the repository’s `prototype/`
 | Python API/coordinate/crop/downloader tests | `tests/python/` | 67 tests, including new horizon-mask tests. |
 | Node geometry checks | `scripts/geometry-check.ts` | Curvature, pole coordinates, Sun directions, mesh topology, NoData, synthetic demo, horizon ray-marching, edge-inset coverage. |
 | Browser/WebGL integration checks | `scripts/browser-test.mjs` | Mission console + Terrain Lab: orbit drag, keyboard orbit, camera presets, inspection, exaggeration, shadow pixel brightening, Sun extremes, all grid qualities, radius, horizon import, real-mode safeguard, mobile layout. |
-| Isolated planning-console prototype UI | `TerrainLab.tsx` | Re-homed into the SELENE aerospace design system rather than served as a separate page. |
+| Isolated planning-console prototype UI | `TerrainLab.tsx` | Re-homed into the CHANDRA aerospace design system rather than served as a separate page. |
 
 ## New integration beyond the prototype
 

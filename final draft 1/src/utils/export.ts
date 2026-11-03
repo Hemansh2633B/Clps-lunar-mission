@@ -36,7 +36,7 @@ export function missionReportJSON(site: LandingSite, config: MissionConfig, sim:
       ? 'Terrain: user-edited 8-sector horizon mask, NOT a measured DEM.'
       : 'Terrain: LOLA-inspired illustrative masks, NOT flight-certified DEM.';
   return JSON.stringify({
-    product: 'SELENE mission planning report',
+    product: 'CHANDRA mission planning report',
     generatedAt: new Date().toISOString(),
     disclaimer: `Ephemeris: astronomy-engine + IAU 2015 Moon rotation. ${terrainDisclaimer} Power: idealized cosine model with system derate. Center-of-disk LOS; no atmospheric refraction.`,
     site,

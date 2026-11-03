@@ -52,7 +52,7 @@ const DEFAULT_EXAMPLES: TerrainExample[] = [
 
 declare global {
   interface Window {
-    __SELENE_TERRAIN__?: {
+    __CHANDRA_TERRAIN__?: {
       mode: string; gridSize: number; triangles: number; landingPosition: number[] | null;
       exaggeration: number; shadows: boolean; sun: SunPosition | null; sunDirection: number[]; camera: number[];
       shadowMapSize: number[]; calls: number;
@@ -163,9 +163,9 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
         labelRef.current.style.top = `${((1 - p.y) / 2) * container.clientHeight}px`;
       }
       renderer.render(scene, camera);
-      if (window.__SELENE_TERRAIN__) {
-        window.__SELENE_TERRAIN__.camera = camera.position.toArray();
-        window.__SELENE_TERRAIN__.calls = renderer.info.render.calls;
+      if (window.__CHANDRA_TERRAIN__) {
+        window.__CHANDRA_TERRAIN__.camera = camera.position.toArray();
+        window.__CHANDRA_TERRAIN__.calls = renderer.info.render.calls;
       }
       if (changed) requestRender();
     };
@@ -416,7 +416,7 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
       ray_coverage_percent: horizon.ray_coverage_percent[i],
       max_obstacle_range_km: horizon.max_obstacle_range_km[i],
     }));
-    download(`selene-dem-horizon-${horizon.latitude.toFixed(2)}-${horizon.longitude.toFixed(1)}.csv`, toCSV(rows), 'text/csv');
+    download(`chandra-dem-horizon-${horizon.latitude.toFixed(2)}-${horizon.longitude.toFixed(1)}.csv`, toCSV(rows), 'text/csv');
     notify('DEM horizon mask exported');
   }, [horizon, notify]);
 
@@ -437,7 +437,7 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
     const d = data;
     const n = d?.grid.size ?? 0;
     const center = n ? Math.floor(n / 2) * n + Math.floor(n / 2) : 0;
-    window.__SELENE_TERRAIN__ = {
+    window.__CHANDRA_TERRAIN__ = {
       mode: d?.synthetic ? 'synthetic' : 'real',
       gridSize: n,
       triangles: ctx?.mesh ? ctx.mesh.geometry.index!.count / 3 : 0,

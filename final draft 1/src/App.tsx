@@ -16,6 +16,7 @@ import { TimelineScrubber } from './components/TimelineScrubber';
 import { ComparisonMatrix } from './components/ComparisonMatrix';
 const TerrainLab = lazy(() => import('./components/TerrainLab').then((m) => ({ default: m.TerrainLab })));
 import type { TerrainSiteInput } from './components/TerrainLab';
+const SpaceView = lazy(() => import('./components/SpaceView').then((m) => ({ default: m.SpaceView })));
 import { EducatorOverlay } from './components/EducatorOverlay';
 import { CustomSiteModal, SettingsModal, HorizonTableModal, ShortcutsModal, type CustomSiteInput } from './components/Modals';
 import { download, missionReportJSON, timeseriesCSV, horizonCSV, summaryCSV, comparisonCSV, type ComparisonRow } from './utils/export';
@@ -41,6 +42,7 @@ export default function App() {
   const [mode, setMode] = useState<AppMode>('planner');
   const [compareMode, setCompareMode] = useState(false);
   const [terrainView, setTerrainView] = useState(false);
+  const [spaceView, setSpaceView] = useState(false);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [panorama, setPanorama] = useState<PanoramaOptions>({ showTracks: true, showTerrain: true, sector: 'full' });
   const [mapLayers, setMapLayers] = useState<MapLayers>({ grid: true, lighting: true, earthVector: true });
@@ -81,7 +83,7 @@ export default function App() {
 
   useEffect(() => {
     setTimeMs((t) => clamp(t, win.startMs, win.endMs));
-  }, [win.startMs, win.endMs]);
+  }, [win.startMs, win.endMs, spaceView]);
 
   const pinCurrent = useCallback(() => {
     setScenarios((prev) => {
@@ -105,8 +107,9 @@ export default function App() {
       else if (e.key === ']') setTimeMs((t) => clamp(t + DAY_MS, win.startMs, win.endMs));
       else if (e.key === 'ArrowLeft') setTimeMs((t) => clamp(t - HOUR_MS, win.startMs, win.endMs));
       else if (e.key === 'ArrowRight') setTimeMs((t) => clamp(t + HOUR_MS, win.startMs, win.endMs));
-      else if (e.key.toLowerCase() === 'c') { setTerrainView(false); setCompareMode((v) => !v); }
-      else if (e.key.toLowerCase() === 't') setTerrainView((v) => !v);
+      else if (e.key.toLowerCase() === 'c') { setTerrainView(false); setSpaceView(false); setCompareMode((v) => !v); }
+      else if (e.key.toLowerCase() === 't') { setSpaceView(false); setTerrainView((v) => !v); }
+      else if (e.key.toLowerCase() === 'o') { setTerrainView(false); setCompareMode(false); setSpaceView((v) => !v); }
       else if (e.key.toLowerCase() === 'e') setMode((m) => (m === 'planner' ? 'educator' : 'planner'));
       else if (e.key.toLowerCase() === 'g') setGuideOpen((v) => !v);
       else if (e.key.toLowerCase() === 'p') pinCurrent();
@@ -158,18 +161,18 @@ export default function App() {
 
   const handleExport = useCallback((kind: 'json' | 'timeseries' | 'horizon' | 'summary') => {
     const stamp = new Date(timeMs).toISOString().slice(0, 10);
-    if (kind === 'json') download(`selene-report-${stamp}.json`, missionReportJSON(site, config, missionSim.data, current), 'application/json');
-    else if (kind === 'horizon') download(`selene-horizon-${site.id}.csv`, horizonCSV(site, current), 'text/csv');
+    if (kind === 'json') download(`chandra-report-${stamp}.json`, missionReportJSON(site, config, missionSim.data, current), 'application/json');
+    else if (kind === 'horizon') download(`chandra-horizon-${site.id}.csv`, horizonCSV(site, current), 'text/csv');
     else if (!missionSim.data) { notify('Mission window is still computing.'); return; }
-    else if (kind === 'timeseries') download(`selene-timeseries-${site.id}.csv`, timeseriesCSV(missionSim.data), 'text/csv');
-    else download(`selene-summary-${site.id}.csv`, summaryCSV(missionSim.data), 'text/csv');
+    else if (kind === 'timeseries') download(`chandra-timeseries-${site.id}.csv`, timeseriesCSV(missionSim.data), 'text/csv');
+    else download(`chandra-summary-${site.id}.csv`, summaryCSV(missionSim.data), 'text/csv');
     notify(`Exported ${kind}`);
   }, [site, config, missionSim.data, current, timeMs, notify]);
 
   const handleComparisonExport = useCallback((kind: 'csv' | 'json', rows: ComparisonRow[]) => {
     const full = rows.map((r) => ({ ...r, sim: cachedSimulation(r.site, r.scenario.startMs, r.scenario.startMs + r.scenario.config.durationDays * DAY_MS, r.scenario.config) ?? null }));
-    if (kind === 'csv') download('selene-comparison.csv', comparisonCSV(full), 'text/csv');
-    else download('selene-comparison.json', JSON.stringify(full.map((r) => ({ scenario: r.scenario, site: r.site, summary: r.sim?.summary ?? null })), null, 2), 'application/json');
+    if (kind === 'csv') download('chandra-comparison.csv', comparisonCSV(full), 'text/csv');
+    else download('chandra-comparison.json', JSON.stringify(full.map((r) => ({ scenario: r.scenario, site: r.site, summary: r.sim?.summary ?? null })), null, 2), 'application/json');
     notify('Comparison exported');
   }, [notify]);
 
@@ -177,8 +180,10 @@ export default function App() {
     <div className="app-shell">
       <HeaderBar
         timeMs={timeMs} mode={mode} onMode={setMode} compareMode={compareMode}
-        onCompare={() => { setTerrainView(false); setCompareMode((v) => !v); }}
-        terrainActive={terrainView} onTerrain={() => setTerrainView((v) => !v)} onGuide={() => setGuideOpen(true)}
+        onCompare={() => { setTerrainView(false); setSpaceView(false); setCompareMode((v) => !v); }}
+        terrainActive={terrainView} onTerrain={() => { setSpaceView(false); setTerrainView((v) => !v); }}
+        spaceActive={spaceView} onSpace={() => { setTerrainView(false); setCompareMode(false); setSpaceView((v) => !v); }}
+        onGuide={() => setGuideOpen(true)}
         onSettings={() => setSettingsOpen(true)} onShortcuts={() => setShortcutsOpen(true)}
         onExport={handleExport} playing={playing}
         subSolar={{ lat: current.subsolarLatitudeDeg, lon: current.subsolarLongitudeDeg }}
@@ -186,7 +191,7 @@ export default function App() {
       />
       <div className="ticker" aria-hidden="true">
         <div className="ticker-track">
-          {[...TICKER, ...TICKER].map((t, i) => <span key={i}>✶ {t}</span>)}
+          {[...TICKER, ...TICKER].map((t, i) => <span key={i}>· {t}</span>)}
         </div>
       </div>
       {mode === 'educator' && (
@@ -195,14 +200,18 @@ export default function App() {
           <button className="btn sm ghost" style={{ color: '#1f7a52', marginLeft: 'auto' }} onClick={() => setGuideOpen(true)}><BookOpen size={12} /> Open guided stories</button>
         </div>
       )}
-      <div className={`workspace ${compareMode && !terrainView ? 'compare' : ''} ${terrainView ? 'terrain' : ''}`}>
+      <div className={`workspace ${compareMode && !terrainView && !spaceView ? 'compare' : ''} ${terrainView ? 'terrain' : ''} ${spaceView ? 'orbital' : ''}`}>
         <aside className="site-rail">
           <SiteCatalog sites={sites} selectedId={site.id} onSelect={setSelectedId}
             onCustom={() => { setCustomInitial(undefined); setCustomOpen(true); }}
             onHorizonTable={() => setHorizonOpen(true)} onPin={pinCurrent} compareMode={compareMode} />
         </aside>
         <main className="center-stack">
-          {terrainView ? (
+          {spaceView ? (
+            <Suspense fallback={<div className="panel" style={{ flex: 1, display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>Loading 3D space views…</div>}>
+              <SpaceView sites={sites} selectedId={site.id} onSelect={setSelectedId} timeMs={timeMs} onTime={setTimeMs} mode={mode} />
+            </Suspense>
+          ) : terrainView ? (
             <Suspense fallback={<div className="panel" style={{ flex: 1, display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>Loading Terrain Lab…</div>}>
               <TerrainLab site={site} timeMs={timeMs} mode={mode} onCreateSite={createTerrainSite} notify={notify} />
             </Suspense>
@@ -225,20 +234,22 @@ export default function App() {
           <TelemetryPanel site={site} current={current} sim={missionSim.data} events={events} timeMs={timeMs} mode={mode} config={config} onSettings={() => setSettingsOpen(true)} />
         </aside>
       </div>
-      <TimelineScrubber
-        sim={activeSim.data} loading={activeSim.loading} window={win} timeMs={timeMs} onTime={setTimeMs}
-        baselineMs={baselineMs} slipDays={slipDays} onSlip={setSlipDays} durationDays={config.durationDays}
-        onDuration={(d) => setConfig((c) => ({ ...c, durationDays: d }))}
-        playing={playing} onPlay={() => setPlaying((p) => !p)} speed={speed} onSpeed={setSpeed}
-        viewDays={viewDays} onViewDays={setViewDays}
-        missionSummary={missionSim.data?.summary ?? null} baselineSummary={baselineSim.data?.summary ?? null}
-      />
+      {!spaceView && (
+        <TimelineScrubber
+          sim={activeSim.data} loading={activeSim.loading} window={win} timeMs={timeMs} onTime={setTimeMs}
+          baselineMs={baselineMs} slipDays={slipDays} onSlip={setSlipDays} durationDays={config.durationDays}
+          onDuration={(d) => setConfig((c) => ({ ...c, durationDays: d }))}
+          playing={playing} onPlay={() => setPlaying((p) => !p)} speed={speed} onSpeed={setSpeed}
+          viewDays={viewDays} onViewDays={setViewDays}
+          missionSummary={missionSim.data?.summary ?? null} baselineSummary={baselineSim.data?.summary ?? null}
+        />
+      )}
       <footer className="status-bar">
         <span><span className="dot" style={{ background: 'var(--nominal)' }} />EPHEMERIS · astronomy-engine + IAU 2015 Moon rotation</span>
         <span><span className="dot" style={{ background: site.terrain.kind === 'dem' && !site.terrain.synthetic ? 'var(--earth)' : 'var(--solar)' }} />TERRAIN · {site.terrain.kind === 'dem' ? (site.terrain.synthetic ? 'synthetic demo horizon (not real lunar data)' : `DEM-derived horizon · ${site.terrain.sourceFile ?? 'local DEM'} (verify frame)`) : site.terrain.kind === 'custom' ? 'user-edited 8-sector mask (not measured DEM)' : 'LOLA-inspired illustrative masks (not flight DEM)'}</span>
         <span>LOS · center-of-disk, no refraction</span>
         <span>{activeSim.data ? `${activeSim.data.summary.sampleCount} samples · ${activeSim.data.computeMs.toFixed(0)} ms` : 'computing…'}</span>
-        <span style={{ marginLeft: 'auto' }}>Space play · [ ] days · C compare · T terrain · E educator · G guide · ? help</span>
+        <span style={{ marginLeft: 'auto' }}>Space play · [ ] days · C compare · T terrain · O space · E educator · G guide · ? help</span>
       </footer>
 
       {customOpen && <CustomSiteModal onClose={() => setCustomOpen(false)} onCreate={createCustom} initial={customInitial} />}

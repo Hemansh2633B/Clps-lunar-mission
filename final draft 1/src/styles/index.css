@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ============================================================
-   SELENE // OPS — paper-folio design system
+   CHANDRA // OPS — paper-folio design system
    Warm cream paper, ink, coral/amber/navy/lagoon/emerald.
    Fraunces (display) · Outfit (sans) · IBM Plex Mono (data).
    ============================================================ */
@@ -335,4 +335,70 @@ input[type="range"].earth::-webkit-slider-thumb { background: var(--lagoon); }
   .terrain-synthetic-banner { white-space: normal; text-align: center; max-width: calc(100% - 24px); }
   .terrain-guide { display: none; }
   .terrain-inspection { left: 12px; right: 12px; top: auto; bottom: 40px; }
+}
+
+/* ---- v1.5 Space views (planet time-lapse + fleet hangar) ---- */
+.workspace.orbital .center-stack { grid-column: 2 / 4; }
+.workspace.orbital .telemetry-rail { display: none; }
+.space-view { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; background: var(--paper); }
+.space-tabs { display: flex; align-items: center; gap: 2px; padding: 6px 10px; background: var(--paper-2); border-bottom: 1px solid var(--line); flex: 0 0 auto; flex-wrap: wrap; }
+.space-tab { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding: 6px 12px; border: 1px solid transparent; background: transparent; color: var(--ink-soft); cursor: pointer; }
+.space-tab:hover { color: var(--ink); background: #f6efe3; }
+.space-tab.active { background: var(--ink); color: var(--paper-2); border-color: var(--ink); }
+.space-tabs-hint { margin-left: auto; font-size: 9px; letter-spacing: .12em; color: var(--brass); }
+
+.planet-view, .fleet-view { min-width: 0; }
+.planet-stage { position: relative; flex: 1 1 0; min-height: 240px; min-width: 0; background: radial-gradient(ellipse at 50% 40%, #0b0e16 0%, #05060a 75%); overflow: hidden; }
+.planet-viewport { position: absolute; inset: 0; }
+.planet-viewport canvas { display: block; width: 100%; height: 100%; max-width: 100%; }
+.planet-label { position: absolute; z-index: 3; transform: translate(-50%, -150%); font-family: var(--font-mono); font-size: 9px; letter-spacing: .1em; padding: 2px 6px; pointer-events: none; white-space: nowrap; background: rgba(8, 10, 16, .82); border: 1px solid var(--line-strong); color: var(--paper); }
+.planet-label.site { border-color: var(--emerald); color: #d7f3e4; }
+.planet-label.solar { border-color: var(--amber); color: #ffe6b8; }
+.planet-label.earth { border-color: var(--lagoon); color: #cdeef2; }
+.planet-hud-top { position: absolute; left: 12px; top: 10px; z-index: 4; display: flex; flex-direction: column; gap: 4px; max-width: calc(100% - 120px); }
+.planet-toggles { position: absolute; right: 10px; top: 10px; z-index: 4; display: flex; gap: 2px; background: rgba(8, 10, 16, .72); border: 1px solid rgba(224, 207, 174, .4); padding: 2px; }
+.planet-toggles .btn { min-height: 24px; color: var(--paper); background: transparent; border-color: transparent; }
+.planet-toggles .btn:hover { background: rgba(255, 250, 242, .15); color: #fff; }
+.planet-toggles .btn.active { background: var(--amber); color: var(--ink); border-color: var(--amber); }
+.timelapse-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--panel); border-top: 1px solid var(--line); flex: 0 0 auto; flex-wrap: wrap; }
+.timelapse-bar input[type="range"] { flex: 1; min-width: 120px; }
+.timelapse-read { display: flex; gap: 12px; flex-wrap: wrap; font-size: 10px; color: var(--ink-soft); }
+.timelapse-read .brass-text { color: var(--brass); }
+.planet-caption { padding: 8px 14px; background: #e7f5ee; border-top: 1px solid #a9d3bd; color: #14532d; font-size: 11px; line-height: 1.55; flex: 0 0 auto; }
+
+.fleet-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 1px; background: var(--line); flex: 1; min-height: 0; min-width: 0; }
+.fleet-stage { position: relative; min-height: 280px; min-width: 0; background: radial-gradient(ellipse at 50% 120%, #2a2620 0%, #12100c 70%); overflow: hidden; }
+.fleet-viewport { position: absolute; inset: 0; }
+.fleet-viewport canvas { display: block; width: 100%; height: 100%; max-width: 100%; }
+.fleet-hud-top { position: absolute; left: 12px; top: 10px; z-index: 4; display: flex; flex-direction: column; gap: 4px; max-width: calc(100% - 24px); }
+.fleet-view-tools { position: absolute; right: 10px; bottom: 8px; z-index: 4; display: flex; gap: 2px; background: rgba(20, 17, 12, .72); border: 1px solid rgba(224, 207, 174, .4); padding: 2px; }
+.fleet-view-tools .btn { min-height: 22px; font-size: 10px; color: var(--paper); background: transparent; border-color: transparent; }
+.fleet-view-tools .btn:hover { background: rgba(255, 250, 242, .15); color: #fff; }
+.fleet-tooltip { position: absolute; z-index: 5; display: flex; flex-direction: column; gap: 2px; max-width: 220px; background: rgba(20, 17, 12, .92); border: 1px solid var(--amber); padding: 6px 9px; pointer-events: none; }
+.fleet-tooltip strong { font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; color: #ffe6b8; }
+.fleet-tooltip span { font-size: 10px; color: var(--paper); line-height: 1.4; }
+.fleet-controls { background: var(--panel-2); padding: 14px; display: flex; flex-direction: column; gap: 16px; overflow: auto; min-width: 0; }
+.fleet-spec { display: flex; flex-direction: column; gap: 5px; border: 1px solid var(--line); background: var(--paper-2); padding: 10px; }
+.fleet-spec .row { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; }
+.fleet-spec .k { font-family: var(--font-mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--brass); }
+.fleet-spec .v { color: var(--ink); text-align: right; }
+.fleet-part { display: flex; flex-direction: column; gap: 1px; border: 1px solid var(--line); background: var(--paper-2); padding: 5px 8px; transition: border-color .12s; }
+.fleet-disclaimer { display: flex; gap: 7px; align-items: flex-start; font-size: 10px; line-height: 1.5; color: var(--ink-soft); border-top: 1px dashed var(--line-strong); padding-top: 10px; }
+.fleet-disclaimer svg { flex: 0 0 auto; margin-top: 1px; color: var(--brass); }
+
+@media (max-width: 1100px) {
+  .fleet-body { grid-template-columns: 1fr; }
+  .fleet-stage { order: 1; min-height: 360px; }
+  .fleet-controls { order: 2; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items: start; }
+}
+@media (max-width: 900px) {
+  .workspace.orbital .center-stack { grid-column: auto; order: -1; }
+  .planet-stage { min-height: 340px; }
+  .space-tabs-hint { display: none; }
+}
+@media (max-width: 600px) {
+  .fleet-controls { grid-template-columns: 1fr; }
+  .timelapse-read { width: 100%; }
+  .planet-hud-top { max-width: calc(100% - 24px); }
+  .planet-toggles { top: auto; bottom: 8px; right: 8px; }
 }

@@ -35,12 +35,12 @@ const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 const assert = (cond, msg) => { if (!cond) throw new Error(`ASSERT FAILED: ${msg}`); };
-const state = () => page.evaluate(() => window.__SELENE_TERRAIN__);
+const state = () => page.evaluate(() => window.__CHANDRA_TERRAIN__);
 
 try {
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await page.keyboard.press('t');
-  await page.waitForFunction(() => window.__SELENE_TERRAIN__?.mode === 'real' && window.__SELENE_TERRAIN__.gridSize === 257, null, { timeout: 60000 });
+  await page.waitForFunction(() => window.__CHANDRA_TERRAIN__?.mode === 'real' && window.__CHANDRA_TERRAIN__.gridSize === 257, null, { timeout: 60000 });
   await page.waitForTimeout(800);
   const real = await state();
   assert(real.mode === 'real', 'configured DEM auto-loads in real mode');
@@ -52,7 +52,7 @@ try {
 
   await page.getByLabel('Azimuth bin').selectOption('10');
   await page.getByRole('button', { name: /Compute 360° horizon/ }).click();
-  await page.waitForFunction(() => window.__SELENE_TERRAIN__?.horizon?.bins === 36, null, { timeout: 60000 });
+  await page.waitForFunction(() => window.__CHANDRA_TERRAIN__?.horizon?.bins === 36, null, { timeout: 60000 });
   const hz = await state();
   assert(hz.horizon.coverage === 100, 'real fixture horizon coverage');
   assert(hz.horizon.importBlocked === null, 'complete real fixture horizon is importable');

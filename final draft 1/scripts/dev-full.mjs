@@ -19,7 +19,7 @@ const children = [];
 let shuttingDown = false;
 
 function run(name, command, args) {
-  const env = name === 'web' ? { ...process.env, SELENE_API_PORT: apiPort } : process.env;
+  const env = name === 'web' ? { ...process.env, CHANDRA_API_PORT: apiPort } : process.env;
   const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], shell: process.platform === 'win32', env });
   children.push(child);
   const prefix = `[${name}] `;
@@ -45,7 +45,7 @@ function shutdown(code = 0) {
 process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
 
-console.log(`Starting SELENE Terrain Lab API (port ${apiPort}) and Vite console (port ${webPort})…`);
+console.log(`Starting CHANDRA Terrain Lab API (port ${apiPort}) and Vite console (port ${webPort})…`);
 console.log('If Python dependencies are missing: python3 -m venv .venv && .venv/bin/python -m pip install -r backend/requirements.txt -r requirements-dev.txt');
 run('api', pythonBin(), backendArgs);
 run('web', process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', 'dev', '--', '--port', webPort, '--strictPort']);

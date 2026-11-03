@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, Box, Columns2, Download, Keyboard, Settings2, GraduationCap, Gauge } from 'lucide-react';
+import { BookOpen, Box, Columns2, Download, Keyboard, Settings2, GraduationCap, Gauge, Orbit } from 'lucide-react';
 import type { AppMode } from '../types/mission';
 import { mjd, wrap180 } from '../engine/constants';
 
@@ -11,6 +11,8 @@ interface Props {
   onCompare: () => void;
   terrainActive: boolean;
   onTerrain: () => void;
+  spaceActive: boolean;
+  onSpace: () => void;
   onGuide: () => void;
   onSettings: () => void;
   onShortcuts: () => void;
@@ -23,7 +25,7 @@ interface Props {
 const fmtLat = (v: number) => `${Math.abs(v).toFixed(2)}°${v >= 0 ? 'N' : 'S'}`;
 const fmtLon = (v: number) => { const w = wrap180(v); return `${Math.abs(w).toFixed(2)}°${w >= 0 ? 'E' : 'W'}`; };
 
-export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrainActive, onTerrain, onGuide, onSettings, onShortcuts, onExport, playing, subSolar, subEarth }: Props) {
+export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrainActive, onTerrain, spaceActive, onSpace, onGuide, onSettings, onShortcuts, onExport, playing, subSolar, subEarth }: Props) {
   const [exportOpen, setExportOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -37,10 +39,10 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
       <div className="coralbar" />
       <header className="app-header" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '8px 14px', borderBottom: '1px solid var(--line)', background: 'rgba(248,241,228,.94)', backdropFilter: 'blur(8px)', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 11, flex: '0 0 auto' }}>
-          <img src="/assets/patch.png" alt="SELENE mission patch" width={42} height={42} style={{ width: 42, height: 42, borderRadius: '50%', border: '1px solid var(--line)', objectFit: 'cover', flex: '0 0 auto' }} />
-          <div>
-            <div className="display" style={{ fontSize: 19, lineHeight: 1, fontWeight: 600, whiteSpace: 'nowrap' }}>SELENE <span style={{ color: 'var(--coral)' }}>//</span> OPS</div>
-            <div className="mono" style={{ fontSize: 9, letterSpacing: '.18em', color: 'var(--ink-soft)', marginTop: 3 }}>LUNAR SOUTH POLE DESK · v1.4</div>
+          <img src="/assets/patch.png" alt="CHANDRA mission patch" width={42} height={42} style={{ width: 42, height: 42, borderRadius: '50%', border: '1px solid var(--line)', objectFit: 'cover', flex: '0 0 auto' }} />
+          <div title="CHANDRA — Sanskrit lunar deity, “the shining one”">
+            <div className="display" style={{ fontSize: 19, lineHeight: 1, fontWeight: 600, whiteSpace: 'nowrap' }}>CHANDRA <span style={{ color: 'var(--coral)' }}>//</span> OPS</div>
+            <div className="mono" style={{ fontSize: 9, letterSpacing: '.18em', color: 'var(--ink-soft)', marginTop: 3 }}>LUNAR SOUTH POLE DESK · v1.5</div>
           </div>
         </div>
 
@@ -58,8 +60,9 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
             <button type="button" role="radio" aria-checked={mode === 'planner'} onClick={() => onMode('planner')}><Gauge size={13} /> FLIGHT OPS</button>
             <button type="button" role="radio" aria-checked={mode === 'educator'} onClick={() => onMode('educator')}><GraduationCap size={13} /> EDUCATOR</button>
           </div>
+          <button className={`btn ${spaceActive ? 'active' : ''}`} onClick={onSpace}><Orbit size={14} /> Space <span className="kbd">O</span></button>
           <button className={`btn ${terrainActive ? 'active' : ''}`} onClick={onTerrain}><Box size={14} /> Terrain <span className="kbd">T</span></button>
-          <button className={`btn ${compareMode && !terrainActive ? 'active' : ''}`} onClick={onCompare}><Columns2 size={14} /> Compare <span className="kbd">C</span></button>
+          <button className={`btn ${compareMode && !terrainActive && !spaceActive ? 'active' : ''}`} onClick={onCompare}><Columns2 size={14} /> Compare <span className="kbd">C</span></button>
           <button className="btn" onClick={onGuide}><BookOpen size={14} /> Guide <span className="kbd">G</span></button>
           <div ref={ref} style={{ position: 'relative' }}>
             <button className="btn primary" onClick={() => setExportOpen((v) => !v)}><Download size={14} /> Export</button>

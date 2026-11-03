@@ -61,21 +61,21 @@ const comparePng = (a, b) => page.evaluate(async ([first, second]) => {
   }
   return { changed, brighter };
 }, [a.toString('base64'), b.toString('base64')]);
-const terrainState = () => page.evaluate(() => window.__SELENE_TERRAIN__);
+const terrainState = () => page.evaluate(() => window.__CHANDRA_TERRAIN__);
 const buildTerrain = async ({ mode, quality, radius } = {}) => {
   if (mode) await page.getByLabel('Source', { exact: true }).selectOption(mode);
   if (quality) await page.getByLabel('Grid', { exact: true }).selectOption(quality);
   if (radius != null) await page.getByLabel('Radius km', { exact: true }).fill(String(radius));
   const expected = quality === 'low' ? 129 : quality === 'high' ? 513 : 257;
   await page.getByRole('button', { name: /Build terrain/ }).click();
-  await page.waitForFunction((n) => window.__SELENE_TERRAIN__?.gridSize === n && !document.querySelector('.terrain-loading'), expected, { timeout: 30000 });
+  await page.waitForFunction((n) => window.__CHANDRA_TERRAIN__?.gridSize === n && !document.querySelector('.terrain-loading'), expected, { timeout: 30000 });
   await page.waitForTimeout(250);
 };
 
 try {
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await page.waitForSelector('.app-header .display');
-  assert(await page.locator('.app-header .display').innerText().then((t) => t.includes('SELENE')), 'header brand renders');
+  assert(await page.locator('.app-header .display').innerText().then((t) => t.includes('CHANDRA')), 'header brand renders');
   await page.waitForTimeout(1200);
   await page.screenshot({ animations: 'disabled', path: `${OUT}/01-workspace.png` });
   assert(await page.locator('.site-item').count() >= 10, 'catalog has 10+ sites');
@@ -139,7 +139,7 @@ try {
 
   // Terrain Lab: ported prototype capabilities + integrated DEM workflow.
   await page.keyboard.press('t');
-  await page.waitForFunction(() => window.__SELENE_TERRAIN__ && window.__SELENE_TERRAIN__.gridSize === 257, null, { timeout: 30000 });
+  await page.waitForFunction(() => window.__CHANDRA_TERRAIN__ && window.__CHANDRA_TERRAIN__.gridSize === 257, null, { timeout: 30000 });
   await page.waitForTimeout(800);
   const initialTerrain = await terrainState();
   assert(initialTerrain.mode === 'synthetic', 'terrain lab starts in labeled synthetic mode');
@@ -161,7 +161,7 @@ try {
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.72, box.y + box.height * 0.57, { steps: 6 });
   await page.mouse.up();
-  await page.waitForFunction((before) => JSON.stringify(window.__SELENE_TERRAIN__?.camera) !== before, JSON.stringify(initialTerrain.camera), { timeout: 5000 });
+  await page.waitForFunction((before) => JSON.stringify(window.__CHANDRA_TERRAIN__?.camera) !== before, JSON.stringify(initialTerrain.camera), { timeout: 5000 });
   assert(JSON.stringify((await terrainState()).camera) !== JSON.stringify(initialTerrain.camera), 'drag orbits camera');
   await page.getByRole('button', { name: /Reset view/ }).click();
   await page.waitForTimeout(300);
@@ -170,11 +170,11 @@ try {
   await canvas.focus();
   const beforeKey = await terrainState();
   await page.keyboard.press('ArrowRight');
-  await page.waitForFunction((before) => JSON.stringify(window.__SELENE_TERRAIN__?.camera) !== before, JSON.stringify(beforeKey.camera), { timeout: 5000 });
+  await page.waitForFunction((before) => JSON.stringify(window.__CHANDRA_TERRAIN__?.camera) !== before, JSON.stringify(beforeKey.camera), { timeout: 5000 });
   assert(JSON.stringify((await terrainState()).camera) !== JSON.stringify(beforeKey.camera), 'arrow key orbits focused viewport');
   await page.keyboard.press('Home');
   await page.getByRole('button', { name: 'Top', exact: true }).click();
-  await page.waitForFunction(() => { const c = window.__SELENE_TERRAIN__?.camera; return c && c[1] > Math.abs(c[0]) * 5; }, null, { timeout: 5000 });
+  await page.waitForFunction(() => { const c = window.__CHANDRA_TERRAIN__?.camera; return c && c[1] > Math.abs(c[0]) * 5; }, null, { timeout: 5000 });
   const top = await terrainState();
   assert(top.camera[1] > Math.abs(top.camera[0]) * 5, 'top-down preset');
   await page.getByRole('button', { name: 'Oblique', exact: true }).click();
@@ -192,14 +192,14 @@ try {
   assert((await terrainState()).shadows === true, 'shadows default on');
   const shadowOn = await canvas.screenshot();
   await page.locator('.terrain-lab-controls input[type="checkbox"]').uncheck();
-  await page.waitForFunction(() => window.__SELENE_TERRAIN__?.shadows === false);
+  await page.waitForFunction(() => window.__CHANDRA_TERRAIN__?.shadows === false);
   await page.waitForTimeout(600);
   assert((await terrainState()).shadows === false, 'shadow toggle works');
   const shadowOff = await canvas.screenshot();
   const shadowDiff = await comparePng(shadowOn, shadowOff);
   assert(shadowDiff.changed > 50 && shadowDiff.brighter > 50, `shadow toggle changes and brightens terrain pixels: ${JSON.stringify(shadowDiff)}`);
   await page.locator('.terrain-lab-controls input[type="checkbox"]').check();
-  await page.waitForFunction(() => window.__SELENE_TERRAIN__?.shadows === true);
+  await page.waitForFunction(() => window.__CHANDRA_TERRAIN__?.shadows === true);
   await page.waitForTimeout(400);
   await setRange(page.getByLabel(/Azimuth ·/), 283);
   await page.waitForTimeout(500);
@@ -226,7 +226,7 @@ try {
   await page.getByLabel('Azimuth bin').selectOption('10');
   await page.getByLabel('Eye height m').fill('5');
   await page.getByRole('button', { name: /Compute 360° horizon/ }).click();
-  await page.waitForFunction(() => window.__SELENE_TERRAIN__?.horizon?.bins === 36, null, { timeout: 30000 });
+  await page.waitForFunction(() => window.__CHANDRA_TERRAIN__?.horizon?.bins === 36, null, { timeout: 30000 });
   const hz = await terrainState();
   assert(hz.horizon.coverage === 100, 'complete synthetic disk has full ray coverage after edge inset');
   assert(hz.horizon.importBlocked === null, 'synthetic demo import is allowed but labeled');
@@ -235,7 +235,7 @@ try {
     page.waitForEvent('download'),
     page.getByRole('button', { name: 'CSV', exact: true }).click(),
   ]);
-  assert(hzDownload.suggestedFilename().startsWith('selene-dem-horizon'), 'horizon CSV export');
+  assert(hzDownload.suggestedFilename().startsWith('chandra-dem-horizon'), 'horizon CSV export');
   await page.getByRole('button', { name: /Use in mission/ }).click();
   await page.waitForTimeout(700);
   assert(await page.locator('.site-item', { hasText: 'Demo -89.50° 45.0°' }).count() > 0, 'DEM/demo horizon creates mission site');
@@ -244,14 +244,14 @@ try {
 
   // Real mode never silently falls back when no DEM is configured.
   await page.keyboard.press('t');
-  await page.waitForFunction(() => window.__SELENE_TERRAIN__?.gridSize === 257, null, { timeout: 30000 });
+  await page.waitForFunction(() => window.__CHANDRA_TERRAIN__?.gridSize === 257, null, { timeout: 30000 });
   await page.getByLabel('Source', { exact: true }).selectOption('real');
   await page.getByRole('button', { name: /Build terrain/ }).click();
   await page.waitForSelector('text=No DEM configured');
   assert(await page.locator('[role="alert"]').first().innerText().then((t) => t.includes('No DEM configured')), 'real mode never silently falls back');
   await page.getByLabel('Source', { exact: true }).selectOption('synthetic');
   await page.getByRole('button', { name: /Build terrain/ }).click();
-  await page.waitForFunction(() => window.__SELENE_TERRAIN__?.gridSize === 257);
+  await page.waitForFunction(() => window.__CHANDRA_TERRAIN__?.gridSize === 257);
 
   // Mobile layout: no horizontal overflow, viewport still usable.
   await page.setViewportSize({ width: 390, height: 844 });
@@ -268,10 +268,83 @@ try {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.keyboard.press('t');
 
+  // ---- v1.5 Space views: planet time-lapse + fleet hangar ----
+  const planetState = () => page.evaluate(() => window.__CHANDRA_PLANET__);
+  const fleetState = () => page.evaluate(() => window.__CHANDRA_FLEET__);
+  await page.keyboard.press('o');
+  await page.waitForFunction(() => window.__CHANDRA_PLANET__ && window.__CHANDRA_PLANET__.sites > 0, null, { timeout: 30000 });
+  await page.waitForTimeout(1400); // let the Moon texture decode
+  assert(await page.locator('.planet-viewport canvas').isVisible(), 'planet viewport renders');
+  assert((await planetState()).sites >= 10, 'planet shows the site catalog markers');
+  assert(await page.locator('.planet-label.site').count() > 0, 'selected-site label present');
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/09-planet.png` });
+
+  // Time-lapse advances the real ephemeris (sub-solar point sweeps).
+  const beforeLapse = await planetState();
+  await page.getByLabel('Time-lapse speed').selectOption('4'); // 7 days / s
+  await page.locator('.timelapse-bar button').first().click();
+  await page.waitForFunction(() => window.__CHANDRA_PLANET__?.playing === true, null, { timeout: 5000 });
+  await page.waitForTimeout(1300);
+  const duringLapse = await planetState();
+  assert(duringLapse.timeMs > beforeLapse.timeMs, 'time-lapse advances the clock');
+  assert(Math.abs(duringLapse.subsolar[1] - beforeLapse.subsolar[1]) > 5 || Math.abs(duringLapse.subsolar[0] - beforeLapse.subsolar[0]) > 1, 'sub-solar point moves during time-lapse');
+  await page.locator('.timelapse-bar button').first().click(); // pause
+  await page.waitForFunction(() => window.__CHANDRA_PLANET__?.playing === false, null, { timeout: 5000 });
+  // Camera presets reposition the camera.
+  const camBefore = (await planetState()).camera;
+  await page.getByRole('button', { name: 'South pole', exact: true }).click();
+  await page.waitForFunction((before) => JSON.stringify(window.__CHANDRA_PLANET__?.camera) !== before, JSON.stringify(camBefore), { timeout: 5000 });
+  assert((await planetState()).camera[1] < -2, 'south-pole preset looks up at the pole');
+
+  // Fleet hangar tab.
+  await page.getByRole('tab', { name: /Fleet hangar/ }).click();
+  await page.waitForFunction(() => window.__CHANDRA_FLEET__ && window.__CHANDRA_FLEET__.parts > 1, null, { timeout: 30000 });
+  await page.waitForTimeout(700);
+  assert((await fleetState()).vehicle === 'starship-stack', 'fleet defaults to the Starship stack');
+  assert(await page.locator('.fleet-viewport canvas').isVisible(), 'fleet viewport renders');
+  assert(await page.locator('.fleet-part').count() >= 2, 'fleet part callouts listed');
+  assert(await page.locator('.fleet-disclaimer').isVisible(), 'stylized-model disclaimer visible');
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/10-fleet-stack.png` });
+
+  // Stage separation slider moves the upper stage.
+  await setRange(page.locator('.fleet-controls input[type="range"]'), 0.8);
+  await page.waitForFunction(() => window.__CHANDRA_FLEET__?.separation > 0.5, null, { timeout: 5000 });
+  assert((await fleetState()).separation > 0.5, 'stage separation slider works');
+  // Engine plume toggle.
+  await page.getByRole('button', { name: /Ignite engines/ }).click();
+  await page.waitForFunction(() => window.__CHANDRA_FLEET__?.plume === true, null, { timeout: 5000 });
+  assert((await fleetState()).plume === true, 'engine plume ignites');
+
+  // Switch to the HLS lunar lander, then the CLPS lander.
+  await page.getByRole('button', { name: 'STARSHIP HLS', exact: true }).click();
+  await page.waitForFunction(() => window.__CHANDRA_FLEET__?.vehicle === 'starship-hls', null, { timeout: 10000 });
+  await page.waitForTimeout(600);
+  assert((await fleetState()).vehicle === 'starship-hls', 'HLS lander loads');
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/11-fleet-hls.png` });
+  await page.getByRole('button', { name: 'CLPS LANDER', exact: true }).click();
+  await page.waitForFunction(() => window.__CHANDRA_FLEET__?.vehicle === 'clps-lander', null, { timeout: 10000 });
+  assert((await fleetState()).vehicle === 'clps-lander', 'CLPS lander loads');
+
+  // Hover a part for a KSP-style callout (scan a few points to guarantee a hit).
+  const fbox = await page.locator('.fleet-viewport canvas').boundingBox();
+  let hoverHit = false;
+  for (const [fx, fy] of [[0.5, 0.45], [0.5, 0.6], [0.45, 0.5], [0.55, 0.35]]) {
+    await page.mouse.move(fbox.x + fbox.width * fx, fbox.y + fbox.height * fy);
+    await page.waitForTimeout(180);
+    if ((await fleetState()).hovered) { hoverHit = true; break; }
+  }
+  assert(hoverHit, 'hovering a vehicle part shows a callout');
+
+  // Close Space views and confirm the console returns.
+  await page.keyboard.press('o');
+  await page.waitForTimeout(400);
+  assert(await page.locator('.planet-viewport').count() === 0, 'Space views close back to the console');
+  assert(await page.locator('.app-header .display').innerText().then((t) => t.includes('CHANDRA')), 'brand survives view switching');
+
   const unexpectedConsole = consoleErrors.filter((e) => !e.includes('status of 400')); // real-DEM-without-DEM 400 is an expected, tested safeguard
   assert(pageErrors.length === 0, `page errors: ${pageErrors.join(' | ')}`);
   assert(unexpectedConsole.length === 0, `console errors: ${unexpectedConsole.join(' | ')}`);
-  console.log('BROWSER TESTS PASSED · mission console + Terrain Lab (orbit, keyboard, qualities, shadows, horizon import, mobile) · screenshots in', OUT);
+  console.log('BROWSER TESTS PASSED · mission console + Terrain Lab + Space views (planet time-lapse, fleet hangar) · screenshots in', OUT);
 } catch (err) {
   await page.screenshot({ animations: 'disabled', path: `${OUT}/99-browser-failure.png`, fullPage: true }).catch(() => {});
   console.error('BROWSER FAILURE STATE', JSON.stringify(await terrainState().catch(() => null)), 'console:', consoleErrors, 'page:', pageErrors);

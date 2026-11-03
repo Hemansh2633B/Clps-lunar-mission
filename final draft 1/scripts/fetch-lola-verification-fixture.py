@@ -8,7 +8,7 @@ This is a SOFTWARE VERIFICATION FIXTURE, not a flight product:
   * that derivative fills invalid source pixels before downsampling, so NoData
     coverage is NOT preserved. Do not use it for scientific illumination studies.
 
-It exists to exercise SELENE's real projected-DEM loading, cropping, horizon
+It exists to exercise CHANDRA's real projected-DEM loading, cropping, horizon
 ray-marching, and browser integration without downloading the multi-GB NASA COG.
 """
 from __future__ import annotations
@@ -35,7 +35,7 @@ RADIUS = 1737400.0
 
 def fetch(path: str) -> bytes:
     url = f"https://api.github.com/repos/{REPO}/contents/{path}"
-    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github.raw", "User-Agent": "SELENE-verification-fixture"})
+    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github.raw", "User-Agent": "CHANDRA-verification-fixture"})
     with urllib.request.urlopen(req, timeout=120) as response:
         return response.read()
 

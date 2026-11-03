@@ -165,6 +165,7 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
     ['← / →', 'Step −1 / +1 hour'],
     ['C', 'Toggle comparison mode'],
     ['T', 'Toggle Terrain Lab (3D DEM inspector)'],
+    ['O', 'Toggle Space views (planet time-lapse + fleet hangar)'],
     ['E', 'Toggle educator / planner mode'],
     ['G', 'Open field guide'],
     ['P', 'Pin current scenario'],

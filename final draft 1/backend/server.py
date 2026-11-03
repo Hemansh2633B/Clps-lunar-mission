@@ -1,4 +1,4 @@
-"""Local API for SELENE Terrain Lab: DEM extraction, horizon masks, and optional static hosting."""
+"""Local API for CHANDRA Terrain Lab: DEM extraction, horizon masks, and optional static hosting."""
 import argparse
 import os
 from flask import Flask, jsonify, request, send_from_directory
@@ -29,7 +29,7 @@ def create_app(settings=None):
 
     @app.get("/api/health")
     def health():
-        return jsonify(status="ok", product="SELENE Terrain Lab API")
+        return jsonify(status="ok", product="CHANDRA Terrain Lab API")
 
     @app.get("/api/examples")
     def examples():
@@ -106,7 +106,7 @@ def create_app(settings=None):
     def index():
         if (dist / "index.html").is_file():
             return send_from_directory(dist, "index.html")
-        return jsonify(product="SELENE Terrain Lab API", hint="Run npm run build to serve the console here, or use the Vite dev server.")
+        return jsonify(product="CHANDRA Terrain Lab API", hint="Run npm run build to serve the console here, or use the Vite dev server.")
 
     @app.get("/assets/<path:filename>")
     def assets(filename):
@@ -120,7 +120,7 @@ def create_app(settings=None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="SELENE local lunar DEM terrain API")
+    parser = argparse.ArgumentParser(description="CHANDRA local lunar DEM terrain API")
     parser.add_argument("--dem", default=os.environ.get("LUNAR_DEM_PATH"), help="Local raster, relative to project root or absolute")
     parser.add_argument("--dem-config", default=os.environ.get("LUNAR_DEM_CONFIG"), help="JSON file with verified vertical datum/units")
     parser.add_argument("--host", default="0.0.0.0")

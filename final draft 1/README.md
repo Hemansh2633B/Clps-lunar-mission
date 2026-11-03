@@ -1,4 +1,4 @@
-# SELENE // OPS · Lunar South Pole Mission Planning Console
+# CHANDRA // OPS · Lunar South Pole Mission Planning Console
 
 An interactive, production-grade workspace for comparing **solar illumination**, **terrain occlusion**, and **Direct-to-Earth (DTE) communication** windows at lunar south-pole landing sites — built for the CLPS / Artemis launch-slip trade study.
 
@@ -26,7 +26,7 @@ npm run dev:full     # Flask terrain API on :8000 + Vite console on :5173
 npm run dev:full -- --api-port 8002 --web-port 5174 --dem-config data/verification/lola_verification_config.json
 ```
 
-`dev:full` forwards `--dem` / `--dem-config` to Flask and points Vite’s `/api` proxy at the chosen API port. `npm run dev:api -- --port 8001` also works; set `SELENE_API_PORT=8001` for a separately started Vite dev/preview server.
+`dev:full` forwards `--dem` / `--dem-config` to Flask and points Vite’s `/api` proxy at the chosen API port. `npm run dev:api -- --port 8001` also works; set `CHANDRA_API_PORT=8001` for a separately started Vite dev/preview server.
 
 `npm run dev` alone still works: the mission console is fully functional, and Terrain Lab falls back to a clearly labeled built-in synthetic demo when the API is offline. Real DEM mode requires the backend and never silently falls back.
 
@@ -34,11 +34,11 @@ Production build and checks:
 
 ```bash
 npm run build        # tsc + vite build
-npm test             # 20 Vitest engine / physics / DEM-profile / export tests
+npm test             # 31 Vitest engine / physics / DEM-profile / export / vehicle tests
 npm run test:python  # 70 backend/DEM/horizon/downloader/API-error tests
 npm run test:geometry# Three.js geometry / synthetic / horizon checks
 npm run test:parity  # TypeScript ↔ Python horizon ray-marcher parity
-npm run test:browser # Playwright mission console + Terrain Lab E2E (incl. mobile)
+npm run test:browser # Playwright console + Terrain Lab + Space views E2E (incl. mobile)
 npm run test:all     # unit + python + geometry + parity
 npm run typecheck
 ```
@@ -79,10 +79,12 @@ The dev server is configured with `allowedHosts: true` so it works behind Arena 
 | Preserve DEM horizon samples verbatim in mission sites (no illustrative ripple) | DEM-derived custom sites + Site context provenance |
 | Load prototype example locations or the selected mission site | Terrain Lab examples / Load selected site |
 | Keyboard-orbit the 3D viewport, top/oblique presets, zoom buttons | Focus canvas: arrows / + / − / Home |
+| Watch a 3D Moon with a real-ephemeris terminator sweep in time-lapse | **Space → Planet** (`O`) |
+| Fly around stylized Starship / HLS / CLPS vehicles with staging & plumes | **Space → Fleet hangar** (`O`) |
 
 ### Keyboard shortcuts
 
-`Space` play/pause · `[` / `]` ±1 day · `←` / `→` ±1 hour · `C` compare · `T` Terrain Lab · `E` educator · `G` field guide · `P` pin scenario · `?` help · `Esc` close overlays.
+`Space` play/pause · `[` / `]` ±1 day · `←` / `→` ±1 hour · `C` compare · `T` Terrain Lab · `O` Space views · `E` educator · `G` field guide · `P` pin scenario · `?` help · `Esc` close overlays.
 
 ---
 
@@ -133,6 +135,27 @@ Verified with this fixture at −89.5°, 45° E, radius 5 km: landing elevation 
 | `POST /api/terrain` | Extract `{latitude, longitude, radius_km, quality, mode}` grid |
 | `POST /api/horizon` | Ray-marched horizon mask for the same request + `az_step_deg`, `eye_height_m` |
 
+---
+
+## Space views · planet time-lapse + fleet hangar (`O`)
+
+A second 3D workspace, opened with **Space** in the header or the `O` shortcut, with two tabs:
+
+![Planet time-lapse](screenshots/09-planet.png)
+
+### Planet · time-lapse
+- **Body-fixed Moon** rendered from an equirectangular albedo map, lit by a single hard Sun so the airless terminator is sharp. The Sun direction is driven by the **real sub-solar point** (astronomy-engine + IAU 2015 Moon rotation), so the day/night line sweeps across the pole as the lunation advances.
+- **Time-lapse** from 1 h/s to 7 days/s, looping a ~709 h synodic month, with a scrub bar and live UTC / MJD / sub-solar / sub-earth readouts. Playing the time-lapse drives the whole console’s clock.
+- **Site markers** for every catalog site (click to select), the selected-site ring, the amber sub-solar dot, and the teal sub-earth dot with a dashed Earth line. Earth is shown **for direction only — sizes and distances are not to scale** (labelled in-view).
+- Toggleable terminator great-circle, graticule, stars and Earth; camera presets for near side, south pole, sub-solar and Earth view. Educator mode adds a plain-English caption.
+
+### Fleet hangar
+- **Stylized, procedural 3D vehicles** in the spirit of Kerbal Space Program / Spaceflight Simulator: the **Starship full stack** (Super Heavy + Starship), the **Starship HLS lunar lander** (legs, docking port, no flaps/heat shield), and a **CLPS robotic lander** (vertical solar masts, DTE dish, descent engine).
+- Orbit / zoom, turntable, side/top/detail camera presets, a **stage-separation slider** for the stack, and an **engine-plume toggle**. Hovering any part shows a KSP-style callout; the side panel lists every part and its role.
+- These are **massing models built from primitives — not engineering CAD or flight geometry**. Quoted dimensions are approximate public figures (see `public/assets/PROVENANCE.md`).
+
+![Fleet hangar — Starship stack](screenshots/10-fleet-stack.png)
+
 ## Architecture
 
 ```text
@@ -142,7 +165,7 @@ final draft 1/
 ├── backend/                    # Flask DEM API (ported from prototype)
 ├── data/                       # Local DEMs (ignored) + README
 ├── dem_config.example.json
-├── docs/PROTOTYPE_PORT.md      # Prototype → SELENE feature map
+├── docs/PROTOTYPE_PORT.md      # Prototype → CHANDRA feature map
 ├── docs/VERIFICATION.md        # Test evidence + real-DEM fixture caveats
 ├── public/assets/              # LROC south-pole mosaic + provenance
 ├── scripts/                    # dev-full, browser/geometry/python/parity/fixture
@@ -165,11 +188,13 @@ final draft 1/
 │   ├── hooks/useSimulation.ts
 │   ├── terrain/                # Three.js mesh, lighting, coordinates,
 │   │                           # synthetic demo, horizon, mission profile, API client
-│   ├── components/             # Header, catalog, panorama, map, telemetry,
-│   │                           # timeline, comparison, educator, TerrainLab, modals
+│   ├── three/                  # vehicles.ts (procedural Starship/HLS/CLPS), geo.ts
+│   ├── components/             # Header, catalog, panorama, map, telemetry, timeline,
+│   │                           # comparison, educator, TerrainLab, SpaceView
+│   │                           # (PlanetViewer + FleetViewer), modals
 │   ├── utils/export.ts         # CSV / JSON report generation
 │   └── styles/index.css        # Paper-folio design tokens + layout
-└── tests/engine.test.ts        # Scientific sanity + unit tests
+└── tests/                      # engine, terrainProfile, space (vehicles + geo)
 ```
 
 **Stack:** Vite 7 · React 19 · TypeScript 5.8 · Tailwind CSS 4 · `astronomy-engine` · `three` · `lucide-react` · HTML5 Canvas / SVG / WebGL · Web Workers · Flask/Rasterio/PyProj backend. Fonts are self-hosted (`@fontsource/fraunces`, `@fontsource/outfit`, `@fontsource/ibm-plex-mono`).
@@ -227,7 +252,7 @@ Heavy window simulations run in a dedicated Web Worker with an LRU result cache,
 
 ---
 
-## Design language — "SELENE // OPS" paper folio
+## Design language — "CHANDRA // OPS" paper folio
 
 A warm mission-briefing desk: cream paper `#f3e6d0` with a faint dot grid, ink `#1c2430`
 text, and a coral rule across the top. Panels are **plates** with `+` register marks;
@@ -241,7 +266,7 @@ points; a constants ticker runs beneath the header. Semantic engineering colors:
 - Occlusion / LOS blocked → crimson `#c23b32`
 - Simultaneous Sun + Earth viability → emerald `#1f7a52`
 
-The 3D Terrain Lab keeps a dark instrument viewport framed by the paper chrome. The
+The 3D Terrain Lab and Space views keep dark instrument viewports framed by the paper chrome. The
 user-supplied patch / hero / lander / ops-desk / classroom illustrations appear only as
 branding and Field Guide plates — never as quantitative data (see `public/assets/PROVENANCE.md`).
 No glassmorphism, no rounded marketing cards; reticles, scale bars, UTC/MJD clocks and
@@ -255,6 +280,7 @@ countdown timers behave like an ops console.
 - Moon rotation: IAU/IAG Working Group on Cartographic Coordinates and Rotational Elements, 2015 report.
 - Ephemeris library: Don Cross, `astronomy-engine` (MIT).
 - South-pole mosaic: NASA / GSFC / Arizona State University, LROC WAC, polar stereographic 400 m/px. See `public/assets/PROVENANCE.md`.
+- Planet-viewer surface maps: lunar albedo + Earth Blue Marble via the `three.js` examples (NASA-derived); decorative only, never data. Fleet vehicles are procedural stylized models, not flight geometry.
 
 ## License
 

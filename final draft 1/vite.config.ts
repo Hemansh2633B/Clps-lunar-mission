@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
-const apiTarget = `http://127.0.0.1:${process.env.SELENE_API_PORT || '8000'}`;
+const apiTarget = `http://127.0.0.1:${process.env.CHANDRA_API_PORT || '8000'}`;
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
