@@ -14,6 +14,7 @@ import { SiteBrief } from './components/SiteBrief';
 import { TelemetryPanel } from './components/TelemetryPanel';
 import { TimelineScrubber } from './components/TimelineScrubber';
 import { ComparisonMatrix } from './components/ComparisonMatrix';
+import { ProvenanceIndicator } from './components/ProvenanceIndicator';
 const TerrainLab = lazy(() => import('./components/TerrainLab').then((m) => ({ default: m.TerrainLab })));
 import type { TerrainSiteInput } from './components/TerrainLab';
 const SpaceView = lazy(() => import('./components/SpaceView').then((m) => ({ default: m.SpaceView })));
@@ -142,7 +143,7 @@ export default function App() {
     setTerrainView(false);
     notify(input.horizon.synthetic
       ? 'Synthetic demo horizon sent to mission planner — not real lunar data'
-      : `DEM horizon preserved sample-for-sample · frame ${s.terrain.sourceFrame ?? 'unspecified'} — verify against IAU ephemeris`);
+      : `DEM horizon preserved + rotated to IAU 2015 · frame ${s.terrain.sourceFrame ?? 'unspecified'} ${s.terrain.frameVerified ? '(verified; residual disclosed)' : '(UNVERIFIED — blocked from mission visibility)'}`);
   }, [notify]);
 
   const applyGuided = useCallback((s: GuidedScenario) => {
@@ -160,6 +161,10 @@ export default function App() {
   }, [notify]);
 
   const handleExport = useCallback((kind: 'json' | 'timeseries' | 'horizon' | 'summary') => {
+    // Never export stale or in-flight results: the mission window must match the
+    // current site/date/config (the hook returns null until the active key resolves).
+    if (missionSim.loading) { notify('Mission window is still computing — export blocked to avoid stale results.'); return; }
+    if (missionSim.error) { notify(`Mission window failed (${missionSim.error}) — nothing to export.`); return; }
     const stamp = new Date(timeMs).toISOString().slice(0, 10);
     if (kind === 'json') download(`chandra-report-${stamp}.json`, missionReportJSON(site, config, missionSim.data, current), 'application/json');
     else if (kind === 'horizon') download(`chandra-horizon-${site.id}.csv`, horizonCSV(site, current), 'text/csv');
@@ -167,7 +172,7 @@ export default function App() {
     else if (kind === 'timeseries') download(`chandra-timeseries-${site.id}.csv`, timeseriesCSV(missionSim.data), 'text/csv');
     else download(`chandra-summary-${site.id}.csv`, summaryCSV(missionSim.data), 'text/csv');
     notify(`Exported ${kind}`);
-  }, [site, config, missionSim.data, current, timeMs, notify]);
+  }, [site, config, missionSim.data, missionSim.loading, missionSim.error, current, timeMs, notify]);
 
   const handleComparisonExport = useCallback((kind: 'csv' | 'json', rows: ComparisonRow[]) => {
     const full = rows.map((r) => ({ ...r, sim: cachedSimulation(r.site, r.scenario.startMs, r.scenario.startMs + r.scenario.config.durationDays * DAY_MS, r.scenario.config) ?? null }));
@@ -231,13 +236,13 @@ export default function App() {
           )}
         </main>
         <aside className="telemetry-rail">
-          <TelemetryPanel site={site} current={current} sim={missionSim.data} events={events} timeMs={timeMs} mode={mode} config={config} onSettings={() => setSettingsOpen(true)} />
+          <TelemetryPanel site={site} current={current} sim={missionSim.data} events={events} timeMs={timeMs} mode={mode} config={config} onSettings={() => setSettingsOpen(true)} loading={missionSim.loading} error={missionSim.error} />
         </aside>
       </div>
       {!spaceView && (
         <TimelineScrubber
           sim={activeSim.data} loading={activeSim.loading} window={win} timeMs={timeMs} onTime={setTimeMs}
-          baselineMs={baselineMs} slipDays={slipDays} onSlip={setSlipDays} durationDays={config.durationDays}
+          baselineMs={baselineMs} onBaseline={setBaselineMs} slipDays={slipDays} onSlip={setSlipDays} durationDays={config.durationDays}
           onDuration={(d) => setConfig((c) => ({ ...c, durationDays: d }))}
           playing={playing} onPlay={() => setPlaying((p) => !p)} speed={speed} onSpeed={setSpeed}
           viewDays={viewDays} onViewDays={setViewDays}
@@ -246,9 +251,9 @@ export default function App() {
       )}
       <footer className="status-bar">
         <span><span className="dot" style={{ background: 'var(--nominal)' }} />EPHEMERIS · astronomy-engine + IAU 2015 Moon rotation</span>
-        <span><span className="dot" style={{ background: site.terrain.kind === 'dem' && !site.terrain.synthetic ? 'var(--earth)' : 'var(--solar)' }} />TERRAIN · {site.terrain.kind === 'dem' ? (site.terrain.synthetic ? 'synthetic demo horizon (not real lunar data)' : `DEM-derived horizon · ${site.terrain.sourceFile ?? 'local DEM'} (verify frame)`) : site.terrain.kind === 'custom' ? 'user-edited 8-sector mask (not measured DEM)' : 'LOLA-inspired illustrative masks (not flight DEM)'}</span>
-        <span>LOS · center-of-disk, no refraction</span>
-        <span>{activeSim.data ? `${activeSim.data.summary.sampleCount} samples · ${activeSim.data.computeMs.toFixed(0)} ms` : 'computing…'}</span>
+        <ProvenanceIndicator site={site} summary={missionSim.data?.summary} compact />
+        <span>LOS · geometric center-of-disk, no refraction, not an RF link budget</span>
+        <span>{activeSim.loading ? 'computing…' : activeSim.error ? 'simulation error' : activeSim.data ? `${activeSim.data.sampling.sampleCount.toLocaleString()} samples · eff ${activeSim.data.sampling.effectiveStepMinutes.toFixed(1)} min · ${activeSim.data.computeMs.toFixed(0)} ms` : 'idle'}</span>
         <span style={{ marginLeft: 'auto' }}>Space play · [ ] days · C compare · T terrain · O space · E educator · G guide · ? help</span>
       </footer>
 

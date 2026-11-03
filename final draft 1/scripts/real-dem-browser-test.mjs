@@ -61,7 +61,7 @@ try {
   assert(await page.locator('.site-item', { hasText: 'DEM -89.50° 45.0°' }).count() > 0, 'real DEM horizon creates mission site');
   assert(await page.locator('text=Measured/sample elevations preserved').count() > 0, 'DEM provenance preserved in mission planner');
   assert(await page.locator('text=MOON_ME').count() > 0, 'source frame disclosed');
-  assert(await page.locator('.status-bar').innerText().then((t) => t.includes('DEM-derived horizon')), 'status bar reflects DEM-derived terrain');
+  assert(await page.locator('.status-bar').innerText().then((t) => t.includes('REAL DEM') && t.includes('FRAME VERIFIED')), 'status bar provenance reflects a frame-verified real DEM');
   await page.screenshot({ animations: 'disabled', path: `${OUT}/10-real-dem-mission-site.png` });
   assert(errors.length === 0, `console/page errors: ${errors.join(' | ')}`);
   console.log('REAL DEM BROWSER TEST PASSED · projected lunar GeoTIFF → crop → horizon → mission site (verification fixture).');

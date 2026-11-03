@@ -9,28 +9,41 @@ export interface SimulationState {
   error: string | null;
 }
 
+/**
+ * Results are keyed to the exact input configuration (site, terrain + frame,
+ * UTC interval, and mission config). A cache miss for the CURRENT key never keeps
+ * the previous scenario's data on screen — the hook returns cached-or-null for the
+ * active key, so a date/site change can never show stale results. Superseded
+ * requests are guarded by the `active` flag and can never overwrite a newer key.
+ */
 export function useSimulation(site: LandingSite, startMs: number, endMs: number, config: MissionConfig): SimulationState {
   const key = simulationKey(site, startMs, endMs, config);
-  const [state, setState] = useState<SimulationState>(() => ({
-    data: cachedSimulation(site, startMs, endMs, config) ?? null,
-    loading: !cachedSimulation(site, startMs, endMs, config),
-    error: null,
-  }));
+  const [state, setState] = useState<SimulationState & { key: string }>(() => {
+    const cached = cachedSimulation(site, startMs, endMs, config);
+    return { key, data: cached ?? null, loading: !cached, error: null };
+  });
 
   useEffect(() => {
     let active = true;
     const cached = cachedSimulation(site, startMs, endMs, config);
     if (cached) {
-      setState({ data: cached, loading: false, error: null });
+      setState({ key, data: cached, loading: false, error: null });
       return;
     }
-    setState((s) => ({ data: s.data, loading: true, error: null }));
+    // Cache miss for THIS key: clear any previous scenario's data immediately.
+    setState({ key, data: null, loading: true, error: null });
     requestSimulation(site, startMs, endMs, config)
-      .then((result) => { if (active) setState({ data: result, loading: false, error: null }); })
-      .catch((err) => { if (active) setState({ data: null, loading: false, error: err instanceof Error ? err.message : String(err) }); });
+      .then((result) => { if (active) setState({ key, data: result, loading: false, error: null }); })
+      .catch((err) => { if (active) setState({ key, data: null, loading: false, error: err instanceof Error ? err.message : String(err) }); });
     return () => { active = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  return state;
+  // Render-time guard: if the key changed before the effect ran, never return data
+  // belonging to a different key (eliminates the one-frame stale window).
+  if (state.key !== key) {
+    const cached = cachedSimulation(site, startMs, endMs, config);
+    return { data: cached ?? null, loading: !cached, error: null };
+  }
+  return { data: state.data, loading: state.loading, error: state.error };
 }

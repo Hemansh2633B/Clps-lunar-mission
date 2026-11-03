@@ -2,6 +2,7 @@ import type { LandingSite, TerrainFeature, TerrainProfile } from '../types/missi
 import type { HorizonMask } from '../terrain/types';
 import { buildTerrainProfile, flatProfile } from '../engine/horizonPhysics';
 import { terrainProfileFromHorizon } from '../terrain/missionProfile';
+import { classifyFrame, convertSite } from '../engine/lunarFrame';
 import { wrap360 } from '../engine/constants';
 
 interface SiteSeed {
@@ -17,7 +18,25 @@ interface SiteSeed {
   features: TerrainFeature[];
   base?: number;
   seed?: number;
+  // Provenance metadata (audit): never present approximate region centers as
+  // surveyed landing points, and never present illustrative relief as measured.
+  program?: string;
+  coordinateType?: LandingSite['coordinateType'];
+  coordinateProvenance?: string;
+  coordinateUncertaintyDeg?: number;
+  elevationProvenance?: string;
+  sourceUrl?: string;
+  sourceDate?: string;
+  dataConfidence?: LandingSite['dataConfidence'];
 }
+
+// Authoritative source for the nine Artemis III candidate regions (Oct 2024 LEAG
+// announcement; downselection from thirteen to nine). NASA publishes regions
+// (~15 km across), NOT precise landing coordinates — centers below are approximate.
+const ARTEMIS3_SOURCE = 'https://ntrs.nasa.gov/citations/20250011660';
+const ARTEMIS3_DATE = '2024-10-28';
+const ARTEMIS3_PROVENANCE = 'Approximate center of a NASA Artemis III candidate region (~15 km across); not a surveyed landing point. Region centers are rounded for visualization.';
+const ILLUSTRATIVE_ELEV = 'Illustrative relief synthesized for visualization; not a measured elevation.';
 
 const polarSeeds: SiteSeed[] = [
   {
@@ -95,8 +114,8 @@ const polarSeeds: SiteSeed[] = [
   },
   {
     id: 'haworth-rim',
-    name: 'Haworth Crater Rim',
-    shortName: 'Haworth Rim',
+    name: 'Haworth',
+    shortName: 'Haworth',
     latitude: -86.9,
     longitude: 355.0,
     elevationM: -1800,
@@ -147,6 +166,96 @@ const polarSeeds: SiteSeed[] = [
       { name: 'Southern saddle', azimuthDeg: 210, elevationDeg: 0.3, widthDeg: 44, kind: 'saddle' },
     ],
   },
+  {
+    id: 'cabeus-b-peak',
+    name: 'Peak near Cabeus B',
+    shortName: 'Cabeus B Peak',
+    latitude: -82.5,
+    longitude: -50.0,
+    elevationM: 1500,
+    region: 'Cabeus B · Artemis III region',
+    description: 'Artemis III candidate region near a peak beside Cabeus B. Lower-latitude polar terrain with access to nearby permanently shadowed cold traps; Earth and Sun geometry vary strongly with libration.',
+    accent: '#7a5c1e',
+    base: 0.0,
+    seed: 31,
+    features: [
+      { name: 'Cabeus B shoulder', azimuthDeg: 150, elevationDeg: 3.2, widthDeg: 56, kind: 'rim' },
+      { name: 'Peak crest', azimuthDeg: 240, elevationDeg: 2.4, widthDeg: 48, kind: 'massif' },
+      { name: 'Earth-facing slope', azimuthDeg: 20, elevationDeg: 0.4, widthDeg: 62, kind: 'saddle' },
+    ],
+  },
+  {
+    id: 'mons-mouton-plateau',
+    name: 'Mons Mouton Plateau',
+    shortName: 'Mouton Plateau',
+    latitude: -84.5,
+    longitude: 28.0,
+    elevationM: 2800,
+    region: 'Mons Mouton · Artemis III region',
+    description: 'The broadest Artemis III candidate region: a high plateau near Mons Mouton. Elevated, open terrain favors long illumination and Earth visibility, with gentle relief across the plateau surface.',
+    accent: '#3a6b8a',
+    base: 0.08,
+    seed: 37,
+    features: [
+      { name: 'Plateau scarp', azimuthDeg: 196, elevationDeg: 2.6, widthDeg: 60, kind: 'massif' },
+      { name: 'Eastern rise', azimuthDeg: 92, elevationDeg: 1.5, widthDeg: 44, kind: 'rim' },
+      { name: 'Earth corridor', azimuthDeg: 30, elevationDeg: 0.25, widthDeg: 68, kind: 'saddle' },
+    ],
+  },
+  {
+    id: 'mons-mouton',
+    name: 'Mons Mouton',
+    shortName: 'Mons Mouton',
+    latitude: -84.6,
+    longitude: 30.5,
+    elevationM: 3600,
+    region: 'Mons Mouton · Artemis III region',
+    description: 'Artemis III candidate region on the Mons Mouton massif itself. A prominent south-polar mountain with strong Earth line-of-sight from its flanks and grazing, persistent sunlight on raised terrain.',
+    accent: '#1e3a5f',
+    base: 0.12,
+    seed: 41,
+    features: [
+      { name: 'Mons Mouton summit', azimuthDeg: 188, elevationDeg: 4.6, widthDeg: 62, kind: 'massif' },
+      { name: 'Western shoulder', azimuthDeg: 262, elevationDeg: 2.2, widthDeg: 46, kind: 'rim' },
+      { name: 'Earth-facing flank', azimuthDeg: 8, elevationDeg: 0.3, widthDeg: 66, kind: 'saddle' },
+    ],
+  },
+  {
+    id: 'nobile-rim-2',
+    name: 'Nobile Rim 2',
+    shortName: 'Nobile Rim 2',
+    latitude: -85.6,
+    longitude: 49.0,
+    elevationM: -700,
+    region: 'Nobile · Artemis III region',
+    description: 'A second Artemis III candidate region on the rim of Nobile crater, offset from Nobile Rim 1. Illuminated rim segments alternate with shadowed interior floors; Earth sits low toward the northeast.',
+    accent: '#0e7490',
+    base: -0.02,
+    seed: 43,
+    features: [
+      { name: 'Nobile rim crest', azimuthDeg: 132, elevationDeg: 3.3, widthDeg: 52, kind: 'rim' },
+      { name: 'Interior massif', azimuthDeg: 220, elevationDeg: 2.5, widthDeg: 48, kind: 'massif' },
+      { name: 'Earth corridor', azimuthDeg: 50, elevationDeg: 0.5, widthDeg: 56, kind: 'saddle' },
+    ],
+  },
+  {
+    id: 'slater-plain',
+    name: 'Slater Plain',
+    shortName: 'Slater Plain',
+    latitude: -88.5,
+    longitude: -137.0,
+    elevationM: -1400,
+    region: 'Slater · Artemis III region',
+    description: 'Artemis III candidate region on a plain near Slater crater. Relatively level terrain close to permanently shadowed regions; low, grazing Sun and libration-driven Earth visibility make window timing critical.',
+    accent: '#6b4a8a',
+    base: -0.04,
+    seed: 47,
+    features: [
+      { name: 'Slater rim shoulder', azimuthDeg: 160, elevationDeg: 2.8, widthDeg: 54, kind: 'rim' },
+      { name: 'Plain scarp', azimuthDeg: 250, elevationDeg: 1.6, widthDeg: 46, kind: 'rim' },
+      { name: 'Earth-facing saddle', azimuthDeg: 16, elevationDeg: 0.45, widthDeg: 60, kind: 'saddle' },
+    ],
+  },
 ];
 
 const referenceSeeds: (SiteSeed & { terrain?: TerrainProfile })[] = [
@@ -188,6 +297,28 @@ const referenceSeeds: (SiteSeed & { terrain?: TerrainProfile })[] = [
   },
 ];
 
+// Per-site provenance. Artemis III regions use approximate region centers (NASA
+// publishes ~15 km regions, not precise points). Historical polar candidates are
+// illustrative. Apollo/Chang'e coordinates are published landing points, but their
+// horizon here is an idealized flat model (terrain confidence stays illustrative).
+const SITE_PROVENANCE: Record<string, Partial<LandingSite>> = {
+  'shackleton-rim': { program: 'Historical polar candidate', coordinateType: 'representative-point', coordinateProvenance: 'Illustrative rim location near Shackleton crater (≈89.9°S); representative point, not a surveyed landing site.', coordinateUncertaintyDeg: 0.3, elevationProvenance: ILLUSTRATIVE_ELEV, dataConfidence: 'illustrative' },
+  'connecting-ridge': { program: 'Historical polar candidate', coordinateType: 'representative-point', coordinateProvenance: 'Illustrative location on the Shackleton–de Gerlache connecting ridge; representative point, not surveyed.', coordinateUncertaintyDeg: 0.4, elevationProvenance: ILLUSTRATIVE_ELEV, dataConfidence: 'illustrative' },
+  'leibnitz-beta': { program: 'Historical polar candidate', coordinateType: 'representative-point', coordinateProvenance: 'Illustrative location on the Leibnitz β plateau; representative point, not surveyed.', coordinateUncertaintyDeg: 0.5, elevationProvenance: ILLUSTRATIVE_ELEV, dataConfidence: 'illustrative' },
+  'malapert-massif': { program: 'Artemis III candidate (2024)', coordinateType: 'region-center', coordinateProvenance: ARTEMIS3_PROVENANCE, coordinateUncertaintyDeg: 0.5, elevationProvenance: ILLUSTRATIVE_ELEV, sourceUrl: ARTEMIS3_SOURCE, sourceDate: ARTEMIS3_DATE, dataConfidence: 'region-approximate' },
+  'haworth-rim': { program: 'Artemis III candidate (2024)', coordinateType: 'region-center', coordinateProvenance: ARTEMIS3_PROVENANCE, coordinateUncertaintyDeg: 0.5, elevationProvenance: ILLUSTRATIVE_ELEV, sourceUrl: ARTEMIS3_SOURCE, sourceDate: ARTEMIS3_DATE, dataConfidence: 'region-approximate' },
+  'nobile-rim-1': { program: 'Artemis III candidate (2024)', coordinateType: 'region-center', coordinateProvenance: ARTEMIS3_PROVENANCE, coordinateUncertaintyDeg: 0.5, elevationProvenance: ILLUSTRATIVE_ELEV, sourceUrl: ARTEMIS3_SOURCE, sourceDate: ARTEMIS3_DATE, dataConfidence: 'region-approximate' },
+  'nobile-rim-2': { program: 'Artemis III candidate (2024)', coordinateType: 'region-center', coordinateProvenance: ARTEMIS3_PROVENANCE, coordinateUncertaintyDeg: 0.5, elevationProvenance: ILLUSTRATIVE_ELEV, sourceUrl: ARTEMIS3_SOURCE, sourceDate: ARTEMIS3_DATE, dataConfidence: 'region-approximate' },
+  'de-gerlache-rim-2': { program: 'Artemis III candidate (2024)', coordinateType: 'region-center', coordinateProvenance: ARTEMIS3_PROVENANCE, coordinateUncertaintyDeg: 0.5, elevationProvenance: ILLUSTRATIVE_ELEV, sourceUrl: ARTEMIS3_SOURCE, sourceDate: ARTEMIS3_DATE, dataConfidence: 'region-approximate' },
+  'cabeus-b-peak': { program: 'Artemis III candidate (2024)', coordinateType: 'region-center', coordinateProvenance: ARTEMIS3_PROVENANCE, coordinateUncertaintyDeg: 0.5, elevationProvenance: ILLUSTRATIVE_ELEV, sourceUrl: ARTEMIS3_SOURCE, sourceDate: ARTEMIS3_DATE, dataConfidence: 'region-approximate' },
+  'mons-mouton-plateau': { program: 'Artemis III candidate (2024)', coordinateType: 'region-center', coordinateProvenance: ARTEMIS3_PROVENANCE, coordinateUncertaintyDeg: 0.5, elevationProvenance: ILLUSTRATIVE_ELEV, sourceUrl: ARTEMIS3_SOURCE, sourceDate: ARTEMIS3_DATE, dataConfidence: 'region-approximate' },
+  'mons-mouton': { program: 'Artemis III candidate (2024)', coordinateType: 'region-center', coordinateProvenance: ARTEMIS3_PROVENANCE, coordinateUncertaintyDeg: 0.5, elevationProvenance: ILLUSTRATIVE_ELEV, sourceUrl: ARTEMIS3_SOURCE, sourceDate: ARTEMIS3_DATE, dataConfidence: 'region-approximate' },
+  'slater-plain': { program: 'Artemis III candidate (2024)', coordinateType: 'region-center', coordinateProvenance: ARTEMIS3_PROVENANCE, coordinateUncertaintyDeg: 0.5, elevationProvenance: ILLUSTRATIVE_ELEV, sourceUrl: ARTEMIS3_SOURCE, sourceDate: ARTEMIS3_DATE, dataConfidence: 'region-approximate' },
+  'apollo-11': { program: 'Apollo 11 (1969)', coordinateType: 'surveyed', coordinateProvenance: 'Published Apollo 11 landing coordinates (Tranquility Base, 20 Jul 1969). Horizon here is an idealized flat model.', coordinateUncertaintyDeg: 0.001, elevationProvenance: 'Approximate published elevation; horizon idealized.', sourceUrl: 'https://nssdc.gsfc.nasa.gov/nmc/spacecraft/display.action?id=1969-059C', sourceDate: '1969-07-20', dataConfidence: 'illustrative' },
+  'apollo-17': { program: 'Apollo 17 (1972)', coordinateType: 'surveyed', coordinateProvenance: 'Published Apollo 17 landing coordinates (Taurus-Littrow, 11 Dec 1972). Horizon here is an idealized flat model.', coordinateUncertaintyDeg: 0.001, elevationProvenance: 'Approximate published elevation; horizon idealized.', sourceUrl: 'https://nssdc.gsfc.nasa.gov/nmc/spacecraft/display.action?id=1972-096C', sourceDate: '1972-12-11', dataConfidence: 'illustrative' },
+  'change-4': { program: "Chang'e 4 (2019)", coordinateType: 'surveyed', coordinateProvenance: "Published Chang'e 4 landing coordinates (Von Kármán crater, 3 Jan 2019). Horizon here is an idealized flat model.", coordinateUncertaintyDeg: 0.001, elevationProvenance: 'Approximate published elevation; horizon idealized.', sourceUrl: 'https://nssdc.gsfc.nasa.gov/nmc/spacecraft/display.action?id=2018-103A', sourceDate: '2019-01-03', dataConfidence: 'illustrative' },
+};
+
 function makeSite(seed: SiteSeed, category: LandingSite['category']): LandingSite {
   const terrain = category === 'reference'
     ? flatProfile('Idealized mare / basin horizon')
@@ -204,6 +335,7 @@ function makeSite(seed: SiteSeed, category: LandingSite['category']): LandingSit
     description: seed.description,
     terrain,
     accent: seed.accent,
+    ...SITE_PROVENANCE[seed.id],
   };
 }
 
@@ -286,15 +418,35 @@ export function makeCustomSite(input: {
   if (input.terrainLabel) terrain.label = input.terrainLabel;
   if (input.sourceFrame) terrain.sourceFrame = input.sourceFrame;
   if (!input.horizon && input.terrainLabel) terrain.uncertaintyDeg = 1.5;
+
+  // Convert site coordinates from the DEM source frame into the IAU 2015 ephemeris
+  // frame (recognized frames only) and record the provenance of any shift. The
+  // horizon mask is rotated by the matching azimuth offset in terrainProfileFromHorizon.
+  let latitude = input.latitude;
+  let longitude = wrap360(input.longitude);
+  let coordinateProvenance = 'User-supplied coordinates (illustrative horizon).';
+  if (input.horizon && !input.horizon.synthetic) {
+    const cls = classifyFrame(input.horizon.source.lunar_reference_frame);
+    if (cls.recognized && cls.transform && cls.transform !== 'iau') {
+      const conv = convertSite(input.latitude, input.longitude, cls.transform);
+      latitude = conv.latitude;
+      longitude = wrap360(conv.longitude);
+      coordinateProvenance = `Converted from ${input.horizon.source.lunar_reference_frame} (${input.latitude.toFixed(5)}°, ${input.longitude.toFixed(5)}°) to the IAU 2015 ephemeris frame via a SPICE-verified constant rotation (residual ≤0.0039°).`;
+    } else if (cls.recognized) {
+      coordinateProvenance = `Coordinates interpreted in the declared ${input.horizon.source.lunar_reference_frame} frame (compatible with IAU 2015; no rotation applied).`;
+    } else {
+      coordinateProvenance = `Source frame "${input.horizon.source.lunar_reference_frame || 'unspecified'}" is unverified; coordinates are NOT frame-corrected and quantitative mission visibility is blocked.`;
+    }
+  }
   const demDescription = input.horizon?.synthetic
     ? 'Synthetic demo horizon from Terrain Lab. Elevations are procedural, NOT real lunar data; use for interface exploration only.'
-    : 'Terrain Lab DEM horizon preserved sample-for-sample. Verify the DEM body-frame realization against the IAU ephemeris frame and confirm coverage before operational use.';
+    : 'Terrain Lab DEM horizon preserved sample-for-sample and rotated into the IAU 2015 ephemeris frame. Frame residual and ray coverage are disclosed; verify before operational use.';
   return {
     id: `custom-${Date.now().toString(36)}`,
     name: input.name || 'Custom site',
     shortName: input.name || 'Custom site',
-    latitude: input.latitude,
-    longitude: wrap360(input.longitude),
+    latitude,
+    longitude,
     elevationM: input.elevationM,
     category: Math.abs(input.latitude) >= 80 ? 'polar' : 'reference',
     region: 'User-defined coordinates',
@@ -304,5 +456,8 @@ export function makeCustomSite(input: {
     terrain,
     accent: '#1f7a52',
     custom: true,
+    coordinateType: 'custom',
+    coordinateProvenance,
+    dataConfidence: input.horizon ? (input.horizon.synthetic ? 'synthetic' : 'measured') : 'illustrative',
   };
 }

@@ -8,7 +8,11 @@ import { evaluateAt, DEFAULT_CONFIG } from '../src/engine/simulation';
 import { missionReportJSON, horizonCSV } from '../src/utils/export';
 import type { HorizonMask } from '../src/terrain/types';
 
-function maskWith(elevations: number[], overrides: Partial<HorizonMask> = {}): HorizonMask {
+// Default to the IAU frame (no rotation) so these tests isolate the "no illustrative
+// ripple / no clamp / verbatim samples" property from frame rotation, which is
+// exercised separately in frame-gating.test.ts. Pass frame='MOON_ME DE421' to test
+// the ME->IAU path (e.g. provenance export).
+function maskWith(elevations: number[], overrides: Partial<HorizonMask> = {}, frame = 'IAU_MOON'): HorizonMask {
   const step = 360 / elevations.length;
   return {
     latitude: -89.5, longitude: 45, radius_km: 5, horizon_radius_km: 4.9, edge_inset_m: 55,
@@ -16,7 +20,7 @@ function maskWith(elevations: number[], overrides: Partial<HorizonMask> = {}): H
     azimuth_step_deg: step, azimuths_deg: elevations.map((_, i) => i * step), elevations_deg: elevations,
     ray_coverage_percent: elevations.map(() => 100), max_obstacle_range_km: elevations.map(() => 1),
     mean_coverage_percent: 100, synthetic: false,
-    source: { filename: 'test.tif', lunar_radius_m: 1737400, elevation_reference_radius_m: 1737400, elevation_reference: 'test datum', lunar_reference_frame: 'MOON_ME DE421', synthetic: false },
+    source: { filename: 'test.tif', lunar_radius_m: 1737400, elevation_reference_radius_m: 1737400, elevation_reference: 'test datum', lunar_reference_frame: frame, synthetic: false },
     model: 'test', frame_note: 'verify frame', ...overrides,
   };
 }
@@ -62,7 +66,7 @@ describe('DEM horizon → mission profile', () => {
   });
 
   it('exports DEM provenance and native-resolution horizon rows', () => {
-    const mask = maskWith(Array.from({ length: 72 }, (_, i) => Math.sin(i / 72 * Math.PI * 2) * 3));
+    const mask = maskWith(Array.from({ length: 72 }, (_, i) => Math.sin(i / 72 * Math.PI * 2) * 3), {}, 'MOON_ME DE421');
     const site = makeCustomSite({ name: 'DEM site', latitude: -89.5, longitude: 45, elevationM: -100, preset: 'flat', horizon: mask });
     const current = evaluateAt(site, Date.parse('2026-12-20T08:00:00Z'), DEFAULT_CONFIG);
     const report = JSON.parse(missionReportJSON(site, DEFAULT_CONFIG, null, current));

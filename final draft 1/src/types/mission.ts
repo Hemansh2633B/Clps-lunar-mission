@@ -29,6 +29,39 @@ export interface TerrainProfile {
   gridSize?: number;
   samplingDeg?: number;
   accuracyNote?: string;
+  /** Frame compatibility with the IAU 2015 ephemeris frame (verified via SPICE). */
+  frameVerified?: boolean;
+  frameTransform?: 'me' | 'pa' | 'iau' | null;
+  frameNote?: string;
+  frameResidualDeg?: number;
+  /** Azimuth offset (deg) applied to align a source-frame mask with the IAU frame. */
+  azimuthOffsetDeg?: number;
+  /** Local (landing-centered) vs regional (distant-obstruction) analysis. */
+  analysisScale?: 'local' | 'regional';
+  regionalRadiusKm?: number;
+  /** Authoritative vertical uncertainty (m) if a product provides it; else undefined. */
+  verticalUncertaintyM?: number;
+  effectiveResolutionM?: number;
+  productVersion?: string;
+}
+
+/** How the mission window was sampled (reproducibility + convergence disclosure). */
+export interface SamplingInfo {
+  requestedStepMinutes: number;
+  effectiveStepMinutes: number;
+  sampleCount: number;
+  capped: boolean;
+  maxGapMinutes: number;
+  strategy: string;
+}
+
+/** Transparent decomposition of the application-defined feasibility heuristic. */
+export interface ScoreBreakdown {
+  heuristic: true;
+  components: { key: string; label: string; valuePct: number; weight: number; contribution: number }[];
+  weightsSum: number;
+  dataConfidence: 'measured' | 'illustrative' | 'synthetic' | 'region-approximate' | 'mixed';
+  note: string;
 }
 
 export interface LandingSite {
@@ -44,6 +77,16 @@ export interface LandingSite {
   terrain: TerrainProfile;
   accent: string;
   custom?: boolean;
+  /** Candidate program / mission class (e.g. 'Artemis III (2024)', 'Apollo', 'Chang\'e'). */
+  program?: string;
+  /** How the coordinate was obtained — never invent precise landing points. */
+  coordinateType?: 'region-center' | 'representative-point' | 'surveyed' | 'custom';
+  coordinateProvenance?: string;
+  coordinateUncertaintyDeg?: number;
+  elevationProvenance?: string;
+  sourceUrl?: string;
+  sourceDate?: string;
+  dataConfidence?: 'measured' | 'illustrative' | 'synthetic' | 'region-approximate';
 }
 
 export interface SkyPosition {
@@ -147,8 +190,16 @@ export interface MissionSummary {
   firstDepletionMs: number | null;
   earthNeverVisible: boolean;
   feasibilityScore: number;
-  verdict: 'NOMINAL' | 'CONDITIONAL' | 'HIGH RISK' | 'SURVIVAL RISK' | 'RELAY REQUIRED';
+  verdict: 'NOMINAL' | 'CONDITIONAL' | 'HIGH RISK' | 'ENERGY DEFICIT' | 'RELAY REQUIRED';
   verdictReason: string;
+  /** Effective sampling used (reproducibility + convergence). */
+  sampling: SamplingInfo;
+  /** Transparent, application-defined heuristic decomposition (not a NASA method). */
+  scoreBreakdown: ScoreBreakdown;
+  /** Confidence of the underlying terrain data (separate from performance). */
+  dataConfidence: ScoreBreakdown['dataConfidence'];
+  /** Whether the terrain frame is verified compatible with the ephemeris frame. */
+  frameVerified: boolean;
 }
 
 export interface SimulationResult {
@@ -158,6 +209,7 @@ export interface SimulationResult {
   events: TransitionEvent[];
   summary: MissionSummary;
   computeMs: number;
+  sampling: SamplingInfo;
 }
 
 export interface Scenario {

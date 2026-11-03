@@ -114,8 +114,14 @@ export function computeEphemeris(site: LandingSite, timeMs: number): EphemerisSa
   const earthTopo = sub(earthFromMoon, observer);
   const earth = toSky(earthTopo, local);
 
+  // Sub-solar and sub-Earth points are SELENOCENTRIC: the body-fixed points where
+  // the Sun / Earth is at zenith. They are properties of the Moon-Sun / Moon-Earth
+  // geometry and must NOT depend on the observer's site. (The topocentric `earthTopo`
+  // is still used above for the Earth's apparent az/el in the site's sky, where the
+  // ~0.26 deg lunar-radius parallax is physically correct.) Using earthTopo here
+  // previously shifted the reported sub-Earth point by the observer parallax.
   const subsolar = bodyLatLon(toBody(sunDirection, frame));
-  const subEarth = bodyLatLon(toBody(earthTopo, frame));
+  const subEarth = bodyLatLon(toBody(earthFromMoon, frame));
   const lib = A.Libration(time);
 
   return {

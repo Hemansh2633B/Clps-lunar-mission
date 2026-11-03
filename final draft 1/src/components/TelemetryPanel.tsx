@@ -1,6 +1,7 @@
-import { Activity, BatteryCharging, Clock, Earth, Radio, Sun, Zap, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Activity, BatteryCharging, Clock, Earth, Radio, Sun, Zap, AlertTriangle, CheckCircle2, Scale } from 'lucide-react';
 import type { AppMode, EvaluatedSample, LandingSite, MissionConfig, SimulationResult, TransitionEvent } from '../types/mission';
 import { formatDuration, LIGHT_SPEED_KMS } from '../engine/constants';
+import { ProvenanceIndicator } from './ProvenanceIndicator';
 
 interface Props {
   site: LandingSite;
@@ -11,6 +12,8 @@ interface Props {
   mode: AppMode;
   config: MissionConfig;
   onSettings: () => void;
+  loading?: boolean;
+  error?: string | null;
 }
 
 function nextEvent(events: TransitionEvent[], body: 'sun' | 'earth', timeMs: number, wantVisible: boolean) {
@@ -26,7 +29,7 @@ function Stat({ label, value, unit, color }: { label: string; value: string; uni
   );
 }
 
-export function TelemetryPanel({ site, current, sim, events, timeMs, mode, config, onSettings }: Props) {
+export function TelemetryPanel({ site, current, sim, events, timeMs, mode, config, onSettings, loading, error }: Props) {
   const sunNext = nextEvent(events, 'sun', timeMs, !current.sunVisibility.visible);
   const earthNext = nextEvent(events, 'earth', timeMs, !current.earthVisibility.visible);
   const summary = sim?.summary;
@@ -44,7 +47,17 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
         <div>
           <div style={{ fontSize: 13, fontWeight: 600 }}>{site.shortName}</div>
           <div className="mono" style={{ fontSize: 10, color: 'var(--muted)' }}>{site.latitude.toFixed(3)}°, {site.longitude.toFixed(3)}° · {site.elevationM} m</div>
+          {site.program && <div className="mono" style={{ fontSize: 9.5, color: 'var(--muted)', marginTop: 2 }}>{site.program}{site.coordinateType ? ` · ${site.coordinateType}` : ''}</div>}
         </div>
+
+        <ProvenanceIndicator site={site} summary={summary} />
+
+        {site.terrain.kind === 'dem' && !site.terrain.synthetic && !site.terrain.frameVerified && (
+          <div role="alert" style={{ display: 'flex', gap: 7, alignItems: 'flex-start', padding: 9, border: '1px solid var(--blocked)', background: '#f8e3df', color: '#8f2b23', fontSize: 10.5, lineHeight: 1.45 }}>
+            <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span><strong>FRAME UNVERIFIED.</strong> This DEM's reference frame is not confirmed compatible with the IAU 2015 ephemeris frame. The numbers below are <strong>not quantitative mission visibility</strong> — view the terrain in Terrain Lab and verify its frame before operational use.</span>
+          </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <div className="panel" style={{ padding: 10, borderColor: current.sunVisibility.visible ? '#d9b877' : '#e0a99f' }}>
@@ -98,6 +111,9 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
             ))}
           </div>
           <button className="btn sm ghost" style={{ marginTop: 8, padding: 0 }} onClick={onSettings}>Array: {config.arrayAreaM2} m² · {(config.cellEfficiency * 100).toFixed(0)}% cells · {(config.systemDerate * 100).toFixed(0)}% derate →</button>
+          <p style={{ fontSize: 9.5, color: 'var(--dim)', lineHeight: 1.45, marginTop: 7 }}>
+            Instantaneous array power (W), not net energy. Idealized model: flux 1361/au² W/m²; horizontal deck ∝ sin(el), tracking mast ∝ cos(el), fixed mast ∝ cos(el)·cos(Δaz); zero output when the Sun is terrain-occulted. No temperature, dust, or degradation effects.
+          </p>
         </section>
 
         <section>
@@ -112,6 +128,9 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
             <Stat label="One-way light" value={(current.earth.distanceKm / LIGHT_SPEED_KMS).toFixed(2)} unit="s" />
             <Stat label="Comms margin" value={config.commsMarginDeg.toFixed(1)} unit="deg" />
           </div>
+          <p style={{ fontSize: 9.5, color: 'var(--dim)', lineHeight: 1.45, marginTop: 7 }}>
+            Geometric Earth line-of-sight only — <strong>not an RF link budget</strong>. No antenna gain, transmit power, coding, or pointing loss is modeled; "DTE open" means Earth clears the terrain, not that a radio link is closed.
+          </p>
         </section>
 
         <section>
@@ -139,12 +158,55 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: verdictColor }}>
                     {summary.verdict === 'NOMINAL' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {summary.verdict}
                   </div>
-                  <div style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.45, marginTop: 3 }}>{educator ? (summary.verdict === 'NOMINAL' ? 'This window looks good: power and radio contact overlap for most of the mission.' : summary.verdict === 'RELAY REQUIRED' ? 'Earth never rises here. The lander must talk through a relay satellite.' : 'This window has gaps. The team would need to store energy and schedule radio passes carefully.') : summary.verdictReason}</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.45, marginTop: 3 }}>{educator ? (summary.verdict === 'NOMINAL' ? 'This window looks good: power and Earth line-of-sight overlap for most of the mission.' : summary.verdict === 'RELAY REQUIRED' ? 'Earth never rises here. The lander must talk through a relay satellite.' : summary.verdict === 'ENERGY DEFICIT' ? 'The battery model runs out of stored energy before the window ends — more array area or less load is needed.' : 'This window has gaps. The team would need to store energy and schedule radio passes carefully.') : summary.verdictReason}</div>
                 </div>
               </div>
+
+              <details style={{ marginTop: 10, border: '1px solid var(--border)', background: '#fffdf7', borderRadius: 6 }}>
+                <summary style={{ cursor: 'pointer', listStyle: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', fontSize: 11, fontWeight: 600, color: 'var(--ink-soft)' }}>
+                  <Scale size={12} /> How this score is computed <span className="chip" style={{ marginLeft: 'auto', fontSize: 8.5 }}>heuristic</span>
+                </summary>
+                <div style={{ padding: '0 10px 9px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+                    <thead>
+                      <tr style={{ color: 'var(--muted)', textAlign: 'left' }}>
+                        <th style={{ padding: '3px 4px', fontWeight: 600 }}>Component</th>
+                        <th style={{ padding: '3px 4px', fontWeight: 600, textAlign: 'right' }}>Value</th>
+                        <th style={{ padding: '3px 4px', fontWeight: 600, textAlign: 'right' }}>Weight</th>
+                        <th style={{ padding: '3px 4px', fontWeight: 600, textAlign: 'right' }}>Points</th>
+                      </tr>
+                    </thead>
+                    <tbody className="mono">
+                      {summary.scoreBreakdown.components.map((c) => (
+                        <tr key={c.key} style={{ borderTop: '1px dashed var(--border)' }}>
+                          <td style={{ padding: '3px 4px', fontFamily: 'Outfit, sans-serif' }}>{c.label}</td>
+                          <td style={{ padding: '3px 4px', textAlign: 'right' }}>{c.valuePct.toFixed(1)}%</td>
+                          <td style={{ padding: '3px 4px', textAlign: 'right' }}>×{c.weight.toFixed(2)}</td>
+                          <td style={{ padding: '3px 4px', textAlign: 'right' }}>{c.contribution.toFixed(1)}</td>
+                        </tr>
+                      ))}
+                      <tr style={{ borderTop: '1px solid var(--ink)', fontWeight: 700 }}>
+                        <td style={{ padding: '3px 4px', fontFamily: 'Outfit, sans-serif' }}>Total (rounded)</td>
+                        <td /><td style={{ padding: '3px 4px', textAlign: 'right' }}>Σ{summary.scoreBreakdown.weightsSum.toFixed(2)}</td>
+                        <td style={{ padding: '3px 4px', textAlign: 'right' }}>{summary.feasibilityScore}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <p style={{ fontSize: 9.5, color: 'var(--dim)', lineHeight: 1.45, marginTop: 7 }}>{summary.scoreBreakdown.note}</p>
+                  <p style={{ fontSize: 9.5, color: 'var(--dim)', lineHeight: 1.45, marginTop: 4 }}>
+                    Data confidence: <strong>{summary.dataConfidence}</strong> (separate from performance). Battery component is an energy-balance model (charge η 0.92 / discharge η 0.95, hard SOC bounds) — <strong>not thermal survival</strong>.
+                  </p>
+                </div>
+              </details>
             </>
-          ) : (
+          ) : error ? (
+            <div role="alert" style={{ fontSize: 11, color: 'var(--blocked)', display: 'flex', alignItems: 'flex-start', gap: 6, lineHeight: 1.45 }}>
+              <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} /> Mission window failed: {error}
+            </div>
+          ) : loading ? (
             <div style={{ fontSize: 11, color: 'var(--dim)', display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={12} className="pulse" /> Computing mission window…</div>
+          ) : (
+            <div style={{ fontSize: 11, color: 'var(--dim)', display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={12} /> No mission window yet — adjust the start date or duration.</div>
           )}
         </section>
       </div>
