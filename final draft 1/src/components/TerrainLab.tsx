@@ -497,9 +497,9 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
         <button className="btn ghost" onClick={() => ctxRef.current?.resetCamera()}><RotateCcw size={13} /> Reset view</button>
       </div>
 
-      {formError && <div role="alert" style={{ padding: '6px 12px', background: '#241a08', borderBottom: '1px solid #5c430f', color: 'var(--solar)', fontSize: 11, display: 'flex', gap: 8 }}><AlertTriangle size={13} /> {formError}</div>}
-      {error && <div role="alert" style={{ padding: '8px 12px', background: '#240b0b', borderBottom: '1px solid #5c1d1d', color: '#fca5a5', fontSize: 12, display: 'flex', gap: 8 }}><AlertTriangle size={14} /> {error}</div>}
-      {webglError && <div role="alert" style={{ padding: '8px 12px', background: '#240b0b', color: '#fca5a5', fontSize: 12 }}>{webglError}</div>}
+      {formError && <div role="alert" style={{ padding: '6px 12px', background: '#fdf0d5', borderBottom: '1px solid #d9b877', color: 'var(--solar)', fontSize: 11, display: 'flex', gap: 8 }}><AlertTriangle size={13} /> {formError}</div>}
+      {error && <div role="alert" style={{ padding: '8px 12px', background: '#fbe9e7', borderBottom: '1px solid #e0a99f', color: '#c23b32', fontSize: 12, display: 'flex', gap: 8 }}><AlertTriangle size={14} /> {error}</div>}
+      {webglError && <div role="alert" style={{ padding: '8px 12px', background: '#fbe9e7', color: '#c23b32', fontSize: 12 }}>{webglError}</div>}
 
       <div className="terrain-lab-body">
         <aside className="terrain-lab-controls">
@@ -561,16 +561,16 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
             <button className="btn sm" style={{ width: '100%' }} disabled={!data || horizonLoading || !!eyeError} onClick={() => void computeHorizon()}>{horizonLoading ? 'Ray-marching…' : 'Compute 360° horizon'}</button>
             {horizon && (
               <div style={{ marginTop: 8 }}>
-                <svg viewBox="0 0 360 80" style={{ width: '100%', height: 70, background: '#0c1017', borderRadius: 4 }}>
+                <svg viewBox="0 0 360 80" style={{ width: '100%', height: 70, background: '#fffdf7', borderRadius: 4 }}>
                   {horizon.azimuths_deg.map((az, i) => {
                     const h = horizon.elevations_deg[i];
                     const y = 60 - Math.max(-10, Math.min(30, h)) * 1.5;
                     const cov = horizon.ray_coverage_percent[i];
-                    return <rect key={az} x={az} y={Math.min(60, y)} width={horizon.azimuth_step_deg} height={Math.abs(60 - y) + 1} fill={cov < 100 ? '#EF4444' : h > 0 ? '#8A94A6' : '#06B6D4'} opacity={0.8} />;
+                    return <rect key={az} x={az} y={Math.min(60, y)} width={horizon.azimuth_step_deg} height={Math.abs(60 - y) + 1} fill={cov < 100 ? '#c23b32' : h > 0 ? '#5c5348' : '#0e7490'} opacity={0.8} />;
                   })}
-                  <line x1={0} x2={360} y1={60} y2={60} stroke="#3a4656" strokeWidth={0.75} />
-                  <text x={2} y={10} fontSize={7} fill="#5C6675" fontFamily="JetBrains Mono">+30°</text>
-                  <text x={2} y={76} fontSize={7} fill="#5C6675" fontFamily="JetBrains Mono">−10°</text>
+                  <line x1={0} x2={360} y1={60} y2={60} stroke="#b39b73" strokeWidth={0.75} />
+                  <text x={2} y={10} fontSize={7} fill="#8a7358" fontFamily="JetBrains Mono">+30°</text>
+                  <text x={2} y={76} fontSize={7} fill="#8a7358" fontFamily="JetBrains Mono">−10°</text>
                 </svg>
                 <div style={{ fontSize: 9, color: 'var(--dim)', marginTop: 4 }}>Ray coverage {horizon.mean_coverage_percent.toFixed(1)}% · eye {horizon.eye_height_m} m · {horizon.azimuth_step_deg}° bins</div>
                 <div style={{ fontSize: 9, color: 'var(--dim)', marginTop: 2 }}>Horizon radius {horizon.horizon_radius_km.toFixed(3)} km · edge inset {horizon.edge_inset_m.toFixed(1)} m · step {horizon.sampling_step_m.toFixed(1)} m</div>

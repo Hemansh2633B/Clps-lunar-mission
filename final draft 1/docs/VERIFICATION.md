@@ -1,4 +1,4 @@
-# Verification evidence · SELENE v1.3
+# Verification evidence · SELENE v1.4
 
 This file records what was actually executed in the Arena sandbox. It distinguishes software-path verification from scientific validation.
 
@@ -54,6 +54,24 @@ Browser evidence: `screenshots/09-real-dem-lab.png`, `screenshots/10-real-dem-mi
 - Simulation cache keys include terrain kind, resolution, eye height, source frame, synthetic flag, and the full horizon array.
 - The Flask API returns JSON for 404/405/500, sets `nosniff`/`no-referrer` headers, and logs unexpected failures.
 - Terrain Lab validates latitude/longitude/radius/eye height inline and disables invalid builds/horizon computations.
+
+## v1.4 "SELENE // OPS" paper-folio redesign
+
+- Ported the user-supplied reference design onto the working app: cream paper + dot grid,
+  ink text, coral rule, plates with `+` register marks, rubber stamps, hard-shadow amber
+  keys, Fraunces / Outfit / IBM Plex Mono, a constants ticker, and a full-width live clock
+  strip (mission UTC · MJD · sub-solar · sub-earth) driven by the real ephemeris sample.
+- All five user images are wired in as branding / Field Guide plates only (patch, hero,
+  lander, ops-desk, classroom); provenance recorded in `public/assets/PROVENANCE.md`.
+- Charts restyled to the paper palette (cream sky / ink terrain silhouette, sepia LROC
+  polar map, amber/lagoon/emerald Gantt). The 3D Terrain Lab keeps a dark instrument screen.
+- No functional regression: engine, DEM import, comparison, exports, shortcuts, modal
+  focus guards, and mobile layout all unchanged and re-verified.
+- Test-harness hardening: screenshots disable CSS animations (deterministic under
+  SwiftShader), default timeout raised to 45 s, and the boot wait uses the structural
+  `.app-header .display` selector instead of the ambiguous `text=SELENE` (which also
+  matched the hidden `<title>`). Fixed a header flex bug where the brand collapsed to
+  zero width when the clock cluster crowded the row.
 
 ## DEM horizon → mission planner
 

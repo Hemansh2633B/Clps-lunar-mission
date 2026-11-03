@@ -47,12 +47,12 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <div className="panel" style={{ padding: 10, borderColor: current.sunVisibility.visible ? '#5c430f' : '#5c1d1d' }}>
+          <div className="panel" style={{ padding: 10, borderColor: current.sunVisibility.visible ? '#d9b877' : '#e0a99f' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--solar)', fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase' }}><Sun size={12} /> {current.sunVisibility.visible ? 'Sunlit' : 'Dark'}</div>
             <div className="mono" style={{ fontSize: 16, marginTop: 6 }}>{sunNext ? formatDuration((sunNext.timeMs - timeMs) / 3_600_000) : '—'}</div>
             <div style={{ fontSize: 10, color: 'var(--dim)', marginTop: 2 }}>{current.sunVisibility.visible ? 'to sunset' : 'to sunrise'}{!sunNext ? ' · none in window' : ''}</div>
           </div>
-          <div className="panel" style={{ padding: 10, borderColor: current.earthVisibility.visible ? '#0f4c5c' : '#5c1d1d' }}>
+          <div className="panel" style={{ padding: 10, borderColor: current.earthVisibility.visible ? '#9fc6d2' : '#e0a99f' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--earth)', fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase' }}><Radio size={12} /> {current.earthVisibility.visible ? 'DTE open' : 'LOS'}</div>
             <div className="mono" style={{ fontSize: 16, marginTop: 6 }}>{summary?.earthNeverVisible ? 'NEVER' : earthNext ? formatDuration((earthNext.timeMs - timeMs) / 3_600_000) : '—'}</div>
             <div style={{ fontSize: 10, color: 'var(--dim)', marginTop: 2 }}>{summary?.earthNeverVisible ? 'far side · relay needed' : current.earthVisibility.visible ? 'to Earthset' : 'to AOS'}{!earthNext && !summary?.earthNeverVisible ? ' · none in window' : ''}</div>
@@ -60,7 +60,7 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
         </div>
 
         {educator && (
-          <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5, background: '#0c1017', border: '1px solid var(--border)', borderRadius: 5, padding: 10 }}>
+          <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5, background: '#fffdf7', border: '1px solid var(--border)', borderRadius: 5, padding: 10 }}>
             {current.sunVisibility.visible ? 'The lander can see the Sun and make power.' : current.sunVisibility.reason === 'terrain' ? 'The Sun is above the mathematical horizon, but a mountain is blocking it.' : 'The Sun is below the horizon — the lander is in lunar night.'}
             {' '}
             {current.earthVisibility.visible ? 'Earth is above the terrain, so the lander can radio home directly.' : summary?.earthNeverVisible ? 'This site is on the far side: Earth never rises. A relay satellite is required.' : 'Earth is hidden behind terrain right now, so direct radio contact is lost.'}
@@ -129,11 +129,11 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
                 <Stat label="Min battery" value={summary.minBatterySocPct.toFixed(0)} unit="%" color={summary.minBatterySocPct <= 0 ? 'var(--blocked)' : 'var(--nominal)'} />
                 <Stat label="Energy" value={summary.selectedEnergyKWh.toFixed(1)} unit="kWh" />
               </div>
-              <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, padding: 10, border: '1px solid var(--border)', borderRadius: 6, background: '#0c1017' }}>
+              <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, padding: 10, border: '1px solid var(--border)', borderRadius: 6, background: '#fffdf7' }}>
                 <svg width={52} height={52} viewBox="0 0 52 52">
-                  <circle cx={26} cy={26} r={22} fill="none" stroke="#1a212c" strokeWidth={5} />
+                  <circle cx={26} cy={26} r={22} fill="none" stroke="#f3e6d0" strokeWidth={5} />
                   <circle cx={26} cy={26} r={22} fill="none" stroke={verdictColor} strokeWidth={5} strokeDasharray={`${(summary.feasibilityScore / 100) * 138.2} 138.2`} strokeLinecap="round" transform="rotate(-90 26 26)" />
-                  <text x={26} y={30} textAnchor="middle" fontSize={14} fill="#E6EAF2" fontFamily="JetBrains Mono, monospace">{summary.feasibilityScore}</text>
+                  <text x={26} y={30} textAnchor="middle" fontSize={14} fill="#1c2430" fontFamily="IBM Plex Mono, monospace">{summary.feasibilityScore}</text>
                 </svg>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: verdictColor }}>

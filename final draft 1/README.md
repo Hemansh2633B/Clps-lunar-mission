@@ -1,4 +1,4 @@
-# SELENE · Lunar South Pole Mission Planning Console
+# SELENE // OPS · Lunar South Pole Mission Planning Console
 
 An interactive, production-grade workspace for comparing **solar illumination**, **terrain occlusion**, and **Direct-to-Earth (DTE) communication** windows at lunar south-pole landing sites — built for the CLPS / Artemis launch-slip trade study.
 
@@ -168,11 +168,11 @@ final draft 1/
 │   ├── components/             # Header, catalog, panorama, map, telemetry,
 │   │                           # timeline, comparison, educator, TerrainLab, modals
 │   ├── utils/export.ts         # CSV / JSON report generation
-│   └── styles/index.css        # Aerospace design tokens + layout
+│   └── styles/index.css        # Paper-folio design tokens + layout
 └── tests/engine.test.ts        # Scientific sanity + unit tests
 ```
 
-**Stack:** Vite 7 · React 19 · TypeScript 5.8 · Tailwind CSS 4 · `astronomy-engine` · `three` · `lucide-react` · HTML5 Canvas / SVG / WebGL · Web Workers · Flask/Rasterio/PyProj backend. Fonts are self-hosted (`@fontsource/inter`, `@fontsource/jetbrains-mono`).
+**Stack:** Vite 7 · React 19 · TypeScript 5.8 · Tailwind CSS 4 · `astronomy-engine` · `three` · `lucide-react` · HTML5 Canvas / SVG / WebGL · Web Workers · Flask/Rasterio/PyProj backend. Fonts are self-hosted (`@fontsource/fraunces`, `@fontsource/outfit`, `@fontsource/ibm-plex-mono`).
 
 Heavy window simulations run in a dedicated Web Worker with an LRU result cache, so time scrubbing and playback stay responsive. The instantaneous telemetry sample is computed synchronously on the main thread (sub-millisecond).
 
@@ -227,16 +227,25 @@ Heavy window simulations run in a dedicated Web Worker with an LRU result cache,
 
 ---
 
-## Design language
+## Design language — "SELENE // OPS" paper folio
 
-Obsidian `#090B0E` background, elevated `#12161F` panels, crisp `1px #1E2530` borders. Inter for UI, JetBrains Mono with `tabular-nums` for all telemetry. Semantic engineering colors:
+A warm mission-briefing desk: cream paper `#f3e6d0` with a faint dot grid, ink `#1c2430`
+text, and a coral rule across the top. Panels are **plates** with `+` register marks;
+verdicts are rubber **stamps**; primary actions are amber keys with a hard ink shadow.
+Type is **Fraunces** (display), **Outfit** (UI), and **IBM Plex Mono** (`tabular-nums`)
+for all telemetry. A live clock strip reads mission UTC, MJD, sub-solar and sub-earth
+points; a constants ticker runs beneath the header. Semantic engineering colors:
 
-- Solar / power → amber `#F59E0B`
-- Earth / DTE → cyan `#06B6D4`
-- Occlusion / LOS blocked → crimson `#EF4444`
-- Simultaneous Sun + Earth viability → emerald `#10B981`
+- Solar / power → amber `#e09a2b` / brass `#8a5a16`
+- Earth / DTE → lagoon `#0e7490`
+- Occlusion / LOS blocked → crimson `#c23b32`
+- Simultaneous Sun + Earth viability → emerald `#1f7a52`
 
-No gradients-for-gradient’s-sake, no glassmorphism, no rounded marketing cards. Reticles, scale bars, UTC/MJD clocks, and countdown timers behave like an ops console.
+The 3D Terrain Lab keeps a dark instrument viewport framed by the paper chrome. The
+user-supplied patch / hero / lander / ops-desk / classroom illustrations appear only as
+branding and Field Guide plates — never as quantitative data (see `public/assets/PROVENANCE.md`).
+No glassmorphism, no rounded marketing cards; reticles, scale bars, UTC/MJD clocks and
+countdown timers behave like an ops console.
 
 ---
 

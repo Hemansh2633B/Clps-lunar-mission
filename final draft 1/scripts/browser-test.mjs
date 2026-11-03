@@ -30,6 +30,7 @@ const browser = await pw.launch({
   env: { ...process.env, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH || '/tmp/al2023/lib', FONTCONFIG_PATH: '/tmp/fonts' },
 });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+page.setDefaultTimeout(45000);
 const consoleErrors = [];
 const pageErrors = [];
 page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
@@ -73,20 +74,21 @@ const buildTerrain = async ({ mode, quality, radius } = {}) => {
 
 try {
   await page.goto(BASE, { waitUntil: 'networkidle' });
-  await page.waitForSelector('text=SELENE');
+  await page.waitForSelector('.app-header .display');
+  assert(await page.locator('.app-header .display').innerText().then((t) => t.includes('SELENE')), 'header brand renders');
   await page.waitForTimeout(1200);
-  await page.screenshot({ path: `${OUT}/01-workspace.png` });
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/01-workspace.png` });
   assert(await page.locator('.site-item').count() >= 10, 'catalog has 10+ sites');
 
   await page.locator('.site-item', { hasText: 'Apollo 11' }).click();
   await page.waitForTimeout(900);
   assert(await page.locator('text=Tranquility Base').count() > 0, 'Apollo 11 selected');
-  await page.screenshot({ path: `${OUT}/02-apollo11.png` });
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/02-apollo11.png` });
 
   await page.locator('.site-item', { hasText: "Chang'e 4" }).click();
   await page.waitForTimeout(900);
   assert(await page.locator('text=NEVER').count() > 0, 'far side reports NEVER');
-  await page.screenshot({ path: `${OUT}/03-farside.png` });
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/03-farside.png` });
 
   await page.keyboard.press('c');
   await page.getByRole('button', { name: /Pin current/ }).click();
@@ -94,7 +96,7 @@ try {
   await page.locator('.site-rail').getByRole('button', { name: 'Pin', exact: true }).click();
   await page.waitForTimeout(1500);
   assert(await page.locator('text=Scenario comparison').count() > 0, 'comparison open');
-  await page.screenshot({ path: `${OUT}/04-comparison.png` });
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/04-comparison.png` });
   await page.keyboard.press('c');
 
   await page.keyboard.press('e');
@@ -102,7 +104,7 @@ try {
   await page.keyboard.press('g');
   await page.locator('text=Why is the South Pole so different').click();
   await page.waitForTimeout(900);
-  await page.screenshot({ path: `${OUT}/05-educator.png` });
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/05-educator.png` });
   await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: /Custom/ }).first().click();
@@ -144,7 +146,7 @@ try {
   assert(JSON.stringify(initialTerrain.landingPosition) === JSON.stringify([0, 0, 0]), 'landing vertex is exact origin');
   assert(initialTerrain.triangles > 100000 && initialTerrain.triangles < 135000, 'medium grid triangle budget');
   assert(await page.locator('.terrain-synthetic-banner').isVisible(), 'synthetic warning visible');
-  await page.screenshot({ path: `${OUT}/06-terrain-lab.png` });
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/06-terrain-lab.png` });
 
   const canvas = page.locator('.terrain-viewport canvas');
   const box = await canvas.boundingBox();
@@ -238,7 +240,7 @@ try {
   await page.waitForTimeout(700);
   assert(await page.locator('.site-item', { hasText: 'Demo -89.50° 45.0°' }).count() > 0, 'DEM/demo horizon creates mission site');
   assert(await page.locator('text=Synthetic demo samples').count() > 0, 'imported synthetic horizon stays labeled');
-  await page.screenshot({ path: `${OUT}/07-dem-horizon-site.png` });
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/07-dem-horizon-site.png` });
 
   // Real mode never silently falls back when no DEM is configured.
   await page.keyboard.press('t');
@@ -255,7 +257,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForFunction(() => { const c = document.querySelector('.terrain-viewport canvas'); return c && c.getBoundingClientRect().width <= 391; }, null, { timeout: 5000 });
   await page.waitForTimeout(400);
-  await page.screenshot({ path: `${OUT}/08-terrain-mobile.png`, fullPage: true });
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/08-terrain-mobile.png`, fullPage: true });
   const overflow = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth, wide: [...document.querySelectorAll('*')].filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1).slice(0, 8).map((el) => `${el.tagName}.${el.className} ${Math.round(el.getBoundingClientRect().right)}`) }));
   assert(overflow.scroll <= overflow.inner, `mobile terrain layout has no horizontal overflow: ${JSON.stringify(overflow)}`);
   assert(await canvas.isVisible(), 'mobile terrain canvas visible');
@@ -271,7 +273,7 @@ try {
   assert(unexpectedConsole.length === 0, `console errors: ${unexpectedConsole.join(' | ')}`);
   console.log('BROWSER TESTS PASSED · mission console + Terrain Lab (orbit, keyboard, qualities, shadows, horizon import, mobile) · screenshots in', OUT);
 } catch (err) {
-  await page.screenshot({ path: `${OUT}/99-browser-failure.png`, fullPage: true }).catch(() => {});
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/99-browser-failure.png`, fullPage: true }).catch(() => {});
   console.error('BROWSER FAILURE STATE', JSON.stringify(await terrainState().catch(() => null)), 'console:', consoleErrors, 'page:', pageErrors);
   throw err;
 } finally {

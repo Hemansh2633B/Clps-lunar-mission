@@ -9,15 +9,15 @@ export const MJD_UNIX_EPOCH = 40587;
 export const DEFAULT_EYE_HEIGHT_M = 2;
 
 export const COLORS = {
-  bg: '#090B0E',
-  panel: '#12161F',
-  border: '#1E2530',
-  solar: '#F59E0B',
-  earth: '#06B6D4',
-  blocked: '#EF4444',
-  nominal: '#10B981',
-  text: '#E6EAF2',
-  muted: '#8A94A6',
+  bg: '#f3e6d0',
+  panel: '#fffaf2',
+  border: '#e0cfae',
+  solar: '#e09a2b',
+  earth: '#0e7490',
+  blocked: '#c23b32',
+  nominal: '#1f7a52',
+  text: '#1c2430',
+  muted: '#5c5348',
 } as const;
 
 export function mjd(timeMs: number): number {

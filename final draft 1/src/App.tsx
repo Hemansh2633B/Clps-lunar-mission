@@ -22,6 +22,11 @@ import { download, missionReportJSON, timeseriesCSV, horizonCSV, summaryCSV, com
 
 const BASELINE = Date.parse('2026-12-18T00:00:00Z');
 const INITIAL_TIME = Date.parse('2026-12-20T08:00:00Z');
+const TICKER = [
+  '1.54° AXIAL TILT', '709h SYNODIC DAY', '±6.7° LAT LIBRATION', '±7.9° LON LIBRATION',
+  '0.0″ AIRLESS REFRACTION', '1361 W/m² SOLAR CONSTANT', 'IAU 2015 MOON ROTATION',
+  '360° TERRAIN OCCLUSION', 'DIRECT-TO-EARTH WINDOWS', 'LAUNCH-SLIP ECLIPSES',
+];
 
 export default function App() {
   const [sites, setSites] = useState<LandingSite[]>(LANDING_SITES);
@@ -176,11 +181,18 @@ export default function App() {
         terrainActive={terrainView} onTerrain={() => setTerrainView((v) => !v)} onGuide={() => setGuideOpen(true)}
         onSettings={() => setSettingsOpen(true)} onShortcuts={() => setShortcutsOpen(true)}
         onExport={handleExport} playing={playing}
+        subSolar={{ lat: current.subsolarLatitudeDeg, lon: current.subsolarLongitudeDeg }}
+        subEarth={{ lat: current.libration.subEarthLatitudeDeg, lon: current.libration.subEarthLongitudeDeg }}
       />
+      <div className="ticker" aria-hidden="true">
+        <div className="ticker-track">
+          {[...TICKER, ...TICKER].map((t, i) => <span key={i}>✶ {t}</span>)}
+        </div>
+      </div>
       {mode === 'educator' && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 14px', background: '#082018', borderBottom: '1px solid #14532d', fontSize: 11, color: '#6ee7b7' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 14px', background: '#e7f5ee', borderBottom: '1px solid #a9d3bd', fontSize: 11, color: '#1f7a52' }}>
           <GraduationCap size={13} /> Educator mode active — telemetry is translated into plain English.
-          <button className="btn sm ghost" style={{ color: '#6ee7b7', marginLeft: 'auto' }} onClick={() => setGuideOpen(true)}><BookOpen size={12} /> Open guided stories</button>
+          <button className="btn sm ghost" style={{ color: '#1f7a52', marginLeft: 'auto' }} onClick={() => setGuideOpen(true)}><BookOpen size={12} /> Open guided stories</button>
         </div>
       )}
       <div className={`workspace ${compareMode && !terrainView ? 'compare' : ''} ${terrainView ? 'terrain' : ''}`}>
@@ -236,7 +248,7 @@ export default function App() {
       <EducatorOverlay open={guideOpen} onClose={() => setGuideOpen(false)} active={activeTour} step={tourStep}
         onStart={applyGuided} onStep={(d) => setTourStep((s) => clamp(s + d, 0, (activeTour?.steps.length ?? 1) - 1))} onApply={applyGuided} />
       {toast && (
-        <div role="status" aria-live="polite" className="fade-in" style={{ position: 'fixed', bottom: 44, left: '50%', transform: 'translateX(-50%)', background: '#0c1017', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 14px', fontSize: 12, zIndex: 80, boxShadow: '0 12px 32px rgba(0,0,0,.5)' }}>{toast}</div>
+        <div role="status" aria-live="polite" className="fade-in" style={{ position: 'fixed', bottom: 44, left: '50%', transform: 'translateX(-50%)', background: 'var(--paper-2)', border: '1px solid var(--ink)', borderRadius: 0, padding: '8px 14px', fontSize: 12, zIndex: 80, boxShadow: '4px 4px 0 rgba(28,36,48,.2)' }}>{toast}</div>
       )}
     </div>
   );

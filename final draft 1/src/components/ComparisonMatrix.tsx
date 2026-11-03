@@ -36,7 +36,7 @@ function ScenarioCard({ scenario, sites, onUpdate, onRemove, best }: { scenario:
   }, [sim]);
 
   return (
-    <div className="panel fade-in" style={{ display: 'flex', flexDirection: 'column', borderColor: best ? '#1d5c41' : 'var(--border)', minWidth: 0 }}>
+    <div className="panel fade-in" style={{ display: 'flex', flexDirection: 'column', borderColor: best ? '#1f7a52' : 'var(--border)', minWidth: 0 }}>
       <div className="panel-header">
         <span className="panel-title" style={{ color: best ? 'var(--nominal)' : undefined }}>{best ? '★ Best window' : scenario.label || site.shortName}</span>
         <button className="btn sm ghost icon" onClick={() => onRemove(scenario.id)} title="Remove scenario"><Trash2 size={12} /></button>
@@ -62,8 +62,8 @@ function ScenarioCard({ scenario, sites, onUpdate, onRemove, best }: { scenario:
           <div style={{ height: 180, display: 'grid', placeItems: 'center', color: 'var(--dim)', fontSize: 11 }} className="pulse">Computing…</div>
         ) : (
           <>
-            <svg viewBox="0 0 100 22" style={{ width: '100%', height: 26, background: '#0c1017', borderRadius: 3 }}>
-              <polyline points={spark} fill="none" stroke="#10B981" strokeWidth={1.5} />
+            <svg viewBox="0 0 100 22" style={{ width: '100%', height: 26, background: '#fffdf7', borderRadius: 3 }}>
+              <polyline points={spark} fill="none" stroke="#1f7a52" strokeWidth={1.5} />
             </svg>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
               <div className="metric sm"><span className="label">Sunlit</span><span className="value" style={{ color: 'var(--solar)' }}>{s.illuminationPct.toFixed(0)}<span className="unit">%</span></span></div>
@@ -79,12 +79,12 @@ function ScenarioCard({ scenario, sites, onUpdate, onRemove, best }: { scenario:
                 ['Longest eclipse', `${s.longestEclipseHours.toFixed(1)} h`],
                 ['Min battery', `${s.minBatterySocPct.toFixed(0)}%`],
               ] as const).map(([label, val]) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #161c26' }}>
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #f3e6d0' }}>
                   <span style={{ color: 'var(--dim)' }}>{label}</span><span className="mono">{val}</span>
                 </div>
               ))}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 8, background: '#0c1017', border: '1px solid var(--border)', borderRadius: 5 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 8, background: '#fffdf7', border: '1px solid var(--border)', borderRadius: 5 }}>
               <span className="mono" style={{ fontSize: 20, fontWeight: 600, color: verdictColor }}>{s.feasibilityScore}</span>
               <div>
                 <div style={{ fontSize: 11, fontWeight: 700, color: verdictColor }}>{s.verdict}</div>
@@ -125,7 +125,7 @@ export function ComparisonMatrix({ scenarios, sites, onUpdate, onRemove, onPin, 
       </div>
       <div style={{ flex: 1, overflow: 'auto', padding: 12 }}>
         {mode === 'educator' && (
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.5, background: '#0c1017', border: '1px solid var(--border)', borderRadius: 6, padding: 10 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.5, background: '#fffdf7', border: '1px solid var(--border)', borderRadius: 6, padding: 10 }}>
             Each column is one landing site + start date + solar array choice. Green means the lander can both make power and talk to Earth. Pin Apollo 11 next to a polar site to see why the pole is so different.
           </div>
         )}

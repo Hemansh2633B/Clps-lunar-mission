@@ -29,7 +29,7 @@ const polarSeeds: SiteSeed[] = [
     elevationM: -1200,
     region: 'Shackleton · 89.9°S',
     description: 'Rim of the 21 km Shackleton crater, whose floor is a permanently shadowed cold trap. A classic peak-of-near-eternal-light candidate with a towering interior rim and an Earth-facing saddle.',
-    accent: '#F59E0B',
+    accent: '#c4842a',
     base: -0.12,
     seed: 3,
     features: [
@@ -48,7 +48,7 @@ const polarSeeds: SiteSeed[] = [
     elevationM: 650,
     region: 'Shackleton–de Gerlache ridge',
     description: 'The illuminated ridge linking Shackleton and de Gerlache. Broad, relatively benign terrain with long illumination stretches and a low Earth-facing horizon.',
-    accent: '#10B981',
+    accent: '#1f7a52',
     base: -0.05,
     seed: 7,
     features: [
@@ -66,7 +66,7 @@ const polarSeeds: SiteSeed[] = [
     elevationM: 4200,
     region: 'Malapert · 86°S',
     description: 'A ~5 km high massif near the south pole. Elevated terrain gives strong Earth visibility and long sunlight, but the summit ridge blocks part of the local sky.',
-    accent: '#3B82F6',
+    accent: '#1e3a5f',
     base: 0.1,
     seed: 11,
     features: [
@@ -84,7 +84,7 @@ const polarSeeds: SiteSeed[] = [
     elevationM: 3800,
     region: 'Leibnitz β plateau',
     description: 'High plateau on the Moon’s south-polar far-side limb. Elevated, open terrain with favorable Earth geometry and grazing but persistent sunlight.',
-    accent: '#A78BFA',
+    accent: '#8a4b6b',
     base: 0.05,
     seed: 15,
     features: [
@@ -102,7 +102,7 @@ const polarSeeds: SiteSeed[] = [
     elevationM: -1800,
     region: 'Haworth · 86.9°S',
     description: 'Rim of Haworth crater, adjacent to permanently shadowed terrain. A raised rim segment provides illumination while the crater interior remains a cold trap.',
-    accent: '#F97316',
+    accent: '#c4533a',
     base: -0.02,
     seed: 19,
     features: [
@@ -120,7 +120,7 @@ const polarSeeds: SiteSeed[] = [
     elevationM: -900,
     region: 'Nobile · Artemis region',
     description: 'A candidate Artemis landing region on the rim of Nobile crater. Mix of illuminated ridges and shadowed floors, with Earth low toward the northeast.',
-    accent: '#06B6D4',
+    accent: '#0e7490',
     base: 0.0,
     seed: 23,
     features: [
@@ -138,7 +138,7 @@ const polarSeeds: SiteSeed[] = [
     elevationM: -2100,
     region: 'de Gerlache · Artemis region',
     description: 'Rim segment of de Gerlache crater. Terrain toward the northwest can occult Earth during libration minima, producing recurring DTE blackouts.',
-    accent: '#EF4444',
+    accent: '#c23b32',
     base: -0.06,
     seed: 29,
     features: [
@@ -159,7 +159,7 @@ const referenceSeeds: (SiteSeed & { terrain?: TerrainProfile })[] = [
     elevationM: -2600,
     region: 'Mare Tranquillitatis',
     description: 'First crewed landing, 20 July 1969. Equatorial mare site: classic ~14-day lunar day/night cycle, high midday Sun, and Earth high in the sky.',
-    accent: '#E6EAF2',
+    accent: '#8a7358',
     features: [],
   },
   {
@@ -171,7 +171,7 @@ const referenceSeeds: (SiteSeed & { terrain?: TerrainProfile })[] = [
     elevationM: -1900,
     region: 'Taurus-Littrow valley',
     description: 'Last crewed Apollo landing, 11 December 1972. Valley floor between massifs; still near-side with strong Earth visibility and a normal diurnal cycle.',
-    accent: '#E6EAF2',
+    accent: '#8a7358',
     features: [],
   },
   {
@@ -183,7 +183,7 @@ const referenceSeeds: (SiteSeed & { terrain?: TerrainProfile })[] = [
     elevationM: -5900,
     region: 'South Pole–Aitken basin · far side',
     description: 'First far-side soft landing, 3 January 2019. Earth is permanently below the horizon — the mission relied on the Queqiao relay satellite.',
-    accent: '#EF4444',
+    accent: '#c23b32',
     features: [],
   },
 ];
@@ -302,7 +302,7 @@ export function makeCustomSite(input: {
       ? 'Synthesized from a Terrain Lab horizon. Verify source frame and coverage before operational use.'
       : 'Synthesized site. Horizon is an illustrative preset or user-edited 8-sector mask, not a measured DEM.',
     terrain,
-    accent: '#10B981',
+    accent: '#1f7a52',
     custom: true,
   };
 }

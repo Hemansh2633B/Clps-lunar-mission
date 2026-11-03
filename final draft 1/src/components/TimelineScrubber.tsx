@@ -30,9 +30,9 @@ const ML = 112;
 const MR = 20;
 const PW = W - ML - MR;
 const TRACKS = [
-  { key: 'sun', label: 'Sunlight / power', y: 12, color: '#F59E0B', bg: '#241408' },
-  { key: 'earth', label: 'DTE comms', y: 38, color: '#06B6D4', bg: '#08222a' },
-  { key: 'combined', label: 'Mission viable', y: 64, color: '#10B981', bg: '#082018' },
+  { key: 'sun', label: 'Sunlight / power', y: 12, color: '#c4842a', bg: '#fdf0d5' },
+  { key: 'earth', label: 'DTE comms', y: 38, color: '#0e7490', bg: '#e3f2f6' },
+  { key: 'combined', label: 'Mission viable', y: 64, color: '#1f7a52', bg: '#e7f5ee' },
 ] as const;
 const TH = 16;
 const SPEEDS = [1, 60, 3600, 86400, 604800];
@@ -115,18 +115,18 @@ export function TimelineScrubber(props: Props) {
         >
           {TRACKS.map((t) => (
             <g key={t.key}>
-              <text x={ML - 10} y={t.y + 13} textAnchor="end" fontSize={10} fill="#8A94A6" fontFamily="Inter, sans-serif">{t.label}</text>
+              <text x={ML - 10} y={t.y + 13} textAnchor="end" fontSize={10} fill="#5c5348" fontFamily="Outfit, sans-serif">{t.label}</text>
               <rect x={ML} y={t.y} width={PW} height={TH} fill={t.bg} rx={2} />
               {runs[t.key].map((r, i) => <rect key={i} x={r.x} y={t.y} width={r.w} height={TH} fill={t.color} opacity={0.85} rx={1} />)}
             </g>
           ))}
           {ticks.map((t) => (
             <g key={t}>
-              <line x1={xOf(t)} x2={xOf(t)} y1={8} y2={82} stroke="#1a212c" strokeWidth={1} />
-              <text x={xOf(t)} y={96} textAnchor="middle" fontSize={9} fill="#5C6675" fontFamily="JetBrains Mono, monospace">{formatDate(t).slice(5)}</text>
+              <line x1={xOf(t)} x2={xOf(t)} y1={8} y2={82} stroke="#f3e6d0" strokeWidth={1} />
+              <text x={xOf(t)} y={96} textAnchor="middle" fontSize={9} fill="#8a7358" fontFamily="IBM Plex Mono, monospace">{formatDate(t).slice(5)}</text>
             </g>
           ))}
-          <rect x={mx0} y={8} width={Math.max(2, mx1 - mx0)} height={76} fill="rgba(230,234,242,.06)" stroke="#E6EAF2" strokeOpacity={0.6} strokeWidth={1} rx={3}
+          <rect x={mx0} y={8} width={Math.max(2, mx1 - mx0)} height={76} fill="rgba(30,58,95,.08)" stroke="#1e3a5f" strokeOpacity={0.6} strokeWidth={1} strokeDasharray="3 2" rx={0}
             style={{ cursor: 'grab' }}
             onPointerDown={(e) => { e.stopPropagation(); (e.target as Element).setPointerCapture(e.pointerId); drag.current = { x: e.clientX, slip: slipDays }; }}
             onPointerMove={(e) => {
@@ -138,16 +138,16 @@ export function TimelineScrubber(props: Props) {
             }}
             onPointerUp={(e) => { (e.target as Element).releasePointerCapture(e.pointerId); setTimeout(() => { drag.current = null; }, 0); }}
           />
-          <text x={mx0 + 6} y={18} fontSize={9} fill="#E6EAF2" fontFamily="JetBrains Mono, monospace" pointerEvents="none">MISSION {durationDays}d · slip +{slipDays}d</text>
+          <text x={mx0 + 6} y={18} fontSize={9} fill="#1c2430" fontFamily="IBM Plex Mono, monospace" pointerEvents="none">MISSION {durationDays}d · slip +{slipDays}d</text>
           <g pointerEvents="none">
             <line x1={xOf(timeMs)} x2={xOf(timeMs)} y1={6} y2={86} stroke="#fff" strokeWidth={1.2} />
             <polygon points={`${xOf(timeMs) - 5},4 ${xOf(timeMs) + 5},4 ${xOf(timeMs)},10`} fill="#fff" />
           </g>
-          {hoverT != null && <line x1={xOf(hoverT)} x2={xOf(hoverT)} y1={6} y2={86} stroke="#8A94A6" strokeOpacity={0.4} strokeDasharray="2 3" />}
-          <text x={ML} y={112} fontSize={9} fill="#5C6675" fontFamily="Inter, sans-serif">Drag the white mission box to simulate launch slip · click tracks to scrub</text>
+          {hoverT != null && <line x1={xOf(hoverT)} x2={xOf(hoverT)} y1={6} y2={86} stroke="#5c5348" strokeOpacity={0.4} strokeDasharray="2 3" />}
+          <text x={ML} y={112} fontSize={9} fill="#8a7358" fontFamily="Outfit, sans-serif">Drag the white mission box to simulate launch slip · click tracks to scrub</text>
         </svg>
         {hoverT != null && <div className="tooltip" style={{ right: 16, top: 8 }}>{formatUTC(hoverT)}</div>}
-        {loading && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(9,11,14,.45)', fontSize: 11, color: 'var(--muted)' }} className="pulse">Recomputing window…</div>}
+        {loading && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(243,230,208,.6)', fontSize: 11, color: 'var(--ink-soft)' }} className="pulse">Recomputing window…</div>}
       </div>
       <div style={{ padding: '0 12px 6px' }}>
         <input type="range" min={win.startMs} max={win.endMs} step={60000} value={timeMs} onChange={(e) => onTime(Number(e.target.value))} aria-label="Mission time scrubber" />

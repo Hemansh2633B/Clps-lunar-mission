@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, Box, Columns2, Download, Keyboard, Moon, Settings2, GraduationCap, Gauge } from 'lucide-react';
+import { BookOpen, Box, Columns2, Download, Keyboard, Settings2, GraduationCap, Gauge } from 'lucide-react';
 import type { AppMode } from '../types/mission';
-import { mjd } from '../engine/constants';
+import { mjd, wrap180 } from '../engine/constants';
 
 interface Props {
   timeMs: number;
@@ -16,9 +16,14 @@ interface Props {
   onShortcuts: () => void;
   onExport: (kind: 'json' | 'timeseries' | 'horizon' | 'summary') => void;
   playing: boolean;
+  subSolar: { lat: number; lon: number };
+  subEarth: { lat: number; lon: number };
 }
 
-export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrainActive, onTerrain, onGuide, onSettings, onShortcuts, onExport, playing }: Props) {
+const fmtLat = (v: number) => `${Math.abs(v).toFixed(2)}°${v >= 0 ? 'N' : 'S'}`;
+const fmtLon = (v: number) => { const w = wrap180(v); return `${Math.abs(w).toFixed(2)}°${w >= 0 ? 'E' : 'W'}`; };
+
+export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrainActive, onTerrain, onGuide, onSettings, onShortcuts, onExport, playing, subSolar, subEarth }: Props) {
   const [exportOpen, setExportOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -28,57 +33,75 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
   }, []);
   const utc = new Date(timeMs).toISOString();
   return (
-    <header className="app-header" style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '0 14px', height: 52, borderBottom: '1px solid var(--border)', background: 'linear-gradient(180deg,#10141c,#0b0e13)', flexShrink: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 30, height: 30, borderRadius: 6, border: '1px solid #2a3441', background: '#0c1017', display: 'grid', placeItems: 'center', position: 'relative' }}>
-          <Moon size={16} color="#F59E0B" strokeWidth={1.75} />
-          <span style={{ position: 'absolute', inset: -3, border: '1px solid rgba(245,158,11,.18)', borderRadius: 8 }} />
-        </div>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.18em' }}>SELENE</div>
-          <div style={{ fontSize: 9, letterSpacing: '0.14em', color: 'var(--dim)', textTransform: 'uppercase' }}>Lunar mission planning console</div>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginLeft: 12, padding: '4px 12px', border: '1px solid var(--border)', borderRadius: 5, background: '#0c1017' }}>
-        <div>
-          <div style={{ fontSize: 9, color: 'var(--dim)', letterSpacing: '.1em', textTransform: 'uppercase' }}>Mission epoch · sim</div>
-          <div className="mono" style={{ fontSize: 14, fontWeight: 500 }}>{utc.slice(0, 10)} <span style={{ color: 'var(--solar)' }}>{utc.slice(11, 19)}</span> <span style={{ color: 'var(--dim)', fontSize: 11 }}>UTC</span></div>
-        </div>
-        <div style={{ width: 1, height: 26, background: 'var(--border)' }} />
-        <div>
-          <div style={{ fontSize: 9, color: 'var(--dim)', letterSpacing: '.1em', textTransform: 'uppercase' }}>MJD</div>
-          <div className="mono" style={{ fontSize: 13 }}>{mjd(timeMs).toFixed(4)}</div>
-        </div>
-        <span className={`chip ${playing ? 'nominal' : 'neutral'}`}><span className={playing ? 'pulse' : ''} style={{ width: 6, height: 6, borderRadius: '50%', background: playing ? 'var(--nominal)' : 'var(--dim)' }} />{playing ? 'RUNNING' : 'HOLD'}</span>
-      </div>
-
-      <div style={{ flex: 1 }} />
-
-      <div style={{ display: 'flex', border: '1px solid var(--border-strong)', borderRadius: 5, overflow: 'hidden' }}>
-        <button className={`btn ghost sm ${mode === 'planner' ? 'active' : ''}`} style={{ borderRadius: 0, border: 'none' }} onClick={() => onMode('planner')}><Gauge size={13} /> Planner</button>
-        <button className={`btn ghost sm ${mode === 'educator' ? 'active' : ''}`} style={{ borderRadius: 0, border: 'none' }} onClick={() => onMode('educator')}><GraduationCap size={13} /> Educator</button>
-      </div>
-      <button className={`btn ${terrainActive ? 'active' : ''}`} onClick={onTerrain}><Box size={14} /> Terrain Lab <span className="kbd">T</span></button>
-      <button className={`btn ${compareMode && !terrainActive ? 'active' : ''}`} onClick={onCompare}><Columns2 size={14} /> Compare <span className="kbd">C</span></button>
-      <button className="btn" onClick={onGuide}><BookOpen size={14} /> Field guide <span className="kbd">G</span></button>
-      <div ref={ref} style={{ position: 'relative' }}>
-        <button className="btn" onClick={() => setExportOpen((v) => !v)}><Download size={14} /> Export</button>
-        {exportOpen && (
-          <div className="fade-in" style={{ position: 'absolute', right: 0, top: 34, width: 230, background: 'var(--panel)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: 4, zIndex: 40, boxShadow: '0 16px 40px rgba(0,0,0,.5)' }}>
-            {([
-              ['json', 'Mission report (.json)'],
-              ['summary', 'Window summary (.csv)'],
-              ['timeseries', 'Telemetry timeseries (.csv)'],
-              ['horizon', 'Horizon mask (.csv)'],
-            ] as const).map(([kind, label]) => (
-              <button key={kind} className="btn ghost" style={{ width: '100%', justifyContent: 'flex-start' }} onClick={() => { onExport(kind); setExportOpen(false); }}>{label}</button>
-            ))}
+    <>
+      <div className="coralbar" />
+      <header className="app-header" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '8px 14px', borderBottom: '1px solid var(--line)', background: 'rgba(248,241,228,.94)', backdropFilter: 'blur(8px)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11, flex: '0 0 auto' }}>
+          <img src="/assets/patch.png" alt="SELENE mission patch" width={42} height={42} style={{ width: 42, height: 42, borderRadius: '50%', border: '1px solid var(--line)', objectFit: 'cover', flex: '0 0 auto' }} />
+          <div>
+            <div className="display" style={{ fontSize: 19, lineHeight: 1, fontWeight: 600, whiteSpace: 'nowrap' }}>SELENE <span style={{ color: 'var(--coral)' }}>//</span> OPS</div>
+            <div className="mono" style={{ fontSize: 9, letterSpacing: '.18em', color: 'var(--ink-soft)', marginTop: 3 }}>LUNAR SOUTH POLE DESK · v1.4</div>
           </div>
-        )}
+        </div>
+
+        <span className="engine-pill" style={{ flex: '0 0 auto' }} title="Real Sun/Earth ephemeris via astronomy-engine + IAU 2015 Moon rotation"><span className="led sage" />EPHEMERIS: NOMINAL</span>
+
+        <span className={`chip ${playing ? 'nominal' : 'neutral'}`} title="Simulation playback" style={{ marginLeft: 4, flex: '0 0 auto' }}>
+          <span className={playing ? 'led sage' : ''} style={playing ? undefined : { width: 8, height: 8, borderRadius: '50%', background: 'var(--dim)', display: 'inline-block' }} />
+          {playing ? 'RUNNING' : 'HOLD'}
+        </span>
+
+        <div style={{ flex: 1 }} />
+
+        <div className="header-tools" style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 12, flex: '0 0 auto' }}>
+          <div className="modeswitch" role="radiogroup" aria-label="Operator mode">
+            <button type="button" role="radio" aria-checked={mode === 'planner'} onClick={() => onMode('planner')}><Gauge size={13} /> FLIGHT OPS</button>
+            <button type="button" role="radio" aria-checked={mode === 'educator'} onClick={() => onMode('educator')}><GraduationCap size={13} /> EDUCATOR</button>
+          </div>
+          <button className={`btn ${terrainActive ? 'active' : ''}`} onClick={onTerrain}><Box size={14} /> Terrain <span className="kbd">T</span></button>
+          <button className={`btn ${compareMode && !terrainActive ? 'active' : ''}`} onClick={onCompare}><Columns2 size={14} /> Compare <span className="kbd">C</span></button>
+          <button className="btn" onClick={onGuide}><BookOpen size={14} /> Guide <span className="kbd">G</span></button>
+          <div ref={ref} style={{ position: 'relative' }}>
+            <button className="btn primary" onClick={() => setExportOpen((v) => !v)}><Download size={14} /> Export</button>
+            {exportOpen && (
+              <div className="fade-in" style={{ position: 'absolute', right: 0, top: 36, width: 230, background: 'var(--paper-2)', border: '1px solid var(--ink)', borderRadius: 0, padding: 4, zIndex: 40, boxShadow: '5px 5px 0 rgba(28,36,48,.18)' }}>
+                {([
+                  ['json', 'Mission report (.json)'],
+                  ['summary', 'Window summary (.csv)'],
+                  ['timeseries', 'Telemetry timeseries (.csv)'],
+                  ['horizon', 'Horizon mask (.csv)'],
+                ] as const).map(([kind, label]) => (
+                  <button key={kind} className="btn ghost" style={{ width: '100%', justifyContent: 'flex-start' }} onClick={() => { onExport(kind); setExportOpen(false); }}>{label}</button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button className="btn icon" title="Mission parameters" onClick={onSettings}><Settings2 size={15} /></button>
+          <button className="btn icon" title="Keyboard shortcuts (?)" onClick={onShortcuts}><Keyboard size={15} /></button>
+        </div>
+      </header>
+      <div className="clock-strip header-clock">
+        <div className="cluster">
+          <div className="k">MISSION EPOCH · SIM</div>
+          <div className="v">{utc.slice(11, 19)} <span style={{ color: 'var(--brass)' }}>UTC</span></div>
+          <div className="h">{utc.slice(0, 10)}</div>
+        </div>
+        <div className="cluster">
+          <div className="k">MJD</div>
+          <div className="v">{mjd(timeMs).toFixed(4)}</div>
+          <div className="h">MODIFIED JULIAN</div>
+        </div>
+        <div className="cluster">
+          <div className="k">SUB-SOLAR</div>
+          <div className="v">{fmtLon(subSolar.lon)} · {fmtLat(subSolar.lat)}</div>
+          <div className="h">SELENOGRAPHIC</div>
+        </div>
+        <div className="cluster">
+          <div className="k">SUB-EARTH</div>
+          <div className="v">{fmtLon(subEarth.lon)} · {fmtLat(subEarth.lat)}</div>
+          <div className="h">OPTICAL LIBRATION</div>
+        </div>
       </div>
-      <button className="btn icon" title="Mission parameters" onClick={onSettings}><Settings2 size={15} /></button>
-      <button className="btn icon" title="Keyboard shortcuts (?)" onClick={onShortcuts}><Keyboard size={15} /></button>
-    </header>
+    </>
   );
 }

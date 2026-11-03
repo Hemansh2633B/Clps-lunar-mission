@@ -30,6 +30,7 @@ const browser = await pw.launch({
   env: { ...process.env, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH || '/tmp/al2023/lib', FONTCONFIG_PATH: '/tmp/fonts' },
 });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+page.setDefaultTimeout(45000);
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -47,7 +48,7 @@ try {
   assert(await page.locator('text=Real DEM').count() > 0, 'real DEM chip visible');
   assert(await page.locator('text=LDEM_80S_20MPP_ADJ_512_verification.tif').count() > 0, 'source provenance visible');
   assert(await page.locator('.terrain-stats').innerText().then((t) => t.includes('100.0%')), 'real fixture disk coverage reported');
-  await page.screenshot({ path: `${OUT}/09-real-dem-lab.png` });
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/09-real-dem-lab.png` });
 
   await page.getByLabel('Azimuth bin').selectOption('10');
   await page.getByRole('button', { name: /Compute 360° horizon/ }).click();
@@ -61,7 +62,7 @@ try {
   assert(await page.locator('text=Measured/sample elevations preserved').count() > 0, 'DEM provenance preserved in mission planner');
   assert(await page.locator('text=MOON_ME').count() > 0, 'source frame disclosed');
   assert(await page.locator('.status-bar').innerText().then((t) => t.includes('DEM-derived horizon')), 'status bar reflects DEM-derived terrain');
-  await page.screenshot({ path: `${OUT}/10-real-dem-mission-site.png` });
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/10-real-dem-mission-site.png` });
   assert(errors.length === 0, `console/page errors: ${errors.join(' | ')}`);
   console.log('REAL DEM BROWSER TEST PASSED · projected lunar GeoTIFF → crop → horizon → mission site (verification fixture).');
 } finally {

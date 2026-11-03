@@ -61,18 +61,18 @@ export function PolarMap({ sites, selected, current, onSelect, onPlaceCustom, la
     ctx.beginPath();
     ctx.arc(C, C, R, 0, Math.PI * 2);
     ctx.clip();
-    ctx.fillStyle = '#0a0d12';
+    ctx.fillStyle = '#f7f1e6';
     ctx.fillRect(0, 0, SIZE, SIZE);
     if (imgRef.current) {
       ctx.globalAlpha = 0.9;
       ctx.drawImage(imgRef.current, C - R, C - R, R * 2, R * 2);
       ctx.globalAlpha = 1;
-      ctx.fillStyle = 'rgba(9,11,14,.35)';
+      ctx.fillStyle = 'rgba(243,230,208,.58)';
       ctx.fillRect(0, 0, SIZE, SIZE);
     } else {
       const g = ctx.createRadialGradient(C, C, 10, C, C, R);
-      g.addColorStop(0, '#1a212c');
-      g.addColorStop(1, '#0a0d12');
+      g.addColorStop(0, '#f3e6d0');
+      g.addColorStop(1, '#f7f1e6');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, SIZE, SIZE);
     }
@@ -100,8 +100,8 @@ export function PolarMap({ sites, selected, current, onSelect, onPlaceCustom, la
             const lat = ll.lat * DEG;
             const lon = ll.lon * DEG;
             const dot = Math.cos(lat) * (sx * Math.cos(lon) + sy * Math.sin(lon)) + Math.sin(lat) * sz;
-            if (dot < 0) { data.data[idx] = 4; data.data[idx + 1] = 8; data.data[idx + 2] = 16; data.data[idx + 3] = 150; }
-            else { data.data[idx] = 245; data.data[idx + 1] = 158; data.data[idx + 2] = 11; data.data[idx + 3] = Math.round(18 * dot); }
+            if (dot < 0) { data.data[idx] = 60; data.data[idx + 1] = 45; data.data[idx + 2] = 30; data.data[idx + 3] = 120; }
+            else { data.data[idx] = 224; data.data[idx + 1] = 154; data.data[idx + 2] = 43; data.data[idx + 3] = Math.round(22 * dot); }
           }
         }
         lctx.putImageData(data, 0, 0);
@@ -112,7 +112,7 @@ export function PolarMap({ sites, selected, current, onSelect, onPlaceCustom, la
     }
 
     if (layers.grid) {
-      ctx.strokeStyle = 'rgba(138,148,166,.28)';
+      ctx.strokeStyle = 'rgba(138,115,88,.4)';
       ctx.lineWidth = 1;
       const rings = extent >= 10 ? [85, 80] : extent >= 5 ? [88, 85] : [89, 88];
       for (const lat of rings) {
@@ -120,8 +120,8 @@ export function PolarMap({ sites, selected, current, onSelect, onPlaceCustom, la
         if (!p) continue;
         const r = Math.hypot(p.x - C, p.y - C);
         ctx.beginPath(); ctx.arc(C, C, r, 0, Math.PI * 2); ctx.stroke();
-        ctx.fillStyle = 'rgba(138,148,166,.7)';
-        ctx.font = '10px JetBrains Mono, monospace';
+        ctx.fillStyle = '#8a7358';
+        ctx.font = '10px IBM Plex Mono, monospace';
         ctx.fillText(`${Math.abs(lat)}°S`, C + 4, C - r + 12);
       }
       for (let lon = 0; lon < 360; lon += 30) {
@@ -129,9 +129,9 @@ export function PolarMap({ sites, selected, current, onSelect, onPlaceCustom, la
         if (!p) continue;
         ctx.beginPath(); ctx.moveTo(C, C); ctx.lineTo(p.x, p.y); ctx.stroke();
         const lp = project(90 - extent + 0.6, lon, extent);
-        if (lp) { ctx.fillStyle = 'rgba(138,148,166,.8)'; ctx.font = '10px JetBrains Mono, monospace'; ctx.textAlign = 'center'; ctx.fillText(`${lon}°`, lp.x, lp.y + 4); ctx.textAlign = 'left'; }
+        if (lp) { ctx.fillStyle = '#8a7358'; ctx.font = '10px IBM Plex Mono, monospace'; ctx.textAlign = 'center'; ctx.fillText(`${lon}°`, lp.x, lp.y + 4); ctx.textAlign = 'left'; }
       }
-      ctx.strokeStyle = 'rgba(230,234,242,.35)';
+      ctx.strokeStyle = 'rgba(28,36,48,.4)';
       ctx.beginPath(); ctx.moveTo(C - 8, C); ctx.lineTo(C + 8, C); ctx.moveTo(C, C - 8); ctx.lineTo(C, C + 8); ctx.stroke();
     }
 
@@ -142,13 +142,13 @@ export function PolarMap({ sites, selected, current, onSelect, onPlaceCustom, la
         const len = 46;
         const ex = sp.x + Math.sin(az) * len;
         const ey = sp.y + Math.cos(az) * len;
-        ctx.strokeStyle = current.earthVisibility.visible ? '#06B6D4' : '#EF4444';
+        ctx.strokeStyle = current.earthVisibility.visible ? '#0e7490' : '#c23b32';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([4, 3]);
         ctx.beginPath(); ctx.moveTo(sp.x, sp.y); ctx.lineTo(ex, ey); ctx.stroke();
         ctx.setLineDash([]);
         ctx.beginPath(); ctx.arc(ex, ey, 3, 0, Math.PI * 2); ctx.fillStyle = ctx.strokeStyle; ctx.fill();
-        ctx.font = '9px JetBrains Mono, monospace';
+        ctx.font = '9px IBM Plex Mono, monospace';
         ctx.fillText(`DTE ${current.earth.azimuthDeg.toFixed(0)}°`, ex + 6, ey + 3);
       }
     }
@@ -159,9 +159,9 @@ export function PolarMap({ sites, selected, current, onSelect, onPlaceCustom, la
       const isSel = s.id === selected.id;
       ctx.beginPath();
       ctx.arc(p.x, p.y, isSel ? 6 : 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = isSel ? s.accent : '#0c1017';
+      ctx.fillStyle = isSel ? s.accent : '#fffdf7';
       ctx.fill();
-      ctx.strokeStyle = isSel ? '#fff' : s.accent;
+      ctx.strokeStyle = isSel ? '#fffaf2' : s.accent;
       ctx.lineWidth = isSel ? 1.5 : 1.2;
       ctx.stroke();
       if (isSel) {
@@ -178,17 +178,17 @@ export function PolarMap({ sites, selected, current, onSelect, onPlaceCustom, la
       const off = isSel ? 22 : 15;
       const lx = p.x + ux * off;
       const ly = p.y + uy * off;
-      ctx.strokeStyle = 'rgba(230,234,242,.25)';
+      ctx.strokeStyle = 'rgba(28,36,48,.3)';
       ctx.lineWidth = 0.75;
       ctx.beginPath(); ctx.moveTo(p.x + ux * 5, p.y + uy * 5); ctx.lineTo(lx, ly); ctx.stroke();
-      ctx.fillStyle = isSel ? '#E6EAF2' : 'rgba(230,234,242,.78)';
-      ctx.font = `${isSel ? '600 ' : ''}9px Inter, sans-serif`;
+      ctx.fillStyle = isSel ? '#1c2430' : '#5c5348';
+      ctx.font = `${isSel ? '600 ' : ''}9px Outfit, sans-serif`;
       ctx.textAlign = ux > 0.3 ? 'left' : ux < -0.3 ? 'right' : 'center';
       ctx.fillText(s.shortName, lx + ux * 3, ly + uy * 3 + 3);
       ctx.textAlign = 'left';
     }
     ctx.restore();
-    ctx.strokeStyle = '#2A3441';
+    ctx.strokeStyle = '#c4b49a';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(C, C, R, 0, Math.PI * 2); ctx.stroke();
   }, [polarSites, selected, current, layers, extent, imgReady]);
@@ -221,7 +221,7 @@ export function PolarMap({ sites, selected, current, onSelect, onPlaceCustom, la
           <button className="btn sm icon" onClick={() => setExtent(10)}><RotateCcw size={12} /></button>
         </div>
       </div>
-      <div style={{ position: 'relative', padding: 10, display: 'grid', placeItems: 'center', background: '#0a0d12' }}>
+      <div style={{ position: 'relative', padding: 10, display: 'grid', placeItems: 'center', background: '#f7f1e6' }}>
         <canvas
           ref={canvasRef}
           width={SIZE}

@@ -133,59 +133,60 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions }
           <button className="btn sm ghost" title="Reset view" onClick={() => { onOptions({ ...options, sector: 'full' }); setLocked(null); }}><Maximize2 size={12} /></button>
         </div>
       </div>
-      <div style={{ position: 'relative', background: 'radial-gradient(ellipse at 50% 120%, #131a26 0%, #0a0d12 70%)' }}>
+      <div style={{ position: 'relative', background: 'radial-gradient(ellipse at 50% 120%, #f6ead2 0%, #f7f1e6 70%)' }}>
         <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', display: 'block', cursor: 'crosshair' }} onMouseMove={handleMove} onMouseLeave={() => setHover(null)} onClick={() => { if (hover) setLocked(locked ? null : { az: hover.az, el: hover.el }); }}>
           <defs>
             <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#0b1018" />
-              <stop offset="100%" stopColor="#101722" />
+              <stop offset="0%" stopColor="#f7f4ee" />
+              <stop offset="55%" stopColor="#f6ead2" />
+              <stop offset="100%" stopColor="#f3d7ae" />
             </linearGradient>
             <linearGradient id="terrainGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#2a3441" />
-              <stop offset="100%" stopColor="#0c1017" />
+              <stop offset="0%" stopColor="#e7d3b0" />
+              <stop offset="100%" stopColor="#d9c19a" />
             </linearGradient>
-            <radialGradient id="sunGlow"><stop offset="0%" stopColor="#F59E0B" stopOpacity=".55" /><stop offset="100%" stopColor="#F59E0B" stopOpacity="0" /></radialGradient>
-            <radialGradient id="earthGlow"><stop offset="0%" stopColor="#06B6D4" stopOpacity=".45" /><stop offset="100%" stopColor="#06B6D4" stopOpacity="0" /></radialGradient>
+            <radialGradient id="sunGlow"><stop offset="0%" stopColor="#c4842a" stopOpacity=".55" /><stop offset="100%" stopColor="#c4842a" stopOpacity="0" /></radialGradient>
+            <radialGradient id="earthGlow"><stop offset="0%" stopColor="#0e7490" stopOpacity=".45" /><stop offset="100%" stopColor="#0e7490" stopOpacity="0" /></radialGradient>
           </defs>
           <rect x={ML} y={MT} width={PW} height={PH} fill="url(#skyGrad)" />
           {elTicks.map((e) => (
             <g key={e}>
-              <line x1={ML} x2={ML + PW} y1={yOf(e)} y2={yOf(e)} stroke={e === 0 ? '#3a4656' : '#1a212c'} strokeWidth={e === 0 ? 1.2 : 1} strokeDasharray={e === 0 ? '' : '3 5'} />
-              <text x={ML - 8} y={yOf(e) + 3} textAnchor="end" fontSize={10} fill="#5C6675" fontFamily="JetBrains Mono, monospace">{e}°</text>
+              <line x1={ML} x2={ML + PW} y1={yOf(e)} y2={yOf(e)} stroke={e === 0 ? '#1c2430' : '#e4d3b4'} strokeOpacity={e === 0 ? 0.35 : 1} strokeWidth={e === 0 ? 1.2 : 1} strokeDasharray={e === 0 ? '3 4' : '3 5'} />
+              <text x={ML - 8} y={yOf(e) + 3} textAnchor="end" fontSize={10} fill="#8a7358" fontFamily="IBM Plex Mono, monospace">{e}°</text>
             </g>
           ))}
           {COMPASS.filter(([a]) => { const x = xOf(a); return x != null; }).map(([a, label]) => {
             const x = xOf(a)!;
             return (
               <g key={a}>
-                <line x1={x} x2={x} y1={MT} y2={MT + PH} stroke="#161d28" strokeWidth={1} />
-                <text x={x} y={H - 10} textAnchor="middle" fontSize={10} fill="#8A94A6" fontFamily="JetBrains Mono, monospace">{label}</text>
-                <text x={x} y={H - 21} textAnchor="middle" fontSize={8} fill="#4a5462" fontFamily="JetBrains Mono, monospace">{a === 360 ? 0 : a}°</text>
+                <line x1={x} x2={x} y1={MT} y2={MT + PH} stroke="#e0cfae" strokeWidth={1} />
+                <text x={x} y={H - 10} textAnchor="middle" fontSize={10} fill="#5c5348" fontFamily="IBM Plex Mono, monospace">{label}</text>
+                <text x={x} y={H - 21} textAnchor="middle" fontSize={8} fill="#8a7358" fontFamily="IBM Plex Mono, monospace">{a === 360 ? 0 : a}°</text>
               </g>
             );
           })}
-          {tracks.sun.map((d, i) => <path key={`s${i}`} d={d} fill="none" stroke="#F59E0B" strokeOpacity={0.4} strokeWidth={1.2} strokeDasharray="4 4" />)}
-          {tracks.earth.map((d, i) => <path key={`e${i}`} d={d} fill="none" stroke="#06B6D4" strokeOpacity={0.45} strokeWidth={1.2} strokeDasharray="2 4" />)}
-          {options.showTerrain && <path d={terrainPath} fill="url(#terrainGrad)" stroke="#3d4a5c" strokeWidth={1.2} />}
+          {tracks.sun.map((d, i) => <path key={`s${i}`} d={d} fill="none" stroke="#c4842a" strokeOpacity={0.4} strokeWidth={1.2} strokeDasharray="4 4" />)}
+          {tracks.earth.map((d, i) => <path key={`e${i}`} d={d} fill="none" stroke="#0e7490" strokeOpacity={0.45} strokeWidth={1.2} strokeDasharray="2 4" />)}
+          {options.showTerrain && <path d={terrainPath} fill="url(#terrainGrad)" stroke="#3d3128" strokeWidth={1.6} />}
           {options.showTerrain && site.terrain.features.filter((f) => f.kind !== 'drop' && f.elevationDeg > 1).map((f) => {
             const x = xOf(f.azimuthDeg);
             if (x == null) return null;
             const y = yOf(terrainElevationAt(site.terrain, f.azimuthDeg));
-            return <text key={f.name} x={x} y={y - 6} textAnchor="middle" fontSize={8.5} fill="#6b7686" fontFamily="Inter, sans-serif">{f.name}</text>;
+            return <text key={f.name} x={x} y={y - 6} textAnchor="middle" fontSize={8.5} fill="#8a7358" fontFamily="Outfit, sans-serif">{f.name}</text>;
           })}
           {earthX != null && (
             <g>
               <circle cx={earthX} cy={earthY} r={18} fill="url(#earthGlow)" />
-              <circle cx={earthX} cy={earthY} r={6} fill={current.earthVisibility.visible ? '#06B6D4' : '#1a2a33'} stroke={current.earthVisibility.visible ? '#7dd3fc' : '#EF4444'} strokeWidth={1.5} strokeDasharray={current.earthVisibility.visible ? '' : '3 2'} />
+              <circle cx={earthX} cy={earthY} r={6} fill={current.earthVisibility.visible ? '#0e7490' : '#e7f0f4'} stroke={current.earthVisibility.visible ? '#0e7490' : '#c23b32'} strokeWidth={1.5} strokeDasharray={current.earthVisibility.visible ? '' : '3 2'} />
               <circle cx={earthX - 2} cy={earthY - 1} r={2} fill="#0e7490" opacity={0.7} />
-              <text x={earthX > W - 130 ? earthX - 11 : earthX + 11} y={earthY - 8} textAnchor={earthX > W - 130 ? "end" : "start"} fontSize={10} fill={current.earthVisibility.visible ? '#7dd3fc' : '#fca5a5'} fontFamily="JetBrains Mono, monospace">EARTH {current.earth.elevationDeg.toFixed(2)}°</text>
+              <text x={earthX > W - 130 ? earthX - 11 : earthX + 11} y={earthY - 8} textAnchor={earthX > W - 130 ? "end" : "start"} fontSize={10} fill={current.earthVisibility.visible ? '#0e7490' : '#c23b32'} fontFamily="IBM Plex Mono, monospace">EARTH {current.earth.elevationDeg.toFixed(2)}°</text>
             </g>
           )}
           {sunX != null && (
             <g>
               <circle cx={sunX} cy={sunY} r={24} fill="url(#sunGlow)" />
-              <circle cx={sunX} cy={sunY} r={7} fill={current.sunVisibility.visible ? '#F59E0B' : '#3a2a08'} stroke={current.sunVisibility.visible ? '#fde68a' : '#EF4444'} strokeWidth={1.5} strokeDasharray={current.sunVisibility.visible ? '' : '3 2'} />
-              <text x={sunX > W - 130 ? sunX - 12 : sunX + 12} y={sunY + 4} textAnchor={sunX > W - 130 ? "end" : "start"} fontSize={10} fill={current.sunVisibility.visible ? '#fcd34d' : '#fca5a5'} fontFamily="JetBrains Mono, monospace">SUN {current.sun.elevationDeg.toFixed(2)}°</text>
+              <circle cx={sunX} cy={sunY} r={7} fill={current.sunVisibility.visible ? '#c4842a' : '#fdf0d5'} stroke={current.sunVisibility.visible ? '#8a5a16' : '#c23b32'} strokeWidth={1.5} strokeDasharray={current.sunVisibility.visible ? '' : '3 2'} />
+              <text x={sunX > W - 130 ? sunX - 12 : sunX + 12} y={sunY + 4} textAnchor={sunX > W - 130 ? "end" : "start"} fontSize={10} fill={current.sunVisibility.visible ? '#8a5a16' : '#c23b32'} fontFamily="IBM Plex Mono, monospace">SUN {current.sun.elevationDeg.toFixed(2)}°</text>
             </g>
           )}
           {probe && (() => {
@@ -194,9 +195,9 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions }
             const y = yOf(probe.el);
             return (
               <g pointerEvents="none">
-                <line x1={x} x2={x} y1={MT} y2={MT + PH} stroke="#e6eaf2" strokeOpacity={0.3} strokeDasharray="2 3" />
-                <line x1={ML} x2={ML + PW} y1={y} y2={y} stroke="#e6eaf2" strokeOpacity={0.3} strokeDasharray="2 3" />
-                <circle cx={x} cy={y} r={4} fill="none" stroke="#e6eaf2" strokeOpacity={0.7} />
+                <line x1={x} x2={x} y1={MT} y2={MT + PH} stroke="#1c2430" strokeOpacity={0.3} strokeDasharray="2 3" />
+                <line x1={ML} x2={ML + PW} y1={y} y2={y} stroke="#1c2430" strokeOpacity={0.3} strokeDasharray="2 3" />
+                <circle cx={x} cy={y} r={4} fill="none" stroke="#1c2430" strokeOpacity={0.7} />
               </g>
             );
           })()}
@@ -207,7 +208,7 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions }
           </div>
         )}
         {mode === 'educator' && (
-          <div style={{ position: 'absolute', right: 12, bottom: 36, maxWidth: 260, background: 'rgba(12,16,23,.92)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 10px', fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>
+          <div style={{ position: 'absolute', right: 12, bottom: 36, maxWidth: 260, background: 'rgba(255,250,242,.95)', border: '1px solid var(--line-strong)', borderRadius: 0, padding: '8px 10px', fontSize: 11, color: 'var(--muted)', lineHeight: 1.5, boxShadow: '3px 3px 0 rgba(28,36,48,.12)' }}>
             <strong style={{ color: 'var(--text)' }}>Read the silhouette.</strong> The gray ridge is terrain. The Sun or Earth is blocked whenever it sits below that line — even if its elevation is above 0°.
           </div>
         )}
@@ -215,7 +216,7 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions }
       <div style={{ display: 'flex', gap: 16, padding: '6px 12px', borderTop: '1px solid var(--border)', fontSize: 10, color: 'var(--dim)', flexWrap: 'wrap' }}>
         <span><span style={{ color: 'var(--solar)' }}>━</span> Sun track</span>
         <span><span style={{ color: 'var(--earth)' }}>┄</span> Earth track (libration)</span>
-        <span><span style={{ color: '#3d4a5c' }}>▰</span> Terrain mask</span>
+        <span><span style={{ color: '#6b5344' }}>▰</span> Terrain mask</span>
         <span style={{ marginLeft: 'auto' }} className="mono">{site.terrain.label} · {site.terrain.kind === 'dem' ? site.terrain.elevations.length : site.terrain.elevations.length - 1} samples @ {site.terrain.resolutionDeg}° · click to lock probe</span>
       </div>
     </section>
