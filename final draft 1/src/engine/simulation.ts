@@ -1,5 +1,5 @@
-import type { EvaluatedSample, LandingSite, MissionConfig, SimulationResult } from '../types/mission';
-import { DAY_MS, HOUR_MS, clamp } from './constants';
+import type { EvaluatedSample, LandingSite, MissionConfig, SamplingInfo, SimulationResult } from '../types/mission';
+import { DAY_MS, clamp } from './constants';
 import { computeEphemeris } from './ephemeris';
 import { findTransitions, visibilityFor } from './horizonPhysics';
 import { computePower, summarizeMission } from './powerComms';
@@ -37,19 +37,47 @@ export function evaluateAt(site: LandingSite, timeMs: number, config: MissionCon
   };
 }
 
+export const MAX_SAMPLES = 20_000;
+
+/**
+ * Sample the mission window uniformly, preserving BOTH endpoints and the full
+ * requested interval. If the requested step would exceed MAX_SAMPLES, the step is
+ * coarsened UNIFORMLY across the whole window — never by keeping a fine step and
+ * jumping to the end (which previously created an enormous final gap and corrupted
+ * battery integration and visibility fractions). The effective step is reported.
+ * Visibility transitions are then refined adaptively (see findTransitions).
+ */
 export function simulateMission(site: LandingSite, startMs: number, endMs: number, config: MissionConfig): SimulationResult {
   const t0 = performance.now();
-  const stepMs = clamp(config.stepMinutes, 1, 240) * 60_000;
-  const span = Math.max(HOUR_MS, endMs - startMs);
-  const count = Math.min(20_000, Math.max(2, Math.ceil(span / stepMs) + 1));
+  const requestedStepMinutes = clamp(config.stepMinutes, 1, 240);
+  const requestedStepMs = requestedStepMinutes * 60_000;
+  const span = Math.max(0, endMs - startMs);
+  const requestedCount = span > 0 ? Math.floor(span / requestedStepMs) + 1 : 2;
+  const count = Math.min(MAX_SAMPLES, Math.max(2, requestedCount));
+  const capped = requestedCount > MAX_SAMPLES;
+  const effectiveStepMs = span > 0 ? span / (count - 1) : 0;
   const samples: EvaluatedSample[] = [];
+  let maxGapMs = 0;
+  let prev = startMs;
   for (let i = 0; i < count; i++) {
-    const timeMs = i === count - 1 ? endMs : startMs + i * stepMs;
+    const timeMs = i === count - 1 ? endMs : startMs + i * effectiveStepMs;
+    if (i > 0) maxGapMs = Math.max(maxGapMs, timeMs - prev);
+    prev = timeMs;
     samples.push(evaluateAt(site, timeMs, config));
   }
+  const sampling: SamplingInfo = {
+    requestedStepMinutes,
+    effectiveStepMinutes: effectiveStepMs / 60_000,
+    sampleCount: count,
+    capped,
+    maxGapMinutes: maxGapMs / 60_000,
+    strategy: capped
+      ? 'uniform; step coarsened to respect the 20,000-sample cap; adaptive transition refinement'
+      : 'uniform; adaptive transition refinement',
+  };
   const events = findTransitions(site, config, samples);
-  const summary = summarizeMission(samples, events, config, startMs, endMs);
-  return { site, config, samples, events, summary, computeMs: performance.now() - t0 };
+  const summary = summarizeMission(samples, events, config, startMs, endMs, sampling, site);
+  return { site, config, samples, events, summary, computeMs: performance.now() - t0, sampling };
 }
 
 export function simulationKey(site: LandingSite, startMs: number, endMs: number, config: MissionConfig): string {
@@ -57,6 +85,8 @@ export function simulationKey(site: LandingSite, startMs: number, endMs: number,
   return [
     site.id, site.latitude.toFixed(5), site.longitude.toFixed(5), site.elevationM,
     site.terrain.kind, site.terrain.resolutionDeg, site.terrain.eyeHeightM, site.terrain.sourceFrame ?? '', site.terrain.synthetic ? 'synthetic' : 'real',
+    site.terrain.frameVerified ? 'fv1' : 'fv0', site.terrain.frameTransform ?? '', (site.terrain.azimuthOffsetDeg ?? 0).toFixed(4),
+    site.terrain.coveragePercent ?? '', site.terrain.radiusKm ?? '', site.terrain.analysisScale ?? 'local',
     terrainHash,
     Math.round(startMs / 60000), Math.round(endMs / 60000),
     config.durationDays, config.arrayMode, config.arrayAreaM2, config.cellEfficiency, config.systemDerate,

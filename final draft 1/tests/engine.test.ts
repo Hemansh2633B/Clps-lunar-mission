@@ -149,7 +149,7 @@ describe('power and survival', () => {
     const config = { ...DEFAULT_CONFIG, arrayMode: 'horizontal' as const, arrayAreaM2: 2, loadW: 400, batteryCapacityKWh: 5, stepMinutes: 60 };
     const sim = simulateMission(site, START, START + 5 * DAY_MS, config);
     expect(sim.summary.depletionHours).toBeGreaterThan(0);
-    expect(sim.summary.verdict).toBe('SURVIVAL RISK');
+    expect(sim.summary.verdict).toBe('ENERGY DEFICIT');
   });
 });
 

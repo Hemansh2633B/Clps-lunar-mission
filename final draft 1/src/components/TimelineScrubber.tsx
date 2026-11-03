@@ -10,6 +10,7 @@ interface Props {
   timeMs: number;
   onTime: (t: number) => void;
   baselineMs: number;
+  onBaseline: (ms: number) => void;
   slipDays: number;
   onSlip: (d: number) => void;
   durationDays: number;
@@ -39,7 +40,9 @@ const SPEEDS = [1, 60, 3600, 86400, 604800];
 const SPEED_LABEL: Record<number, string> = { 1: '1×', 60: '1 min/s', 3600: '1 h/s', 86400: '1 d/s', 604800: '7 d/s' };
 
 export function TimelineScrubber(props: Props) {
-  const { sim, loading, window: win, timeMs, onTime, baselineMs, slipDays, onSlip, durationDays, onDuration, playing, onPlay, speed, onSpeed, viewDays, onViewDays, missionSummary, baselineSummary } = props;
+  const { sim, loading, window: win, timeMs, onTime, baselineMs, onBaseline, slipDays, onSlip, durationDays, onDuration, playing, onPlay, speed, onSpeed, viewDays, onViewDays, missionSummary, baselineSummary } = props;
+  const sampling = sim?.sampling ?? null;
+  const baselineInput = new Date(baselineMs).toISOString().slice(0, 16);
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverT, setHoverT] = useState<number | null>(null);
   const drag = useRef<{ x: number; slip: number } | null>(null);
@@ -165,12 +168,21 @@ export function TimelineScrubber(props: Props) {
           <button className="btn sm" onClick={() => onSlip(clamp(slipDays + 14, 0, 60))}>+14 d</button>
           <button className="btn sm ghost icon" onClick={() => onSlip(0)}><RotateCcw size={12} /></button>
         </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--muted)' }} title="Mission start in UTC. All ephemeris, timelines and exports use UTC (no local timezone).">
+          Start (UTC)
+          <input
+            type="datetime-local" className="input" style={{ height: 22, fontSize: 11, width: 182 }}
+            value={baselineInput}
+            onChange={(e) => { const v = e.target.value; if (!v) return; const ms = Date.parse(`${v}:00Z`); if (!Number.isNaN(ms)) onBaseline(ms); }}
+            aria-label="Mission start date and time (UTC)"
+          />
+        </label>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--muted)' }}>Duration
-          <select className="input" style={{ width: 66, height: 22, fontSize: 11 }} value={durationDays} onChange={(e) => onDuration(Number(e.target.value))}>
-            {[3, 7, 10, 14, 30].map((d) => <option key={d} value={d}>{d} d</option>)}
+          <select className="input" style={{ width: 66, height: 22, fontSize: 11 }} value={durationDays} onChange={(e) => onDuration(Number(e.target.value))} aria-label="Mission duration days">
+            {[3, 7, 10, 14, 30, 90].map((d) => <option key={d} value={d}>{d} d</option>)}
           </select>
         </label>
-        <span className="mono" style={{ fontSize: 10, color: 'var(--muted)' }}>{formatDate(baselineMs)} → <span style={{ color: 'var(--solar)' }}>{formatDate(win.missionStart)}</span></span>
+        <span className="mono" style={{ fontSize: 10, color: 'var(--muted)' }}>slip → <span style={{ color: 'var(--solar)' }}>{formatDate(win.missionStart)}</span></span>
         <div style={{ display: 'flex', gap: 16, marginLeft: 'auto', alignItems: 'center' }}>
           <div className="metric sm"><span className="label">Combined Δ</span><span className="value" style={{ fontSize: 13, color: combinedDelta == null ? 'var(--muted)' : combinedDelta >= 0 ? 'var(--nominal)' : 'var(--blocked)' }}>{combinedDelta == null ? '—' : `${combinedDelta >= 0 ? '+' : ''}${combinedDelta.toFixed(1)}`}<span className="unit">%</span></span></div>
           <div className="metric sm"><span className="label">Energy Δ</span><span className="value" style={{ fontSize: 13, color: energyDelta == null ? 'var(--muted)' : energyDelta >= 0 ? 'var(--nominal)' : 'var(--blocked)' }}>{energyDelta == null ? '—' : `${energyDelta >= 0 ? '+' : ''}${energyDelta.toFixed(1)}`}<span className="unit">kWh</span></span></div>
@@ -178,6 +190,16 @@ export function TimelineScrubber(props: Props) {
           <div className="metric sm"><span className="label">Verdict</span><span className="value" style={{ fontSize: 12, color: missionSummary?.verdict === 'NOMINAL' ? 'var(--nominal)' : missionSummary?.verdict === 'CONDITIONAL' ? 'var(--solar)' : 'var(--blocked)' }}>{missionSummary?.verdict ?? '—'}</span></div>
         </div>
       </div>
+      {sampling && (
+        <div className="mono" style={{ padding: '3px 12px 6px', fontSize: 9.5, color: 'var(--muted)', borderTop: '1px dashed var(--border)', display: 'flex', gap: 10, flexWrap: 'wrap' }}
+          title="Visibility percentages and gaps integrate refined transition timestamps (adaptive bisection), not the coarse sample grid.">
+          <span>SAMPLING · {sampling.sampleCount.toLocaleString()} samples</span>
+          <span>requested {sampling.requestedStepMinutes} min → effective {sampling.effectiveStepMinutes.toFixed(2)} min</span>
+          <span>max gap {sampling.maxGapMinutes.toFixed(2)} min</span>
+          {sampling.capped && <span style={{ color: 'var(--solar)' }}>step coarsened to respect 20,000-sample cap (full span + both endpoints preserved)</span>}
+          <span style={{ marginLeft: 'auto' }}>UTC · transitions refined adaptively</span>
+        </div>
+      )}
     </section>
   );
 }

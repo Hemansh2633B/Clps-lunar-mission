@@ -17,3 +17,6 @@ artifacts/
 
 # Local verification DEM fixtures (large raster data)
 data/verification/
+
+# SPICE kernels (large binaries; reproducible via scripts/fetch-spice-kernels.py)
+data/kernels/
