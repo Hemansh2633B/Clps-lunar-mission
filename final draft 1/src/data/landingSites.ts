@@ -217,17 +217,41 @@ export function siteById(id: string): LandingSite | undefined {
 
 export type CustomTerrainPreset = 'flat' | 'ridge' | 'crater-rim' | 'massif';
 
-export function customTerrain(preset: CustomTerrainPreset, sectors?: number[]): TerrainProfile {
-  if (sectors && sectors.length === 8) {
-    const features: TerrainFeature[] = sectors.map((elev, i) => ({
-      name: `Sector ${i * 45}°`,
-      azimuthDeg: i * 45,
-      elevationDeg: elev,
-      widthDeg: 90,
-      kind: elev > 2 ? 'massif' : elev < 0 ? 'drop' : 'rim',
-    }));
-    return buildTerrainProfile('Custom 8-sector horizon', features, -0.08, 5, 'illustrative', 1.0);
+/** User-edited 8-sector mask: sector values are exact at 0/45/…/315°, periodic linear between. */
+export function customSectorProfile(sectors: number[]): TerrainProfile {
+  if (sectors.length !== 8 || sectors.some((v) => !Number.isFinite(v))) {
+    throw new Error('An 8-sector horizon needs eight finite elevation values.');
   }
+  const elevations: number[] = [];
+  for (let az = 0; az <= 360; az += 1) {
+    const x = (az % 360) / 45;
+    const i0 = Math.floor(x) % 8;
+    const i1 = (i0 + 1) % 8;
+    const f = x - Math.floor(x);
+    elevations.push(sectors[i0] * (1 - f) + sectors[i1] * f);
+  }
+  elevations[360] = elevations[0];
+  const features: TerrainFeature[] = sectors.map((elev, i) => ({
+    name: `Sector ${i * 45}°`,
+    azimuthDeg: i * 45,
+    elevationDeg: elev,
+    widthDeg: 45,
+    kind: elev > 2 ? 'massif' : elev < 0 ? 'drop' : 'rim',
+  }));
+  return {
+    label: 'User-edited 8-sector horizon',
+    kind: 'custom',
+    resolutionDeg: 1,
+    elevations,
+    features,
+    uncertaintyDeg: 1.0,
+    eyeHeightM: 2,
+    accuracyNote: 'User-edited sector values are exact at the eight cardinal/intercardinal azimuths; interpolation between them is not a measured terrain product.',
+  };
+}
+
+export function customTerrain(preset: CustomTerrainPreset, sectors?: number[]): TerrainProfile {
+  if (sectors && sectors.length === 8) return customSectorProfile(sectors);
   switch (preset) {
     case 'ridge':
       return buildTerrainProfile('Custom ridge horizon', [

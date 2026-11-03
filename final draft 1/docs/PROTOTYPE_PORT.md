@@ -26,6 +26,8 @@ This document maps every working capability from the repository’s `prototype/`
 
 - **360° horizon ray-marching** from the loaded DEM grid (`backend/horizon.py`, `src/terrain/horizon.ts`), with configurable azimuth bins / eye height, per-ray coverage, disclosed edge inset, CSV export, and TypeScript↔Python parity tests.
 - **Sample-preserving mission import**: creates a `kind: 'dem'` landing site whose terrain elevations are the ray-marched samples verbatim — no illustrative re-synthesis. Incomplete real masks are blocked; synthetic imports stay labeled.
+- **Exact custom sector masks**: the 8-sector editor now produces a `kind: 'custom'` periodic horizon with the edited values exact at 0/45/…/315°, rather than an illustrative feature synthesis.
+- **Terrain-relative power & survival**: vertical arrays can track a Sun visible below the reference tangent; battery depletion is interpolated inside a sample interval.
 - **Educator story** “From DEM to Horizon Mask” in the Field Guide.
 - **Single-command full stack**: `npm run dev:full` starts the Flask API and Vite console together and forwards `--dem`, `--dem-config`, `--api-port`, `--web-port`.
 - **Real-DEM verification fixture**: `scripts/fetch-lola-verification-fixture.py` + `npm run test:real-dem` exercise projected lunar GeoTIFF loading without NASA network access. See `docs/VERIFICATION.md` for caveats.

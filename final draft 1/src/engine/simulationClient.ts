@@ -23,6 +23,8 @@ function getWorker(): Worker {
     worker.onerror = (event) => {
       for (const [, entry] of pending) entry.reject(new Error(event.message || 'Simulation worker error'));
       pending.clear();
+      worker?.terminate();
+      worker = null; // a later request spawns a fresh worker instead of reusing a broken one
     };
   }
   return worker;

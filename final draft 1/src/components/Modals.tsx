@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { X, Download, Plus } from 'lucide-react';
 import type { EvaluatedSample, LandingSite, MissionConfig } from '../types/mission';
 import type { CustomTerrainPreset } from '../data/landingSites';
@@ -6,12 +6,34 @@ import { horizonTable } from '../engine/horizonPhysics';
 import { formatCoord } from '../engine/constants';
 
 function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const node = ref.current;
+    node?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); onCloseRef.current(); return; }
+      if (e.key !== 'Tab' || !node) return;
+      const focusable = Array.from(node.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+        .filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => { document.removeEventListener('keydown', onKey, true); previous?.focus?.(); };
+  }, []);
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={`modal fade-in ${wide ? 'wide' : ''}`}>
+      <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`modal fade-in ${wide ? 'wide' : ''}`} style={{ outline: 'none' }}>
         <div className="modal-header">
-          <span style={{ fontSize: 13, fontWeight: 600 }}>{title}</span>
-          <button className="btn sm ghost icon" onClick={onClose}><X size={13} /></button>
+          <span id={titleId} style={{ fontSize: 13, fontWeight: 600 }}>{title}</span>
+          <button className="btn sm ghost icon" onClick={onClose} aria-label="Close dialog"><X size={13} /></button>
         </div>
         <div className="modal-body">{children}</div>
       </div>
@@ -109,11 +131,12 @@ export function SettingsModal({ config, onChange, onClose }: { config: MissionCo
 }
 
 export function HorizonTableModal({ site, current, onClose, onExport }: { site: LandingSite; current: EvaluatedSample; onClose: () => void; onExport: () => void }) {
-  const rows = horizonTable(site, current, 5);
+  const step = site.terrain.kind === 'dem' ? site.terrain.resolutionDeg : 5;
+  const rows = horizonTable(site, current, step);
   return (
     <Modal title={`Horizon elevation table · ${site.shortName}`} onClose={onClose} wide>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ fontSize: 11, color: 'var(--muted)' }}>{site.terrain.label} · 5° bins · Sun az {current.sun.azimuthDeg.toFixed(1)}°, Earth az {current.earth.azimuthDeg.toFixed(1)}°</span>
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>{site.terrain.label} · {step}° bins · Sun az {current.sun.azimuthDeg.toFixed(1)}°, Earth az {current.earth.azimuthDeg.toFixed(1)}°</span>
         <button className="btn sm" onClick={onExport}><Download size={12} /> CSV</button>
       </div>
       <div style={{ maxHeight: 420, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 5 }}>

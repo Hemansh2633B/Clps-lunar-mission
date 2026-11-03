@@ -86,10 +86,15 @@ export default function App() {
     setCompareMode(true);
   }, [site.id, win.missionStart, config, notify]);
 
+  const overlayOpen = customOpen || settingsOpen || horizonOpen || shortcutsOpen || guideOpen;
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+      if (overlayOpen && e.key !== 'Escape') return;
       if (e.key === ' ') { e.preventDefault(); setPlaying((p) => !p); }
       else if (e.key === '[') setTimeMs((t) => clamp(t - DAY_MS, win.startMs, win.endMs));
       else if (e.key === ']') setTimeMs((t) => clamp(t + DAY_MS, win.startMs, win.endMs));
@@ -105,7 +110,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [win.startMs, win.endMs, pinCurrent]);
+  }, [win.startMs, win.endMs, pinCurrent, overlayOpen]);
 
   const placeCustom = useCallback((lat: number, lon: number) => {
     const s = makeCustomSite({ name: `Map ${lat.toFixed(2)}° ${lon.toFixed(1)}°`, latitude: lat, longitude: lon, elevationM: 0, preset: 'flat' });
@@ -218,7 +223,7 @@ export default function App() {
       />
       <footer className="status-bar">
         <span><span className="dot" style={{ background: 'var(--nominal)' }} />EPHEMERIS · astronomy-engine + IAU 2015 Moon rotation</span>
-        <span><span className="dot" style={{ background: 'var(--solar)' }} />TERRAIN · LOLA-inspired illustrative masks (not flight DEM)</span>
+        <span><span className="dot" style={{ background: site.terrain.kind === 'dem' && !site.terrain.synthetic ? 'var(--earth)' : 'var(--solar)' }} />TERRAIN · {site.terrain.kind === 'dem' ? (site.terrain.synthetic ? 'synthetic demo horizon (not real lunar data)' : `DEM-derived horizon · ${site.terrain.sourceFile ?? 'local DEM'} (verify frame)`) : site.terrain.kind === 'custom' ? 'user-edited 8-sector mask (not measured DEM)' : 'LOLA-inspired illustrative masks (not flight DEM)'}</span>
         <span>LOS · center-of-disk, no refraction</span>
         <span>{activeSim.data ? `${activeSim.data.summary.sampleCount} samples · ${activeSim.data.computeMs.toFixed(0)} ms` : 'computing…'}</span>
         <span style={{ marginLeft: 'auto' }}>Space play · [ ] days · C compare · T terrain · E educator · G guide · ? help</span>
@@ -231,7 +236,7 @@ export default function App() {
       <EducatorOverlay open={guideOpen} onClose={() => setGuideOpen(false)} active={activeTour} step={tourStep}
         onStart={applyGuided} onStep={(d) => setTourStep((s) => clamp(s + d, 0, (activeTour?.steps.length ?? 1) - 1))} onApply={applyGuided} />
       {toast && (
-        <div className="fade-in" style={{ position: 'fixed', bottom: 44, left: '50%', transform: 'translateX(-50%)', background: '#0c1017', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 14px', fontSize: 12, zIndex: 80, boxShadow: '0 12px 32px rgba(0,0,0,.5)' }}>{toast}</div>
+        <div role="status" aria-live="polite" className="fade-in" style={{ position: 'fixed', bottom: 44, left: '50%', transform: 'translateX(-50%)', background: '#0c1017', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '8px 14px', fontSize: 12, zIndex: 80, boxShadow: '0 12px 32px rgba(0,0,0,.5)' }}>{toast}</div>
       )}
     </div>
   );

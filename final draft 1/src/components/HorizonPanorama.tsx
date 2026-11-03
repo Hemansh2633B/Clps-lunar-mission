@@ -36,10 +36,11 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions }
 
   const { azStart, azSpan, elMin, elMax } = useMemo(() => {
     const maxTerrain = Math.max(...site.terrain.elevations);
+    const minTerrain = Math.min(...site.terrain.elevations);
     let trackMax = 0;
     if (sim) for (const s of sim.samples) trackMax = Math.max(trackMax, s.sun.elevationDeg, s.earth.elevationDeg);
     const elMax = clamp(Math.max(12, maxTerrain + 4, current.sun.elevationDeg + 6, current.earth.elevationDeg + 6, trackMax + 6), 12, 90);
-    const elMin = -4;
+    const elMin = clamp(Math.min(-4, minTerrain - 2), -30, -4);
     let azStart = 0;
     let azSpan = 360;
     if (options.sector === 'sun') { azStart = wrap360(current.sun.azimuthDeg - 60); azSpan = 120; }
@@ -215,7 +216,7 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions }
         <span><span style={{ color: 'var(--solar)' }}>━</span> Sun track</span>
         <span><span style={{ color: 'var(--earth)' }}>┄</span> Earth track (libration)</span>
         <span><span style={{ color: '#3d4a5c' }}>▰</span> Terrain mask</span>
-        <span style={{ marginLeft: 'auto' }} className="mono">{site.terrain.label} · {site.terrain.elevations.length - 1} samples · click to lock probe</span>
+        <span style={{ marginLeft: 'auto' }} className="mono">{site.terrain.label} · {site.terrain.kind === 'dem' ? site.terrain.elevations.length : site.terrain.elevations.length - 1} samples @ {site.terrain.resolutionDeg}° · click to lock probe</span>
       </div>
     </section>
   );

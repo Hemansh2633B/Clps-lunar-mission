@@ -67,8 +67,11 @@ export function SiteCatalog({ sites, selectedId, onSelect, onCustom, onHorizonTa
             <button className="btn sm" onClick={onHorizonTable}><Table2 size={12} /> Horizon</button>
             <button className="btn sm primary" onClick={onPin}><Pin size={12} /> {compareMode ? 'Pin' : 'Pin & compare'}</button>
           </div>
-          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--dim)' }}>
-            <Crosshair size={11} /> {selected.terrain.kind === 'flat' ? 'Idealized spherical horizon' : 'LOLA-inspired illustrative mask'} · ±{selected.terrain.uncertaintyDeg.toFixed(2)}°
+          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: selected.terrain.kind === 'dem' && !selected.terrain.synthetic ? 'var(--solar)' : 'var(--dim)' }}>
+            <Crosshair size={11} /> {selected.terrain.kind === 'flat' ? 'Idealized spherical horizon'
+              : selected.terrain.kind === 'dem' ? (selected.terrain.synthetic ? 'Synthetic demo horizon' : 'DEM-derived horizon')
+              : selected.terrain.kind === 'custom' ? 'User-edited 8-sector mask'
+              : 'LOLA-inspired illustrative mask'} · {selected.terrain.kind === 'dem' ? `${selected.terrain.resolutionDeg}° bins` : `±${selected.terrain.uncertaintyDeg.toFixed(2)}°`}
           </div>
         </div>
       )}

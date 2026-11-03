@@ -53,9 +53,10 @@ export function simulateMission(site: LandingSite, startMs: number, endMs: numbe
 }
 
 export function simulationKey(site: LandingSite, startMs: number, endMs: number, config: MissionConfig): string {
-  const terrainHash = site.terrain.elevations.filter((_, i) => i % 15 === 0).map((v) => v.toFixed(2)).join(',');
+  const terrainHash = site.terrain.elevations.map((v) => v.toFixed(3)).join(',');
   return [
     site.id, site.latitude.toFixed(5), site.longitude.toFixed(5), site.elevationM,
+    site.terrain.kind, site.terrain.resolutionDeg, site.terrain.eyeHeightM, site.terrain.sourceFrame ?? '', site.terrain.synthetic ? 'synthetic' : 'real',
     terrainHash,
     Math.round(startMs / 60000), Math.round(endMs / 60000),
     config.durationDays, config.arrayMode, config.arrayAreaM2, config.cellEfficiency, config.systemDerate,

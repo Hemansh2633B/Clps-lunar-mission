@@ -3,7 +3,9 @@ import { computeEphemeris } from '../src/engine/ephemeris';
 import { buildTerrainProfile, visibilityFor, refineCrossing } from '../src/engine/horizonPhysics';
 import { computePower, simulateBattery } from '../src/engine/powerComms';
 import { DEFAULT_CONFIG, evaluateAt, simulateMission } from '../src/engine/simulation';
-import { LANDING_SITES, siteById } from '../src/data/landingSites';
+import { LANDING_SITES, siteById, customSectorProfile } from '../src/data/landingSites';
+import { terrainElevationAt } from '../src/engine/horizonPhysics';
+import type { EvaluatedSample } from '../src/types/mission';
 import { DAY_MS, HOUR_MS } from '../src/engine/constants';
 import { csvEscape } from '../src/utils/export';
 
@@ -72,6 +74,20 @@ describe('horizon physics', () => {
     expect(clear.visible).toBe(true);
   });
 
+  it('distinguishes terrain shadow from below-horizon when the local horizon is depressed', () => {
+    const profile = buildTerrainProfile('dip', [], -2, 0, 'flat', 0);
+    const visibleBelowTangent = visibilityFor('earth', -1, 0, profile);
+    expect(visibleBelowTangent.geometricVisible).toBe(false);
+    expect(visibleBelowTangent.visible).toBe(true);
+    expect(visibleBelowTangent.reason).toBe('clear');
+    const blocked = visibilityFor('earth', -3, 0, profile);
+    expect(blocked.visible).toBe(false);
+    expect(blocked.reason).toBe('below-horizon');
+    const margin = visibilityFor('earth', -1, 0, profile, 1.5);
+    expect(margin.visible).toBe(false);
+    expect(margin.reason).toBe('below-horizon');
+  });
+
   it('refines a crossing to sub-minute precision', () => {
     const site = siteById('apollo-11')!;
     const a = evaluateAt(site, START, cfg);
@@ -95,6 +111,37 @@ describe('power and survival', () => {
     const p = computePower(1.5, 90, 149_597_870, vis, DEFAULT_CONFIG);
     expect(p.verticalTrackingW).toBeGreaterThan(p.horizontalW * 10);
     expect(p.horizontalW).toBeGreaterThan(0);
+  });
+
+  it('interpolates battery depletion inside a sample interval', () => {
+    const t0 = Date.parse('2026-12-18T00:00:00Z');
+    const sample = (timeMs: number): EvaluatedSample => ({
+      timeMs,
+      sun: { azimuthDeg: 0, elevationDeg: -10, distanceKm: 149_597_870 },
+      earth: { azimuthDeg: 0, elevationDeg: 10, distanceKm: 384_400 },
+      sunVisibility: { visible: false, geometricVisible: false, clearanceDeg: -10, terrainElevationDeg: 0, reason: 'below-horizon' },
+      earthVisibility: { visible: true, geometricVisible: true, clearanceDeg: 10, terrainElevationDeg: 0, reason: 'clear' },
+      power: { fluxWm2: 1361, horizontalW: 0, verticalTrackingW: 0, verticalFixedW: 0, selectedW: 0, horizontalIncidence: 0, verticalIncidence: 0 },
+      viable: false,
+      libration: { subEarthLatitudeDeg: 0, subEarthLongitudeDeg: 0, opticalLatitudeDeg: 0, opticalLongitudeDeg: 0 },
+      subsolarLatitudeDeg: 0,
+      subsolarLongitudeDeg: 0,
+    });
+    const config = { ...DEFAULT_CONFIG, loadW: 1000, batteryCapacityKWh: 1, initialSocPct: 100 };
+    const result = simulateBattery([sample(t0), sample(t0 + HOUR_MS), sample(t0 + 2 * HOUR_MS)], config);
+    // 1 kWh / (1 kW / 0.95 discharge efficiency) = 0.95 h to empty.
+    expect(result.firstDepletionMs).toBe(t0 + 0.95 * HOUR_MS);
+    expect(result.depletionHours).toBeCloseTo(1.05, 6);
+    expect(result.minSocPct).toBe(0);
+  });
+
+  it('vertical mast can track a Sun visible below the reference tangent', () => {
+    const profile = buildTerrainProfile('dip', [], -2, 0, 'flat', 0);
+    const vis = visibilityFor('sun', -1, 90, profile);
+    expect(vis.visible).toBe(true);
+    const p = computePower(-1, 90, 149_597_870, vis, DEFAULT_CONFIG);
+    expect(p.horizontalW).toBe(0);
+    expect(p.verticalTrackingW).toBeGreaterThan(0);
   });
 
   it('battery depletes when load exceeds generation', () => {
@@ -130,6 +177,18 @@ describe('mission simulation', () => {
     const ids = ['shackleton-rim', 'connecting-ridge', 'malapert-massif', 'leibnitz-beta', 'haworth-rim', 'nobile-rim-1', 'de-gerlache-rim-2', 'apollo-11', 'apollo-17', 'change-4'];
     for (const id of ids) expect(siteById(id)).toBeDefined();
     expect(LANDING_SITES.length).toBeGreaterThanOrEqual(10);
+  });
+});
+
+describe('custom sector horizons', () => {
+  it('preserves the eight edited sector values exactly and wraps periodically', () => {
+    const sectors = [0.4, 0.2, 1.5, 3.5, 2.0, 0.5, 0.1, 0.3];
+    const profile = customSectorProfile(sectors);
+    expect(profile.kind).toBe('custom');
+    sectors.forEach((v, i) => expect(terrainElevationAt(profile, i * 45)).toBeCloseTo(v, 10));
+    expect(terrainElevationAt(profile, 360)).toBeCloseTo(sectors[0], 10);
+    expect(terrainElevationAt(profile, 22.5)).toBeCloseTo((sectors[0] + sectors[1]) / 2, 10);
+    expect(() => customSectorProfile([1, 2, 3])).toThrow();
   });
 });
 

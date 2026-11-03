@@ -32,7 +32,9 @@ export function missionReportJSON(site: LandingSite, config: MissionConfig, sim:
     ? site.terrain.synthetic
       ? 'Terrain: synthetic demo horizon from Terrain Lab, NOT real lunar data.'
       : `Terrain: DEM-derived horizon preserved from ${site.terrain.sourceFile ?? 'local DEM'}; source frame ${site.terrain.sourceFrame ?? 'unspecified'}; coverage ${site.terrain.coveragePercent ?? 'unknown'}%. Verify frame alignment and vertical accuracy before operational use.`
-    : 'Terrain: LOLA-inspired illustrative masks, NOT flight-certified DEM.';
+    : site.terrain.kind === 'custom'
+      ? 'Terrain: user-edited 8-sector horizon mask, NOT a measured DEM.'
+      : 'Terrain: LOLA-inspired illustrative masks, NOT flight-certified DEM.';
   return JSON.stringify({
     product: 'SELENE mission planning report',
     generatedAt: new Date().toISOString(),

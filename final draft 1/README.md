@@ -34,8 +34,8 @@ Production build and checks:
 
 ```bash
 npm run build        # tsc + vite build
-npm test             # 16 Vitest engine / physics / DEM-profile / export tests
-npm run test:python  # 68 backend/DEM/horizon/downloader tests
+npm test             # 20 Vitest engine / physics / DEM-profile / export tests
+npm run test:python  # 70 backend/DEM/horizon/downloader/API-error tests
 npm run test:geometry# Three.js geometry / synthetic / horizon checks
 npm run test:parity  # TypeScript ↔ Python horizon ray-marcher parity
 npm run test:browser # Playwright mission console + Terrain Lab E2E (incl. mobile)
@@ -147,7 +147,7 @@ final draft 1/
 ├── public/assets/              # LROC south-pole mosaic + provenance
 ├── scripts/                    # dev-full, browser/geometry/python/parity/fixture
 ├── screenshots/                # Captured during verification
-├── tests/python/               # 68 backend tests
+├── tests/python/               # 70 backend tests
 ├── src/
 │   ├── main.tsx / App.tsx      # Entry + state orchestration
 │   ├── types/mission.ts        # Domain interfaces
@@ -218,6 +218,10 @@ Heavy window simulations run in a dedicated Web Worker with an LRU result cache,
 - Terrain blocks objects that are geometrically above 0°; crossing refinement is sub-minute.
 - **DEM horizon import**: samples preserved verbatim, no clamp/ripple, periodic interpolation at native bin resolution, synthetic labeling, incomplete-real-mask blocking, provenance in JSON/CSV exports.
 - **Horizon parity**: TypeScript and Python ray-marchers agree on synthetic grids, coverage, edge inset, and obstacle ranges.
+- **Battery survival**: zero-crossing is interpolated inside a sample interval; depletion hours count only the post-depletion fraction.
+- **Terrain-relative power**: a Sun visible below the reference tangent (depressed DEM horizon) still drives a vertical mast; horizontal decks correctly receive zero.
+- **Custom 8-sector masks**: edited sector values are exact at 0/45/…/315° and wrap periodically; no illustrative ripple is added.
+- **API robustness**: unknown endpoints, wrong methods, and unexpected backend failures return actionable JSON errors with security headers.
 
 > **This is a planning and education tool, not a flight-certified analysis.** Use measured LOLA DTMs with verified frame/datum metadata and SPICE/DE ephemerides before any operational decision.
 

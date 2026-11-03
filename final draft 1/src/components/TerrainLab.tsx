@@ -456,6 +456,14 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
   const educator = mode === 'educator';
   const stats = data?.statistics;
   const importBlock = horizon ? horizonImportBlocked(horizon) : null;
+  const formError = !Number.isFinite(form.latitude) || form.latitude < -90 || form.latitude > 90
+    ? 'Latitude must be between −90° and +90°.'
+    : !Number.isFinite(form.longitude) || form.longitude < -180 || form.longitude > 360
+      ? 'Longitude must be in −180…180 or 0…360°E.'
+      : !Number.isFinite(form.radius) || form.radius < 0.5 || form.radius > 20
+        ? 'Radius must be between 0.5 and 20 km.'
+        : null;
+  const eyeError = !Number.isFinite(eyeHeight) || eyeHeight < 0 || eyeHeight > 50 ? 'Eye height must be 0–50 m.' : null;
 
   return (
     <section className="panel terrain-lab" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
@@ -484,11 +492,12 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
             <option value="high">High · 513²</option>
           </select>
         </div>
-        <button className="btn primary" disabled={loading || !!webglError} onClick={() => void build()}><Play size={13} /> {loading ? 'Building…' : 'Build terrain'}</button>
+        <button className="btn primary" disabled={loading || !!webglError || !!formError} onClick={() => void build()}><Play size={13} /> {loading ? 'Building…' : 'Build terrain'}</button>
         <button className="btn" disabled={loading} onClick={() => void build({ latitude: site.latitude, longitude: site.longitude, radius: 5 })}><MapPin size={13} /> Load selected site</button>
         <button className="btn ghost" onClick={() => ctxRef.current?.resetCamera()}><RotateCcw size={13} /> Reset view</button>
       </div>
 
+      {formError && <div role="alert" style={{ padding: '6px 12px', background: '#241a08', borderBottom: '1px solid #5c430f', color: 'var(--solar)', fontSize: 11, display: 'flex', gap: 8 }}><AlertTriangle size={13} /> {formError}</div>}
       {error && <div role="alert" style={{ padding: '8px 12px', background: '#240b0b', borderBottom: '1px solid #5c1d1d', color: '#fca5a5', fontSize: 12, display: 'flex', gap: 8 }}><AlertTriangle size={14} /> {error}</div>}
       {webglError && <div role="alert" style={{ padding: '8px 12px', background: '#240b0b', color: '#fca5a5', fontSize: 12 }}>{webglError}</div>}
 
@@ -548,7 +557,8 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
                 <input id="terrain-eye-height" className="input mono" type="number" min={0} max={50} step={0.5} value={eyeHeight} onChange={(e) => setEyeHeight(Number(e.target.value))} />
               </div>
             </div>
-            <button className="btn sm" style={{ width: '100%' }} disabled={!data || horizonLoading} onClick={() => void computeHorizon()}>{horizonLoading ? 'Ray-marching…' : 'Compute 360° horizon'}</button>
+            {eyeError && <div role="alert" style={{ fontSize: 9, color: 'var(--solar)', marginBottom: 4 }}>{eyeError}</div>}
+            <button className="btn sm" style={{ width: '100%' }} disabled={!data || horizonLoading || !!eyeError} onClick={() => void computeHorizon()}>{horizonLoading ? 'Ray-marching…' : 'Compute 360° horizon'}</button>
             {horizon && (
               <div style={{ marginTop: 8 }}>
                 <svg viewBox="0 0 360 80" style={{ width: '100%', height: 70, background: '#0c1017', borderRadius: 4 }}>

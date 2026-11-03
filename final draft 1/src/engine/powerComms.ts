@@ -15,7 +15,10 @@ export function computePower(
 ): PowerState {
   const fluxWm2 = solarFlux(distanceKm);
   const area = config.arrayAreaM2 * config.cellEfficiency * config.systemDerate;
-  if (!sunVisibility.visible || elevationDeg <= 0) {
+  // Visibility is terrain-relative: a Sun slightly below the reference tangent
+  // can still illuminate a site whose local DEM horizon is lower. Horizontal
+  // decks receive nothing at negative elevation; vertical masts can still track.
+  if (!sunVisibility.visible) {
     return {
       fluxWm2,
       horizontalW: 0,
@@ -67,13 +70,16 @@ export function simulateBattery(samples: EvaluatedSample[], config: MissionConfi
     const avgW = (samples[i].power.selectedW + samples[i - 1].power.selectedW) / 2;
     const netKWh = ((avgW - config.loadW) * dtH) / 1000;
     const before = soc;
-    soc += netKWh >= 0 ? netKWh * 0.92 : netKWh / 0.95;
-    soc = clamp(soc, 0, cap);
-    if (before > 0 && soc <= 0 && firstDepletionMs === null) {
-      const frac = before / Math.max(1e-9, before - soc);
-      firstDepletionMs = samples[i - 1].timeMs + frac * (samples[i].timeMs - samples[i - 1].timeMs);
+    const raw = before + (netKWh >= 0 ? netKWh * 0.92 : netKWh / 0.95);
+    if (raw <= 0) {
+      // Linearly interpolate the zero-crossing inside this sample interval.
+      const frac = before > 0 ? clamp(before / Math.max(1e-9, before - raw), 0, 1) : 0;
+      if (firstDepletionMs === null) {
+        firstDepletionMs = samples[i - 1].timeMs + frac * (samples[i].timeMs - samples[i - 1].timeMs);
+      }
+      depletionHours += dtH * (1 - frac);
     }
-    if (soc <= 0) depletionHours += dtH;
+    soc = clamp(raw, 0, cap);
     minSoc = Math.min(minSoc, soc);
   }
   return {

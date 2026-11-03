@@ -13,7 +13,7 @@ export interface TerrainFeature {
 
 export interface TerrainProfile {
   label: string;
-  kind: 'illustrative' | 'flat' | 'dem';
+  kind: 'illustrative' | 'flat' | 'dem' | 'custom';
   resolutionDeg: number;
   elevations: number[];
   features: TerrainFeature[];

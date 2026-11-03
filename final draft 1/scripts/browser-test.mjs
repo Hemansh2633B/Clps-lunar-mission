@@ -111,6 +111,16 @@ try {
   await page.waitForTimeout(700);
   assert(await page.locator('text=Test Ridge Alpha').count() > 0, 'custom site created');
 
+  // Modal keyboard guard: global shortcuts must not fire while a dialog is open.
+  await page.getByRole('button', { name: /Custom/ }).first().click();
+  await page.waitForSelector('[role="dialog"]');
+  await page.keyboard.press('t');
+  await page.waitForTimeout(200);
+  assert(await page.locator('.terrain-lab').count() === 0, 'global shortcuts are suppressed while a modal is open');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+  assert(await page.locator('[role="dialog"]').count() === 0, 'Escape closes the modal');
+
   const [download] = await Promise.all([
     page.waitForEvent('download'),
     (async () => {

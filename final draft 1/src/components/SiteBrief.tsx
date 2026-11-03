@@ -14,7 +14,7 @@ export function SiteBrief({ site, current, onHorizonTable, onPin }: Props) {
     <section className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="panel-header">
         <span className="panel-title"><Crosshair size={13} /> Site context</span>
-        <span className="chip neutral">{site.category === 'polar' ? 'South pole' : 'Reference'}</span>
+        <span className="chip neutral">{site.category === 'polar' ? (site.latitude >= 0 ? 'North pole' : 'South pole') : 'Reference'}</span>
       </div>
       <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
         <div>
@@ -60,9 +60,11 @@ export function SiteBrief({ site, current, onHorizonTable, onPin }: Props) {
         <div style={{ fontSize: 9, color: site.terrain.kind === 'dem' || site.terrain.sourceFrame ? 'var(--solar)' : 'var(--dim)', lineHeight: 1.5 }}>
           {site.terrain.kind === 'dem'
             ? `${site.terrain.synthetic ? 'Synthetic demo' : 'DEM-derived'} horizon · source frame ${site.terrain.sourceFrame ?? 'unspecified'}. Verify frame alignment with the IAU 2015 ephemeris. Azimuth sampling half-width ±${site.terrain.uncertaintyDeg.toFixed(2)}°; ${site.terrain.accuracyNote ?? 'vertical accuracy unverified.'}`
-            : site.terrain.sourceFrame
-              ? `DEM-derived horizon · source frame ${site.terrain.sourceFrame}. Verify frame alignment with the IAU 2015 ephemeris before operational use (±${site.terrain.uncertaintyDeg.toFixed(2)}°).`
-              : `Terrain mask is LOLA-inspired and illustrative (±${site.terrain.uncertaintyDeg.toFixed(2)}°). Coordinates are real; elevations are representative. Not for flight certification.`}
+            : site.terrain.kind === 'custom'
+              ? `User-edited 8-sector horizon (±${site.terrain.uncertaintyDeg.toFixed(2)}°). ${site.terrain.accuracyNote ?? 'Sector values are exact at the eight edited azimuths; not a measured DEM.'}`
+              : site.terrain.sourceFrame
+                ? `DEM-derived horizon · source frame ${site.terrain.sourceFrame}. Verify frame alignment with the IAU 2015 ephemeris before operational use (±${site.terrain.uncertaintyDeg.toFixed(2)}°).`
+                : `Terrain mask is LOLA-inspired and illustrative (±${site.terrain.uncertaintyDeg.toFixed(2)}°). Coordinates are real; elevations are representative. Not for flight certification.`}
         </div>
       </div>
     </section>

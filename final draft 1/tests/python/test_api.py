@@ -53,3 +53,26 @@ def test_oversized_request_is_rejected():
     response = create_app().test_client().post('/api/terrain', data='x' * 20000, content_type='application/json')
     assert response.status_code == 413
     assert 'too large' in response.json['error']
+
+
+def test_api_errors_are_json_and_headers_set():
+    client = create_app().test_client()
+    missing = client.get('/api/does-not-exist')
+    assert missing.status_code == 404
+    assert missing.json['error']
+    assert missing.headers['X-Content-Type-Options'] == 'nosniff'
+    wrong_method = client.get('/api/terrain')
+    assert wrong_method.status_code == 405
+    assert wrong_method.json['error']
+
+
+def test_unexpected_backend_error_is_json_500(monkeypatch):
+    import backend.server as server
+
+    def boom(*args, **kwargs):
+        raise RuntimeError('synthetic failure')
+
+    monkeypatch.setattr(server, 'extract_terrain', boom)
+    response = create_app().test_client().post('/api/terrain', json=payload())
+    assert response.status_code == 500
+    assert 'Internal terrain error' in response.json['error']

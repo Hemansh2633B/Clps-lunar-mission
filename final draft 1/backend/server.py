@@ -79,6 +79,27 @@ def create_app(settings=None):
     def oversized(_):
         return jsonify(error="Terrain request is too large."), 413
 
+    @app.errorhandler(404)
+    def not_found(_):
+        if request.path.startswith("/api/"):
+            return jsonify(error="Unknown API endpoint."), 404
+        return jsonify(error="Not found."), 404
+
+    @app.errorhandler(405)
+    def method_not_allowed(_):
+        return jsonify(error="Method not allowed for this endpoint."), 405
+
+    @app.errorhandler(Exception)
+    def unexpected(exc):
+        app.logger.exception("Unhandled terrain API error")
+        return jsonify(error="Internal terrain error. Check the backend console for details."), 500
+
+    @app.after_request
+    def security_headers(response):
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        return response
+
     dist = PROJECT_ROOT / "dist"
 
     @app.get("/")

@@ -1,4 +1,4 @@
-# Verification evidence · SELENE v1.2
+# Verification evidence · SELENE v1.3
 
 This file records what was actually executed in the Arena sandbox. It distinguishes software-path verification from scientific validation.
 
@@ -8,11 +8,11 @@ This file records what was actually executed in the Arena sandbox. It distinguis
 |---|---|---|
 | TypeScript typecheck | `npm run typecheck` | clean |
 | Production build | `npm run build` | clean; React / Three / ephemeris split into separate chunks |
-| Engine + DEM-profile unit tests | `npm test` | **16 passed** (Vitest) |
-| Backend / DEM / horizon / downloader | `npm run test:python` | **68 passed** (pytest) |
+| Engine + DEM-profile unit tests | `npm test` | **20 passed** (Vitest) |
+| Backend / DEM / horizon / downloader / API errors | `npm run test:python` | **70 passed** (pytest) |
 | Geometry checks | `npm run test:geometry` | passed: curvature, pole coordinates, Sun directions, exact landing origin, shadow casting, NoData topology, synthetic demo, horizon ray-marching |
 | Horizon parity | `npm run test:parity` | passed: TypeScript and Python ray-marchers agree on elevations, coverage, edge inset, obstacle ranges |
-| Mission + Terrain Lab browser E2E | `npm run test:browser` | passed: catalog, Apollo/far-side, comparison, educator, custom site, export, playback; Terrain Lab orbit drag, keyboard orbit, top/oblique presets, inspection pin, exaggeration, shadow pixel brightening, Sun extremes, all grid qualities, radius, horizon CSV/import, real-mode no-DEM safeguard, 390 px mobile layout |
+| Mission + Terrain Lab browser E2E | `npm run test:browser` | passed: catalog, Apollo/far-side, comparison, educator, custom site, modal keyboard guard/focus, export, playback; Terrain Lab orbit drag, keyboard orbit, top/oblique presets, inspection pin, exaggeration, shadow pixel brightening, Sun extremes, all grid qualities, radius, horizon CSV/import, real-mode no-DEM safeguard, 390 px mobile layout |
 | Real-DEM browser smoke | `npm run test:real-dem` | passed against the verification fixture below |
 
 Python warnings are Rasterio `Affine` `*` vs `@` PendingDeprecationWarnings from the installed wheel; they do not indicate a SELENE failure.
@@ -43,6 +43,17 @@ Executed result at −89.5°, 45° E, radius 5 km:
 These values are close to the prototype’s previously recorded native NASA crop (landing ≈ −393.8 m, range ≈ −915 … +697 m), which supports the software path but does not independently validate the source datum, frame, or shadow model.
 
 Browser evidence: `screenshots/09-real-dem-lab.png`, `screenshots/10-real-dem-mission-site.png`.
+
+## v1.3 correctness / robustness pass
+
+- Battery depletion now interpolates the zero-crossing inside a sample interval instead of snapping to the next sample; cumulative depletion hours count only the post-depletion fraction.
+- Power is terrain-relative: if the Sun is visible below the reference tangent because the local DEM horizon is depressed, a vertical mast can still track it; horizontal decks receive zero.
+- Custom 8-sector horizons are exact at the edited azimuths and wrap periodically; they are labeled `kind: 'custom'`, not re-synthesized with illustrative ripple.
+- DEM-aware UI: site catalog, site context, panorama sample count/elevation range, horizon table bin size, JSON/CSV disclaimers, and the status bar all reflect the selected terrain source.
+- Global keyboard shortcuts are suppressed while a modal is open; dialogs have focus trapping, `role="dialog"`, and Escape-to-close. Toasts are `aria-live`.
+- Simulation cache keys include terrain kind, resolution, eye height, source frame, synthetic flag, and the full horizon array.
+- The Flask API returns JSON for 404/405/500, sets `nosniff`/`no-referrer` headers, and logs unexpected failures.
+- Terrain Lab validates latitude/longitude/radius/eye height inline and disables invalid builds/horizon computations.
 
 ## DEM horizon → mission planner
 
