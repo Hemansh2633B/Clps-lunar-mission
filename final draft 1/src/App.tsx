@@ -19,11 +19,19 @@ const TerrainLab = lazy(() => import('./components/TerrainLab').then((m) => ({ d
 import type { TerrainSiteInput } from './components/TerrainLab';
 const SpaceView = lazy(() => import('./components/SpaceView').then((m) => ({ default: m.SpaceView })));
 import { EducatorOverlay } from './components/EducatorOverlay';
+import { Onboarding } from './components/Onboarding';
 import { CustomSiteModal, SettingsModal, HorizonTableModal, ShortcutsModal, type CustomSiteInput } from './components/Modals';
 import { download, missionReportJSON, timeseriesCSV, horizonCSV, summaryCSV, comparisonCSV, type ComparisonRow } from './utils/export';
 
 const BASELINE = Date.parse('2026-12-18T00:00:00Z');
 const INITIAL_TIME = Date.parse('2026-12-20T08:00:00Z');
+const ONBOARD_KEY = 'chandra-onboarded-v1';
+function hasOnboarded(): boolean {
+  try { return window.localStorage.getItem(ONBOARD_KEY) === '1'; } catch { return true; }
+}
+function markOnboarded() {
+  try { window.localStorage.setItem(ONBOARD_KEY, '1'); } catch { /* storage unavailable */ }
+}
 const TICKER = [
   '1.54° AXIAL TILT', '709h SYNODIC DAY', '±6.7° LAT LIBRATION', '±7.9° LON LIBRATION',
   '0.0″ AIRLESS REFRACTION', '1361 W/m² SOLAR CONSTANT', 'IAU 2015 MOON ROTATION',
@@ -56,6 +64,7 @@ export default function App() {
   const [activeTour, setActiveTour] = useState<GuidedScenario | null>(null);
   const [tourStep, setTourStep] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [onboardingOpen, setOnboardingOpen] = useState(() => !hasOnboarded());
 
   const site = sites.find((s) => s.id === selectedId) ?? sites[0];
   const win = useMemo(() => analysisWindow(baselineMs, slipDays, config.durationDays, viewDays), [baselineMs, slipDays, config.durationDays, viewDays]);
@@ -70,6 +79,22 @@ export default function App() {
     setToast(msg);
     window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 2600);
   }, []);
+
+  const dismissOnboarding = useCallback(() => { markOnboarded(); setOnboardingOpen(false); }, []);
+  const startDemo = useCallback(() => {
+    markOnboarded(); setOnboardingOpen(false);
+    setTerrainView(false); setSpaceView(false); setCompareMode(false);
+    setSelectedId('connecting-ridge');
+    setBaselineMs(Date.parse('2026-09-01T00:00:00Z'));
+    setSlipDays(0);
+    setMode('planner');
+    notify('Demo mode — illustrative terrain (not measured flight data). Explore freely.');
+  }, [notify]);
+  const startRealDem = useCallback(() => {
+    markOnboarded(); setOnboardingOpen(false);
+    setSpaceView(false); setCompareMode(false); setTerrainView(true);
+    notify('Terrain Lab opened — configure a compatible lunar DEM (MOON_ME/PA · DE421, or IAU 2015). Real mode never silently substitutes synthetic data.');
+  }, [notify]);
 
   useEffect(() => {
     if (!playing) return;
@@ -94,7 +119,7 @@ export default function App() {
     setCompareMode(true);
   }, [site.id, win.missionStart, config, notify]);
 
-  const overlayOpen = customOpen || settingsOpen || horizonOpen || shortcutsOpen || guideOpen;
+  const overlayOpen = customOpen || settingsOpen || horizonOpen || shortcutsOpen || guideOpen || onboardingOpen;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -193,6 +218,7 @@ export default function App() {
         terrainActive={terrainView} onTerrain={() => { setSpaceView(false); setTerrainView((v) => !v); }}
         spaceActive={spaceView} onSpace={() => { setTerrainView(false); setCompareMode(false); setSpaceView((v) => !v); }}
         onGuide={() => setGuideOpen(true)}
+        onHelp={() => setOnboardingOpen(true)}
         onSettings={() => setSettingsOpen(true)} onShortcuts={() => setShortcutsOpen(true)}
         onExport={handleExport} playing={playing}
         subSolar={{ lat: current.subsolarLatitudeDeg, lon: current.subsolarLongitudeDeg }}
@@ -264,7 +290,8 @@ export default function App() {
       {customOpen && <CustomSiteModal onClose={() => setCustomOpen(false)} onCreate={createCustom} initial={customInitial} />}
       {settingsOpen && <SettingsModal config={config} onChange={setConfig} onClose={() => setSettingsOpen(false)} />}
       {horizonOpen && <HorizonTableModal site={site} current={current} onClose={() => setHorizonOpen(false)} onExport={() => handleExport('horizon')} />}
-      {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
+      {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} onReopenWelcome={() => { setShortcutsOpen(false); setOnboardingOpen(true); }} />}
+      <Onboarding open={onboardingOpen} onClose={dismissOnboarding} onDemo={startDemo} onRealDem={startRealDem} />
       <EducatorOverlay open={guideOpen} onClose={() => setGuideOpen(false)} active={activeTour} step={tourStep}
         onStart={applyGuided} onStep={(d) => setTourStep((s) => clamp(s + d, 0, (activeTour?.steps.length ?? 1) - 1))} onApply={applyGuided} />
       {toast && (

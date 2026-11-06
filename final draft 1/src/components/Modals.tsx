@@ -1,9 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { X, Download, Plus } from 'lucide-react';
+import { X, Download, Plus, SlidersHorizontal } from 'lucide-react';
 import type { EvaluatedSample, LandingSite, MissionConfig } from '../types/mission';
 import type { CustomTerrainPreset } from '../data/landingSites';
 import { horizonTable } from '../engine/horizonPhysics';
 import { formatCoord } from '../engine/constants';
+import { MISSION_PRESETS, matchingPresetId, CUSTOM_PRESET_ID } from '../data/missionPresets';
+import { NumberField } from './NumberField';
+import type { NumericConfigKey } from '../engine/configLimits';
 
 function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -98,11 +101,31 @@ export function CustomSiteModal({ onClose, onCreate, initial }: { onClose: () =>
 }
 
 export function SettingsModal({ config, onChange, onClose }: { config: MissionConfig; onChange: (c: MissionConfig) => void; onClose: () => void }) {
-  const num = (key: keyof MissionConfig, label: string, step = 1, min = 0, max = 10000) => (
-    <div className="field"><label>{label}</label><input className="input mono" type="number" step={step} min={min} max={max} value={config[key] as number} onChange={(e) => onChange({ ...config, [key]: Number(e.target.value) })} /></div>
-  );
+  const activePreset = matchingPresetId(config);
+  const setNum = (key: NumericConfigKey) => (v: number) => onChange({ ...config, [key]: v });
+  const fields: NumericConfigKey[] = ['arrayAreaM2', 'cellEfficiency', 'systemDerate', 'loadW', 'batteryCapacityKWh', 'initialSocPct', 'commsMarginDeg', 'stepMinutes', 'fixedPanelAzimuthDeg', 'durationDays'];
   return (
-    <Modal title="Mission parameters" onClose={onClose}>
+    <Modal title="Mission parameters" onClose={onClose} wide>
+      <div style={{ marginBottom: 14 }}>
+        <div className="panel-title" style={{ marginBottom: 8 }}><SlidersHorizontal size={12} /> Start from a preset</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+          {MISSION_PRESETS.map((p) => (
+            <button key={p.id} className={`btn ${activePreset === p.id ? 'active' : ''}`} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 3, height: 'auto', padding: '8px 10px', textAlign: 'left' }}
+              onClick={() => onChange({ ...p.config })} aria-pressed={activePreset === p.id} title={p.description}>
+              <span style={{ fontSize: 11, fontWeight: 600, whiteSpace: 'normal' }}>{p.label}</span>
+              <span style={{ fontSize: 9, color: 'var(--dim)', fontWeight: 400, whiteSpace: 'normal' }}>{p.tagline}</span>
+            </button>
+          ))}
+          <button className={`btn ${activePreset === CUSTOM_PRESET_ID ? 'active' : ''}`} style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 3, height: 'auto', padding: '8px 10px' }} aria-pressed={activePreset === CUSTOM_PRESET_ID} title="Your own configuration">
+            <span style={{ fontSize: 11, fontWeight: 600 }}>Custom</span>
+            <span style={{ fontSize: 9, color: 'var(--dim)', fontWeight: 400 }}>Tune every value below</span>
+          </button>
+        </div>
+        <p style={{ fontSize: 10, color: 'var(--dim)', lineHeight: 1.5, margin: '8px 0 0' }}>
+          Presets are <strong>illustrative configurations</strong> for demonstration — not claims about actual NASA vehicle specifications.
+          {activePreset !== CUSTOM_PRESET_ID && <> {MISSION_PRESETS.find((p) => p.id === activePreset)?.description}</>}
+        </p>
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
         <div className="field"><label>Array geometry</label>
           <select className="input" value={config.arrayMode} onChange={(e) => onChange({ ...config, arrayMode: e.target.value as MissionConfig['arrayMode'] })}>
@@ -110,20 +133,12 @@ export function SettingsModal({ config, onChange, onClose }: { config: MissionCo
             <option value="vertical-tracking">Vertical mast (az tracking)</option>
             <option value="vertical-fixed">Vertical mast (fixed az)</option>
           </select>
+          <span style={{ fontSize: 9, color: 'var(--dim)', lineHeight: 1.35, marginTop: 2 }}>How the array faces the Sun. A tracking mast follows the Sun's azimuth; a horizontal deck faces straight up.</span>
         </div>
-        {num('arrayAreaM2', 'Array area (m²)', 0.5, 0.1, 200)}
-        {num('cellEfficiency', 'Cell efficiency', 0.01, 0.05, 0.5)}
-        {num('systemDerate', 'System derate', 0.01, 0.3, 1)}
-        {num('loadW', 'Surface load (W)', 10, 0, 10000)}
-        {num('batteryCapacityKWh', 'Battery (kWh)', 1, 0.1, 1000)}
-        {num('initialSocPct', 'Initial SOC (%)', 5, 0, 100)}
-        {num('commsMarginDeg', 'DTE elevation margin (°)', 0.1, 0, 10)}
-        {num('stepMinutes', 'Sample step (min)', 5, 1, 240)}
-        <div className="field"><label>Fixed panel azimuth (°)</label><input className="input mono" type="number" min={0} max={360} value={config.fixedPanelAzimuthDeg} onChange={(e) => onChange({ ...config, fixedPanelAzimuthDeg: Number(e.target.value) })} /></div>
-        {num('durationDays', 'Mission duration (d)', 1, 1, 90)}
+        {fields.map((f) => <NumberField key={f} field={f} value={config[f] as number} onChange={setNum(f)} />)}
       </div>
       <div style={{ fontSize: 10, color: 'var(--dim)', marginTop: 14, lineHeight: 1.6 }}>
-        Power model: P = flux × area × cell efficiency × derate × max(0, cos incidence). Horizontal uses sin(elevation); vertical tracking uses cos(elevation); fixed vertical adds cos(azimuth offset). Battery integrates net power with 92% charge / 95% discharge efficiency. DTE requires Earth center above terrain + margin. No atmospheric refraction.
+        Power model: P = flux × area × cell efficiency × derate × max(0, cos incidence). Horizontal uses sin(elevation); vertical tracking uses cos(elevation); fixed vertical adds cos(azimuth offset). Battery integrates net power with 92% charge / 95% discharge efficiency on the event-aware generation timeline. DTE requires Earth center above terrain + margin. No atmospheric refraction.
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}><button className="btn primary" onClick={onClose}>Done</button></div>
     </Modal>
@@ -158,7 +173,7 @@ export function HorizonTableModal({ site, current, onClose, onExport }: { site: 
   );
 }
 
-export function ShortcutsModal({ onClose }: { onClose: () => void }) {
+export function ShortcutsModal({ onClose, onReopenWelcome }: { onClose: () => void; onReopenWelcome?: () => void }) {
   const keys: [string, string][] = [
     ['Space', 'Play / pause mission clock'],
     ['[ / ]', 'Step −1 / +1 day'],
@@ -181,6 +196,12 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
           </div>
         ))}
       </div>
+      {onReopenWelcome && (
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>New here? Reopen the welcome guide.</span>
+          <button className="btn sm" onClick={onReopenWelcome}>Reopen welcome</button>
+        </div>
+      )}
     </Modal>
   );
 }
