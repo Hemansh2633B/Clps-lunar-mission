@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
-import { GraduationCap, BookOpen } from 'lucide-react';
+import { GraduationCap, BookOpen, ListChecks } from 'lucide-react';
 import type { AppMode, GuidedScenario, LandingSite, MissionConfig, Scenario } from './types/mission';
 import { LANDING_SITES, makeCustomSite } from './data/landingSites';
 import { DEFAULT_CONFIG, analysisWindow, evaluateAt } from './engine/simulation';
@@ -20,6 +20,10 @@ import type { TerrainSiteInput } from './components/TerrainLab';
 const SpaceView = lazy(() => import('./components/SpaceView').then((m) => ({ default: m.SpaceView })));
 import { EducatorOverlay } from './components/EducatorOverlay';
 import { Onboarding } from './components/Onboarding';
+import { WorkflowGuide } from './components/WorkflowGuide';
+import { MISSION_PRESETS, CUSTOM_PRESET_ID, matchingPresetId } from './data/missionPresets';
+import { formatUtcStamp } from './utils/utc';
+import type { WorkflowStepId } from './utils/workflow';
 import { CustomSiteModal, SettingsModal, HorizonTableModal, ShortcutsModal, type CustomSiteInput } from './components/Modals';
 import { download, missionReportJSON, timeseriesCSV, horizonCSV, summaryCSV, comparisonCSV, type ComparisonRow } from './utils/export';
 
@@ -65,6 +69,8 @@ export default function App() {
   const [tourStep, setTourStep] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(() => !hasOnboarded());
+  const [workflowOpen, setWorkflowOpen] = useState(false);
+  const [exported, setExported] = useState(false);
 
   const site = sites.find((s) => s.id === selectedId) ?? sites[0];
   const win = useMemo(() => analysisWindow(baselineMs, slipDays, config.durationDays, viewDays), [baselineMs, slipDays, config.durationDays, viewDays]);
@@ -74,6 +80,10 @@ export default function App() {
   const missionSim = useSimulation(site, win.missionStart, win.missionEnd, config);
   const baselineSim = useSimulation(site, baselineMs, baselineMs + config.durationDays * DAY_MS, config);
   const events = activeSim.data?.events ?? [];
+  const presetName = useMemo(() => {
+    const id = matchingPresetId(config);
+    return id === CUSTOM_PRESET_ID ? 'Custom' : MISSION_PRESETS.find((p) => p.id === id)?.label ?? 'Custom';
+  }, [config]);
 
   const notify = useCallback((msg: string) => {
     setToast(msg);
@@ -88,7 +98,8 @@ export default function App() {
     setBaselineMs(Date.parse('2026-09-01T00:00:00Z'));
     setSlipDays(0);
     setMode('planner');
-    notify('Demo mode — illustrative terrain (not measured flight data). Explore freely.');
+    setWorkflowOpen(true);
+    notify('Demo mode — illustrative terrain (not measured flight data). Follow the guided workflow or explore freely.');
   }, [notify]);
   const startRealDem = useCallback(() => {
     markOnboarded(); setOnboardingOpen(false);
@@ -200,6 +211,7 @@ export default function App() {
     else if (!missionSim.data) { notify('Mission window is still computing.'); return; }
     else if (kind === 'timeseries') download(`chandra-timeseries-${site.id}.csv`, timeseriesCSV(missionSim.data), 'text/csv');
     else download(`chandra-summary-${site.id}.csv`, summaryCSV(missionSim.data), 'text/csv');
+    setExported(true);
     notify(`Exported ${kind}`);
   }, [site, config, missionSim.data, missionSim.loading, missionSim.error, current, timeMs, notify]);
 
@@ -209,6 +221,25 @@ export default function App() {
     else download('chandra-comparison.json', JSON.stringify(full.map((r) => ({ scenario: r.scenario, site: r.site, summary: r.sim?.summary ?? null })), null, 2), 'application/json');
     notify('Comparison exported');
   }, [notify]);
+
+  // Each guided-workflow step drives the real app, then the guide advances.
+  const handleWorkflowAction = useCallback((id: WorkflowStepId) => {
+    if (id === 'region') {
+      document.querySelector<HTMLElement>('.site-rail .site-item')?.focus();
+    } else if (id === 'date') {
+      const el = document.getElementById('mission-start-date');
+      el?.scrollIntoView({ block: 'nearest' });
+      el?.focus();
+    } else if (id === 'preset') {
+      setSettingsOpen(true);
+    } else if (id === 'results') {
+      document.querySelector<HTMLElement>('.telemetry-rail')?.scrollIntoView({ block: 'nearest' });
+    } else if (id === 'compare') {
+      pinCurrent();
+    } else if (id === 'report') {
+      handleExport('json');
+    }
+  }, [pinCurrent, handleExport]);
 
   return (
     <div className="app-shell">
@@ -257,6 +288,20 @@ export default function App() {
               onPin={pinCurrent} onClose={() => setCompareMode(false)} onExport={handleComparisonExport} mode={mode} />
           ) : (
             <>
+              {workflowOpen ? (
+                <WorkflowGuide onClose={() => setWorkflowOpen(false)} onAction={handleWorkflowAction}
+                  context={{
+                    siteName: site.shortName, startUtc: formatUtcStamp(win.missionStart), presetName,
+                    verdict: missionSim.data?.summary?.verdict ?? null, scenarioCount: scenarios.length,
+                    simReady: !!missionSim.data?.summary && !missionSim.loading,
+                    exportBlocked: !!missionSim.data?.analysis && !missionSim.data.analysis.demoEligible,
+                  }} />
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <button className="btn sm ghost" onClick={() => setWorkflowOpen(true)}><ListChecks size={12} /> Guided workflow</button>
+                  <span style={{ fontSize: 10, color: 'var(--dim)' }}>New here? Follow the six-step path from region to report.</span>
+                </div>
+              )}
               <HorizonPanorama site={site} current={current} sim={activeSim.data} mode={mode} options={panorama} onOptions={setPanorama} />
               <div className="lower-grid">
                 <PolarMap sites={sites} selected={site} current={current} onSelect={setSelectedId} onPlaceCustom={placeCustom} layers={mapLayers} onLayers={setMapLayers} />

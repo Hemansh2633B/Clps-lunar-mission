@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { FlaskConical, Mountain, X, MapPin, CalendarClock, Activity, Columns2, Download, ShieldAlert } from 'lucide-react';
+import { FlaskConical, Mountain, X, MapPin, CalendarClock, SlidersHorizontal, Activity, Columns2, Download, ShieldAlert } from 'lucide-react';
 
 interface Props {
   open: boolean;
@@ -10,9 +10,11 @@ interface Props {
 
 const STEPS = [
   { icon: MapPin, title: '1 · Select a region', body: 'Pick a landing region. Each shows its position, program, data confidence and terrain source.' },
-  { icon: CalendarClock, title: '2 · Choose a date', body: 'Set a UTC start, duration and launch delay. All times are UTC — never your local timezone.' },
-  { icon: Activity, title: '3 · Read the results', body: 'Sunlight, Earth line-of-sight, power and battery — explained in plain language, with the numbers alongside.' },
-  { icon: Columns2, title: '4 · Compare & export', body: 'Pin scenarios to compare sites and dates, then export a reproducible report with full provenance.' },
+  { icon: CalendarClock, title: '2 · Set a UTC date', body: 'Set a UTC start, duration and launch delay. All times are UTC — never your local timezone.' },
+  { icon: SlidersHorizontal, title: '3 · Choose a preset', body: 'Start from an illustrative mission profile (or tune your own). Presets are teaching assumptions, not NASA specs.' },
+  { icon: Activity, title: '4 · Read the results', body: 'Sunlight, Earth line-of-sight, power and battery — explained in plain language, with the numbers alongside.' },
+  { icon: Columns2, title: '5 · Compare scenarios', body: 'Pin scenarios to compare sites, dates and presets. Incompatible data is flagged, never ranked together.' },
+  { icon: Download, title: '6 · Export a report', body: 'Download a reproducible report with full provenance, sampling disclosure and analysis status.' },
 ];
 
 /**

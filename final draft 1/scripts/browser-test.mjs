@@ -92,6 +92,21 @@ try {
   await page.screenshot({ animations: 'disabled', path: `${OUT}/01-workspace.png` });
   assert(await page.locator('.site-item').count() >= 10, 'catalog has 10+ sites');
 
+  // Scenario A (student): the guided six-step workflow opens, shows all six steps, and
+  // advancing the first step moves to the UTC-date step. It drives the real workspace.
+  await page.getByRole('button', { name: 'Guided workflow' }).click();
+  await page.waitForSelector('[aria-label="Guided mission workflow"]');
+  const guide = page.locator('[aria-label="Guided mission workflow"]');
+  assert(await guide.locator('ol > li').count() === 6, 'guided workflow shows six steps');
+  assert(await guide.locator('text=Select a region').count() > 0, 'workflow starts at region selection');
+  await guide.getByRole('button', { name: 'Browse regions' }).click();
+  await page.waitForTimeout(300);
+  assert(await guide.locator('h3', { hasText: 'Set the UTC start date' }).count() > 0, 'workflow advances to the UTC-date step');
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/01b-guided-workflow.png` });
+  await guide.getByRole('button', { name: 'Close guided workflow' }).click();
+  await page.waitForTimeout(300);
+  assert(await page.locator('[aria-label="Guided mission workflow"]').count() === 0, 'guided workflow dismisses');
+
   await page.locator('.site-item', { hasText: 'Apollo 11' }).click();
   await page.waitForTimeout(900);
   assert(await page.locator('text=Tranquility Base').count() > 0, 'Apollo 11 selected');
@@ -378,12 +393,17 @@ try {
   assert(await page.locator('text=ILLUSTRATIVE TERRAIN').count() > 0, 'illustrative provenance state shown');
 
   // UTC mission-start selector exists and drives a recompute (no stale results).
-  const startInput = page.getByLabel('Mission start date and time (UTC)');
-  assert(await startInput.count() === 1, 'UTC mission-start selector present');
-  await startInput.fill('2027-03-01T00:00');
-  await startInput.dispatchEvent('change');
+  const startDate = page.getByLabel('Mission start date (UTC)');
+  const startTime = page.getByLabel('Mission start time (UTC)');
+  assert(await startDate.count() === 1, 'UTC mission-start date field present');
+  assert(await startTime.count() === 1, 'UTC mission-start time field present');
+  await startDate.fill('2027-03-01');
+  await startDate.dispatchEvent('change');
+  await startTime.fill('00:00');
+  await startTime.dispatchEvent('change');
   await page.waitForSelector('text=How this score is computed', { timeout: 30000 });
-  assert(await startInput.inputValue() === '2027-03-01T00:00', 'UTC start selector retains the chosen value');
+  assert(await startDate.inputValue() === '2027-03-01', 'UTC date field retains the chosen value');
+  assert(await startTime.inputValue() === '00:00', 'UTC time field retains the chosen value');
   assert(await page.locator('text=SAMPLING').count() > 0, 'sampling disclosure strip present');
 
   // Score transparency: expand the heuristic breakdown and check components + confidence.
