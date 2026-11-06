@@ -3,6 +3,8 @@ import type { AppMode, EvaluatedSample, LandingSite, MissionConfig, SimulationRe
 import { formatDuration, LIGHT_SPEED_KMS } from '../engine/constants';
 import { ProvenanceIndicator } from './ProvenanceIndicator';
 import { AnalysisStatusNotice } from './AnalysisStatusNotice';
+import { InfoTip } from './InfoTip';
+import { explainClearance, explainIllumination, explainEarthLos } from '../utils/explain';
 
 interface Props {
   site: LandingSite;
@@ -21,10 +23,10 @@ function nextEvent(events: TransitionEvent[], body: 'sun' | 'earth', timeMs: num
   return events.find((e) => e.body === body && e.timeMs > timeMs && e.visible === wantVisible) ?? null;
 }
 
-function Stat({ label, value, unit, color }: { label: string; value: string; unit?: string; color?: string }) {
+function Stat({ label, value, unit, color, tip }: { label: string; value: string; unit?: string; color?: string; tip?: string }) {
   return (
     <div className="metric sm">
-      <span className="label">{label}</span>
+      <span className="label" style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>{label}{tip && <InfoTip id={tip} />}</span>
       <span className="value" style={{ color }}>{value}{unit && <span className="unit">{unit}</span>}</span>
     </div>
   );
@@ -70,22 +72,21 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
           </div>
         </div>
 
-        {educator && (
-          <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5, background: '#fffdf7', border: '1px solid var(--border)', borderRadius: 5, padding: 10 }}>
-            {current.sunVisibility.visible ? 'The lander can see the Sun and make power.' : current.sunVisibility.reason === 'terrain' ? 'The Sun is above the mathematical horizon, but a mountain is blocking it.' : 'The Sun is below the horizon — the lander is in lunar night.'}
-            {' '}
-            {current.earthVisibility.visible ? 'Earth is above the terrain, so the lander can radio home directly.' : summary?.earthNeverVisible ? 'This site is on the far side: Earth never rises. A relay satellite is required.' : 'Earth is hidden behind terrain right now, so direct radio contact is lost.'}
+        <details open={educator} style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5, background: '#fffdf7', border: '1px solid var(--border)', borderRadius: 5, padding: '8px 10px' }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: 10.5, color: 'var(--ink-soft)', listStyle: 'none' }}>What the current sky means</summary>
+          <div style={{ marginTop: 6 }}>
+            {explainClearance('Sun', current.sunVisibility)} {explainClearance('Earth', current.earthVisibility)}
           </div>
-        )}
+        </details>
 
         <section>
           <div className="panel-title" style={{ marginBottom: 8 }}><Sun size={12} color="var(--solar)" /> Solar illumination</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <Stat label="Elevation" value={current.sun.elevationDeg.toFixed(2)} unit="deg" color="var(--solar)" />
-            <Stat label="Azimuth" value={current.sun.azimuthDeg.toFixed(1)} unit="deg" />
-            <Stat label="Terrain @ az" value={current.sunVisibility.terrainElevationDeg.toFixed(2)} unit="deg" />
-            <Stat label="Clearance" value={current.sunVisibility.clearanceDeg.toFixed(2)} unit="deg" color={current.sunVisibility.visible ? 'var(--nominal)' : 'var(--blocked)'} />
-            <Stat label="Solar flux" value={current.power.fluxWm2.toFixed(0)} unit="W/m²" />
+            <Stat label="Elevation" value={current.sun.elevationDeg.toFixed(2)} tip="sun-elevation" unit="deg" color="var(--solar)" />
+            <Stat label="Azimuth" value={current.sun.azimuthDeg.toFixed(1)} tip="sun-azimuth" unit="deg" />
+            <Stat label="Terrain @ az" value={current.sunVisibility.terrainElevationDeg.toFixed(2)} tip="horizon-elevation" unit="deg" />
+            <Stat label="Clearance" value={current.sunVisibility.clearanceDeg.toFixed(2)} tip="clearance" unit="deg" color={current.sunVisibility.visible ? 'var(--nominal)' : 'var(--blocked)'} />
+            <Stat label="Solar flux" value={current.power.fluxWm2.toFixed(0)} tip="solar-flux" unit="W/m²" />
             <Stat label="Incidence cos" value={current.power.verticalIncidence.toFixed(3)} />
           </div>
         </section>
@@ -117,11 +118,11 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
         <section>
           <div className="panel-title" style={{ marginBottom: 8 }}><Earth size={12} color="var(--earth)" /> Direct-to-Earth</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <Stat label="Elevation" value={current.earth.elevationDeg.toFixed(2)} unit="deg" color="var(--earth)" />
-            <Stat label="Azimuth" value={current.earth.azimuthDeg.toFixed(1)} unit="deg" />
-            <Stat label="Clearance" value={current.earthVisibility.clearanceDeg.toFixed(2)} unit="deg" color={current.earthVisibility.visible ? 'var(--nominal)' : 'var(--blocked)'} />
-            <Stat label="Libration lat" value={current.libration.subEarthLatitudeDeg.toFixed(2)} unit="deg" />
-            <Stat label="Libration lon" value={current.libration.subEarthLongitudeDeg.toFixed(2)} unit="deg" />
+            <Stat label="Elevation" value={current.earth.elevationDeg.toFixed(2)} tip="earth-elevation" unit="deg" color="var(--earth)" />
+            <Stat label="Azimuth" value={current.earth.azimuthDeg.toFixed(1)} tip="earth-azimuth" unit="deg" />
+            <Stat label="Clearance" value={current.earthVisibility.clearanceDeg.toFixed(2)} tip="clearance" unit="deg" color={current.earthVisibility.visible ? 'var(--nominal)' : 'var(--blocked)'} />
+            <Stat label="Libration lat" value={current.libration.subEarthLatitudeDeg.toFixed(2)} tip="libration" unit="deg" />
+            <Stat label="Libration lon" value={current.libration.subEarthLongitudeDeg.toFixed(2)} tip="libration" unit="deg" />
             <Stat label="Range" value={(current.earth.distanceKm / 1000).toFixed(1)} unit="×10³ km" />
             <Stat label="One-way light" value={(current.earth.distanceKm / LIGHT_SPEED_KMS).toFixed(2)} unit="s" />
             <Stat label="Comms margin" value={config.commsMarginDeg.toFixed(1)} unit="deg" />
@@ -136,14 +137,17 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
           {summary ? (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
-                <Stat label="Sunlit" value={summary.illuminationPct.toFixed(0)} unit="%" color="var(--solar)" />
-                <Stat label="DTE" value={summary.dtePct.toFixed(0)} unit="%" color="var(--earth)" />
-                <Stat label="Both" value={summary.combinedPct.toFixed(0)} unit="%" color="var(--nominal)" />
+                <Stat label="Sunlit" value={summary.illuminationPct.toFixed(0)} tip="illumination" unit="%" color="var(--solar)" />
+                <Stat label="DTE" value={summary.dtePct.toFixed(0)} tip="dte" unit="%" color="var(--earth)" />
+                <Stat label="Both" value={summary.combinedPct.toFixed(0)} tip="combined" unit="%" color="var(--nominal)" />
               </div>
+              <p style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.5, margin: '0 0 10px' }}>
+                {explainIllumination(summary.illuminationPct)} {explainEarthLos(summary.dtePct, summary.earthNeverVisible)}
+              </p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <Stat label="Longest eclipse" value={formatDuration(summary.longestEclipseHours)} />
                 <Stat label="Longest DTE gap" value={formatDuration(summary.longestDteGapHours)} />
-                <Stat label="Min battery" value={summary.minBatterySocPct.toFixed(0)} unit="%" color={summary.minBatterySocPct <= 0 ? 'var(--blocked)' : 'var(--nominal)'} />
+                <Stat label="Min battery" value={summary.minBatterySocPct.toFixed(0)} tip="soc" unit="%" color={summary.minBatterySocPct <= 0 ? 'var(--blocked)' : 'var(--nominal)'} />
                 <Stat label="Energy" value={summary.selectedEnergyKWh.toFixed(1)} unit="kWh" />
               </div>
               <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, padding: 10, border: '1px solid var(--border)', borderRadius: 6, background: '#fffdf7' }}>
