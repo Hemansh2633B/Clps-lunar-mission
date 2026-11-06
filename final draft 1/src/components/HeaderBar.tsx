@@ -61,10 +61,10 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
             <button type="button" role="radio" aria-checked={mode === 'planner'} onClick={() => onMode('planner')}><Gauge size={13} /> FLIGHT OPS</button>
             <button type="button" role="radio" aria-checked={mode === 'educator'} onClick={() => onMode('educator')}><GraduationCap size={13} /> EDUCATOR</button>
           </div>
-          <button className={`btn ${spaceActive ? 'active' : ''}`} onClick={onSpace}><Orbit size={14} /> Space <span className="kbd">O</span></button>
-          <button className={`btn ${terrainActive ? 'active' : ''}`} onClick={onTerrain}><Box size={14} /> Terrain <span className="kbd">T</span></button>
-          <button className={`btn ${compareMode && !terrainActive && !spaceActive ? 'active' : ''}`} onClick={onCompare}><Columns2 size={14} /> Compare <span className="kbd">C</span></button>
-          <button className="btn" onClick={onGuide}><BookOpen size={14} /> Guide <span className="kbd">G</span></button>
+          <button className={`btn ${spaceActive ? 'active' : ''}`} onClick={onSpace} title="Space views — planet time-lapse and fleet hangar" aria-label="Space views"><Orbit size={14} /> Space <span className="kbd">O</span></button>
+          <button className={`btn ${terrainActive ? 'active' : ''}`} onClick={onTerrain} title="Terrain analysis — 3D lab and real DEM workflow" aria-label="Terrain analysis"><Box size={14} /> Terrain <span className="kbd">T</span></button>
+          <button className={`btn ${compareMode && !terrainActive && !spaceActive ? 'active' : ''}`} onClick={onCompare} title="Comparison — pinned scenarios, confidence-tiered ranking" aria-label="Comparison"><Columns2 size={14} /> Compare <span className="kbd">C</span></button>
+          <button className="btn" onClick={onGuide} title="Field Guide — guided stories and searchable glossary" aria-label="Field Guide"><BookOpen size={14} /> Guide <span className="kbd">G</span></button>
           <div ref={ref} style={{ position: 'relative' }}>
             <button className="btn primary" onClick={() => setExportOpen((v) => !v)}><Download size={14} /> Export</button>
             {exportOpen && (

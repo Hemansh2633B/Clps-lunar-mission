@@ -7,6 +7,7 @@ import { DAY_MS, formatCoord } from '../engine/constants';
 import type { ComparisonRow } from '../utils/export';
 import { ProvenanceIndicator, provenanceOf } from './ProvenanceIndicator';
 import { AnalysisStatusNotice, AnalysisStatusBadge } from './AnalysisStatusNotice';
+import { UtcDateTimeInput } from './UtcDateTimeInput';
 
 const CONF_RANK: Record<string, number> = { measured: 3, 'region-approximate': 2, illustrative: 1, synthetic: 0, mixed: 1 };
 const CONF_LABEL: Record<string, string> = { measured: 'measured DEM', 'region-approximate': 'region approx.', illustrative: 'illustrative', synthetic: 'synthetic demo', mixed: 'mixed' };
@@ -50,8 +51,8 @@ function ScenarioCard({ scenario, sites, onUpdate, onRemove, best, indicative }:
         <select className="input" value={scenario.siteId} onChange={(e) => onUpdate(scenario.id, { siteId: e.target.value })}>
           {sites.map((s) => <option key={s.id} value={s.id}>{s.shortName}</option>)}
         </select>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px', gap: 6 }}>
-          <input className="input mono" type="datetime-local" title="Scenario start (UTC)" aria-label="Scenario start date and time (UTC)" value={new Date(scenario.startMs).toISOString().slice(0, 16)} onChange={(e) => { const v = e.target.value; if (!v) return; const t = Date.parse(`${v}:00Z`); if (Number.isFinite(t)) onUpdate(scenario.id, { startMs: t }); }} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px', gap: 6, alignItems: 'start' }}>
+          <UtcDateTimeInput valueMs={scenario.startMs} onChange={(t) => onUpdate(scenario.id, { startMs: t })} ariaPrefix="Scenario start" />
           <select className="input" value={scenario.config.durationDays} onChange={(e) => onUpdate(scenario.id, { config: { ...scenario.config, durationDays: Number(e.target.value) } })} aria-label="Scenario duration days">
             {[3, 7, 10, 14, 30, 90].map((d) => <option key={d} value={d}>{d} d</option>)}
           </select>

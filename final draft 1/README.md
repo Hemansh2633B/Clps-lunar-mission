@@ -2,7 +2,7 @@
 
 An interactive, production-grade workspace for comparing **solar illumination**, **terrain occlusion**, and **Direct-to-Earth (DTE) communication** windows at lunar south-pole landing sites — built for the CLPS / Artemis launch-slip trade study.
 
-The app boots directly into a mission-operations workspace. There is no marketing page. Every panel is live: scrub time, drag the mission window to simulate launch delay, pin up to four site + date + array scenarios, and export CSV / JSON reports.
+The app boots into a mission-operations workspace after a short, dismissible first-run welcome that offers an explicit choice between a labeled demo and configuring real DEM data (never a silent synthetic substitution). A guided six-step workflow — region → UTC date → mission preset → plain-language results → comparison → report — is available from demo mode and a workspace launcher. There is no marketing page. Every panel is live: scrub time, drag the mission window to simulate launch delay, pin up to four site + date + array scenarios, and export CSV / JSON reports.
 
 ![Workspace](screenshots/01-workspace.png)
 
@@ -34,8 +34,9 @@ Production build and checks:
 
 ```bash
 npm run build        # tsc + vite build
-npm test             # 77 Vitest tests: engine, SPICE ephemeris validation, frame gating, sampling/battery, catalogue, export integrity, DEM-profile, vehicles
-npm run test:python  # 88 backend/DEM/horizon/downloader/API-error/lunar-frame tests
+npm test             # 151 Vitest tests (17 files): engine, SPICE-reference ephemeris validation, frame allowlist, transition stress, event-aware energy, analysis status, sampling/battery, catalogue, presets, explanations, UTC, workflow, simulation client, export integrity, DEM-profile, vehicles
+npm run test:python  # 92 passed + 4 skipped: backend/DEM/horizon/downloader/API-error/lunar-frame tests.
+                     # The 4 skips are SPICE-kernel-gated (kernels not fetched) — SKIPPED, never counted as passed.
 npm run test:geometry# Three.js geometry / synthetic / horizon checks
 npm run test:parity  # TypeScript ↔ Python horizon ray-marcher parity
 npm run test:browser # Playwright console + Terrain Lab + Space views E2E (incl. mobile)
@@ -51,6 +52,12 @@ npm run build
 .venv/bin/python -m backend.server --dem-config data/verification/lola_verification_config.json --port 8001
 npm run test:real-dem   # in another terminal; tests http://localhost:8001
 ```
+
+Continuous integration (`.github/workflows/ci.yml`, repo root): a **quality** job runs
+typecheck, build, unit, geometry, parity and pytest on every push/PR (kernel-gated SPICE
+tests are reported as SKIPPED, never passed); an optional **spice-validation** job fetches
+checksummed GitHub-mirror kernels and runs the real independent SPICE frame tests; a
+**browser** job runs the Playwright E2E against a live dev server + terrain API.
 
 > Paths contain a space (`final draft 1`). Always quote them in shell commands.
 
@@ -255,19 +262,19 @@ Heavy window simulations run in a dedicated Web Worker with an LRU result cache,
 ### Coordinates & elevations
 - Site latitude/longitude are the real published values requested in the challenge. Elevations are **representative** values for context, not surveyed lander altitudes.
 
-### Power & survival (idealized engineering model)
+### Power & battery (idealized engineering model)
 - Solar flux = 1361 W/m² / (distance in AU)².
 - `P = flux × area × cell efficiency × system derate × max(0, cos incidence)`.
   - Horizontal deck: incidence factor `sin(elevation)`.
   - Vertical mast (azimuth tracking): `cos(elevation)` — the key reason vertical arrays win at 89°S.
   - Vertical mast (fixed): `cos(elevation) × cos(azimuth offset)`.
-- Battery state-of-charge integrates net power with 92% charge / 95% discharge efficiency. Depletion drives a **SURVIVAL RISK** verdict.
-- Feasibility score weights combined visibility (45%), illumination (20%), DTE (15%), and survival (20%). Verdicts: `NOMINAL`, `CONDITIONAL`, `HIGH RISK`, `SURVIVAL RISK`, `RELAY REQUIRED`.
+- Battery state-of-charge integrates net power on the event-aware generation timeline (adaptive Simpson quadrature between refined Sun events) with 92% charge / 95% discharge efficiency. Depletion drives an **ENERGY DEFICIT** verdict — an energy-balance result, not spacecraft survival.
+- Feasibility score weights combined visibility (45%), illumination (20%), DTE (15%), and energy (20%). It is an **application-defined heuristic, not a NASA methodology**. Verdicts: `NOMINAL`, `CONDITIONAL`, `HIGH RISK`, `ENERGY DEFICIT`, `RELAY REQUIRED`.
 
 ### Terrain Lab limitations
 - GPU shadow maps are a **visualization**, not a validated illumination solver. Grazing angles can show aliasing/bias artifacts.
 - The DEM crop does not include occluders outside its radius. Horizon ray-marching reports NoData coverage and never invents terrain; a disclosed edge inset avoids artificial boundary NoData.
-- DEM body-frame realizations (e.g. `MOON_ME / DE421`) are **not automatically reconciled** with the console’s IAU 2015 ephemeris frame. Sites created from DEM masks carry a frame-check warning.
+- DEM body-frame realizations are matched against an **explicit allowlist** (MOON_ME / MOON_PA DE421, IAU 2015). Allow-listed frames are rotated into the console’s IAU 2015 frame with a disclosed residual (≤0.0039°, constant approximation validated 2020–2035); unknown realizations are **blocked from quantitative mission use**, never silently coerced.
 - DEM horizon import preserves azimuth samples, but vertical accuracy is not inferred from DEM metadata. The displayed ± value for DEM masks is azimuth sampling half-width, not a certified elevation error.
 
 ### Verified behaviors (unit tests)
@@ -278,7 +285,7 @@ Heavy window simulations run in a dedicated Web Worker with an LRU result cache,
 - Terrain blocks objects that are geometrically above 0°; crossing refinement is sub-minute.
 - **DEM horizon import**: samples preserved verbatim, no clamp/ripple, periodic interpolation at native bin resolution, synthetic labeling, incomplete-real-mask blocking, provenance in JSON/CSV exports.
 - **Horizon parity**: TypeScript and Python ray-marchers agree on synthetic grids, coverage, edge inset, and obstacle ranges.
-- **Battery survival**: zero-crossing is interpolated inside a sample interval; depletion hours count only the post-depletion fraction.
+- **Battery energy balance**: zero-crossing is interpolated inside an interval; depletion hours count only the post-depletion fraction; event-aware integration converges across coarse/medium/fine partitions.
 - **Terrain-relative power**: a Sun visible below the reference tangent (depressed DEM horizon) still drives a vertical mast; horizontal decks correctly receive zero.
 - **Custom 8-sector masks**: edited sector values are exact at 0/45/…/315° and wrap periodically; no illustrative ripple is added.
 - **API robustness**: unknown endpoints, wrong methods, and unexpected backend failures return actionable JSON errors with security headers.

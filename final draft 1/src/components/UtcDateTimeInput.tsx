@@ -6,6 +6,8 @@ interface Props {
   onChange: (ms: number) => void;
   /** Optional id for the date field (e.g. a workflow focus target). */
   id?: string;
+  /** Accessible-name prefix, e.g. "Mission start" or "Scenario start". */
+  ariaPrefix?: string;
 }
 
 /**
@@ -14,7 +16,7 @@ interface Props {
  * them as UTC, so the entered wall-clock value is the same instant in every timezone.
  * Invalid or cleared input reverts to the last valid value on blur and explains why.
  */
-export function UtcDateTimeInput({ valueMs, onChange, id }: Props) {
+export function UtcDateTimeInput({ valueMs, onChange, id, ariaPrefix = 'Mission start' }: Props) {
   const autoId = useId();
   const dateId = id ?? `utc-date-${autoId}`;
   const timeId = `utc-time-${autoId}`;
@@ -53,14 +55,14 @@ export function UtcDateTimeInput({ valueMs, onChange, id }: Props) {
       <label htmlFor={dateId} className="mono" style={{ fontSize: 10, color: 'var(--muted)' }}>Start (UTC)</label>
       <input
         id={dateId} type="date" className="input" style={{ ...fieldStyle, width: 130 }}
-        value={dateDraft} aria-label="Mission start date (UTC)" aria-describedby={error ? errId : undefined}
+        value={dateDraft} aria-label={`${ariaPrefix} date (UTC)`} aria-describedby={error ? errId : undefined}
         aria-invalid={error ? true : undefined}
         onChange={(e) => { const v = e.target.value; setDateDraft(v); commit(v, timeDraft); }}
         onBlur={() => { if (!dateDraft || error) revert(); }}
       />
       <input
         id={timeId} type="time" className="input" style={{ ...fieldStyle, width: 92 }} step={60}
-        value={timeDraft} aria-label="Mission start time (UTC)" aria-describedby={error ? errId : undefined}
+        value={timeDraft} aria-label={`${ariaPrefix} time (UTC)`} aria-describedby={error ? errId : undefined}
         aria-invalid={error ? true : undefined}
         onChange={(e) => { const v = e.target.value; setTimeDraft(v); commit(dateDraft, v); }}
         onBlur={() => { if (!timeDraft || error) revert(); }}

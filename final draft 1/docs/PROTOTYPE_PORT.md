@@ -34,4 +34,4 @@ This document maps every working capability from the repository’s `prototype/`
 
 ## Scientific boundary
 
-The prototype’s caution remains: GPU shadow maps are a visualization, not a validated illumination solver. DEM body-frame realizations (e.g. MOON_ME/DE421) and the console’s IAU 2015 ephemeris frame are not automatically reconciled. Terrain Lab labels this, and mission sites created from DEM masks carry a frame-check warning.
+The prototype’s caution remains: GPU shadow maps are a visualization, not a validated illumination solver. Since v1.7, DEM body-frame realizations are matched against an explicit allowlist (MOON_ME / MOON_PA DE421, IAU 2015): allow-listed frames are rotated into the console’s IAU 2015 frame with a disclosed constant-correction residual (validated 2020–2035), while unknown realizations are blocked from quantitative mission use and labeled FRAME UNVERIFIED — never silently coerced.

@@ -413,6 +413,24 @@ try {
   assert(await startTime.inputValue() === '00:00', 'UTC time field retains the chosen value');
   assert(await page.locator('text=SAMPLING').count() > 0, 'sampling disclosure strip present');
 
+  // Multi-timezone check: the same UTC date+time must mean the same mission instant in
+  // a browser running in a different local timezone (Asia/Kolkata, UTC+5:30).
+  const tzContext = await browser.newContext({ timezoneId: 'Asia/Kolkata', viewport: { width: 1600, height: 1000 } });
+  const tzPage = await tzContext.newPage();
+  tzPage.setDefaultTimeout(45000);
+  await tzPage.addInitScript(() => localStorage.setItem('chandra-onboarded-v1', '1'));
+  await tzPage.goto(BASE, { waitUntil: 'load' });
+  await tzPage.waitForSelector('.app-header .display');
+  await tzPage.getByLabel('Mission start date (UTC)').fill('2027-03-01');
+  await tzPage.getByLabel('Mission start time (UTC)').fill('00:00');
+  await tzPage.waitForSelector('text=How this score is computed', { timeout: 30000 });
+  const mainSlip = (await page.locator('text=slip →').innerText()).trim();
+  const tzSlip = (await tzPage.locator('text=slip →').innerText()).trim();
+  assert(mainSlip === tzSlip && mainSlip.includes('2027-03-01'), `UTC start is timezone-independent (${mainSlip} vs ${tzSlip})`);
+  // Do NOT close tzContext mid-run: Sparticuz Chromium runs --single-process, and closing
+  // a second context can tear down the shared renderer (killing the main page too).
+  // The idle tz page is cleaned up by the final browser.close() in `finally`.
+
   // Score transparency: expand the heuristic breakdown and check components + confidence.
   await page.locator('text=How this score is computed').click();
   await page.waitForTimeout(300);
