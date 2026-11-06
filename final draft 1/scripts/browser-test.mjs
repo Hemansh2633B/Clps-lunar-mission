@@ -9,10 +9,12 @@ const BASE = process.env.BASE_URL || 'http://localhost:5173/';
 const OUT = 'screenshots';
 mkdirSync(OUT, { recursive: true });
 
-// The sandbox blocks Playwright's CDN. @sparticuz/chromium ships an npm-distributed
-// binary plus Amazon Linux 2023 shared libraries; extract them once if missing.
+// CI mode uses Playwright's own bundled Chromium (portable across Linux distros).
+// The sandbox blocks Playwright's CDN, so locally we fall back to @sparticuz/chromium
+// (an npm-distributed binary + Amazon Linux 2023 shared libraries, extracted once).
+const CI_BROWSER = process.env.CHANDRA_BROWSER_CI === '1';
 const LIB = '/tmp/al2023/lib';
-if (!existsSync(join(LIB, 'libnss3.so'))) {
+if (!CI_BROWSER && !existsSync(join(LIB, 'libnss3.so'))) {
   const bin = 'node_modules/@sparticuz/chromium/bin';
   for (const [file, dir] of [['al2023.tar.br', '/tmp/al2023'], ['fonts.tar.br', '/tmp/fonts']]) {
     mkdirSync(dir, { recursive: true });
@@ -22,13 +24,14 @@ if (!existsSync(join(LIB, 'libnss3.so'))) {
   }
 }
 
-const exe = process.env.CHROMIUM_PATH || (await sparticuz.executablePath());
-const browser = await pw.launch({
-  executablePath: exe,
-  args: sparticuz.args,
-  headless: true,
-  env: { ...process.env, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH || '/tmp/al2023/lib', FONTCONFIG_PATH: '/tmp/fonts' },
-});
+const browser = CI_BROWSER
+  ? await pw.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] })
+  : await pw.launch({
+      executablePath: process.env.CHROMIUM_PATH || (await sparticuz.executablePath()),
+      args: sparticuz.args,
+      headless: true,
+      env: { ...process.env, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH || '/tmp/al2023/lib', FONTCONFIG_PATH: '/tmp/fonts' },
+    });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 page.setDefaultTimeout(45000);
 const consoleErrors = [];
@@ -76,6 +79,15 @@ try {
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await page.waitForSelector('.app-header .display');
   assert(await page.locator('.app-header .display').innerText().then((t) => t.includes('CHANDRA')), 'header brand renders');
+  // First-run onboarding: verify it offers the demo / real-DEM choice, capture it, then
+  // dismiss (Skip keeps the default workspace state for the rest of the flow).
+  if (await page.locator('text=Welcome to CHANDRA').count()) {
+    assert(await page.locator('text=Explore demo mode').count() > 0, 'onboarding offers demo mode');
+    assert(await page.locator('text=Analyze real DEM data').count() > 0, 'onboarding offers real DEM mode');
+    await page.screenshot({ animations: 'disabled', path: `${OUT}/00-onboarding.png` });
+    await page.locator('button', { hasText: 'Skip for now' }).click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForTimeout(1200);
   await page.screenshot({ animations: 'disabled', path: `${OUT}/01-workspace.png` });
   assert(await page.locator('.site-item').count() >= 10, 'catalog has 10+ sites');
@@ -348,11 +360,11 @@ try {
   await page.locator('.site-item', { hasText: 'Shackleton Rim' }).click();
   await page.waitForTimeout(600);
 
-  // Artemis III tab lists exactly the nine NASA Oct-2024 candidate regions.
-  await page.getByRole('button', { name: 'Artemis III', exact: true }).click();
+  // The 2024 Regions tab lists exactly the nine NASA Oct-2024 candidate regions.
+  await page.getByRole('button', { name: '2024 Regions', exact: true }).click();
   await page.waitForTimeout(300);
   const artemisCount = await page.locator('.site-item').count();
-  assert(artemisCount === 9, `Artemis III tab shows nine regions (got ${artemisCount})`);
+  assert(artemisCount === 9, `2024 Regions tab shows nine regions (got ${artemisCount})`);
   for (const region of ['Cabeus B', 'Haworth', 'Malapert', 'Mouton', 'Nobile', 'de Gerlache', 'Slater']) {
     assert(await page.locator('.site-item', { hasText: region }).count() > 0, `Artemis region present: ${region}`);
   }
