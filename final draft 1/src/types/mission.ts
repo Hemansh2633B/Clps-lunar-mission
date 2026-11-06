@@ -162,6 +162,21 @@ export interface TransitionEvent {
   visible: boolean;
 }
 
+export interface UnresolvedInterval { startMs: number; endMs: number; body: BodyKind | 'combined' }
+
+/** Reliability disclosure for the adaptive visibility-transition detector. */
+export interface TransitionDiagnostics {
+  nodeBudgetPerInterval: number;
+  minStepMs: number;
+  rateBoundDegPerHour: number;
+  budgetExhausted: boolean;
+  exhaustedIntervals: number;
+  fallbackUsed: boolean;
+  unresolvedIntervals: UnresolvedInterval[];
+  nodesEvaluated: number;
+  resolutionStatus: 'resolved' | 'fallback-resolved' | 'degraded';
+}
+
 export interface MissionSummary {
   startMs: number;
   endMs: number;
@@ -210,6 +225,8 @@ export interface SimulationResult {
   summary: MissionSummary;
   computeMs: number;
   sampling: SamplingInfo;
+  /** Reliability of the adaptive transition detection (budget/fallback/unresolved). */
+  transitionDiagnostics: TransitionDiagnostics;
 }
 
 export interface Scenario {

@@ -75,9 +75,9 @@ export function simulateMission(site: LandingSite, startMs: number, endMs: numbe
       ? 'uniform; step coarsened to respect the 20,000-sample cap; adaptive transition refinement'
       : 'uniform; adaptive transition refinement',
   };
-  const events = findTransitions(site, config, samples);
+  const { events, diagnostics: transitionDiagnostics } = findTransitions(site, config, samples);
   const summary = summarizeMission(samples, events, config, startMs, endMs, sampling, site);
-  return { site, config, samples, events, summary, computeMs: performance.now() - t0, sampling };
+  return { site, config, samples, events, summary, computeMs: performance.now() - t0, sampling, transitionDiagnostics };
 }
 
 export function simulationKey(site: LandingSite, startMs: number, endMs: number, config: MissionConfig): string {
