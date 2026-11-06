@@ -29,6 +29,20 @@ export function toCSV(rows: Record<string, unknown>[]): string {
   return lines.join('\n');
 }
 
+/**
+ * Every horizon in CHANDRA is a LOCAL (landing-centered) horizon. The regional PGDA
+ * distant-horizon products were not available, so no regional horizon is fabricated.
+ * This disclosure keeps reports consistent with the "Local horizon" UI label.
+ */
+export function localHorizonDisclosure(t: LandingSite['terrain']): string {
+  const reach = t.horizonRadiusKm ?? t.radiusKm;
+  const reachNote = reach != null ? ` (horizon reach ~${reach} km)` : '';
+  if (t.kind === 'dem' && !t.synthetic) {
+    return `LOCAL HORIZON — terrain occlusion is ray-marched from the local elevation crop${reachNote}; obstructions beyond that radius are not captured. This is NOT a regional distant-horizon model.`;
+  }
+  return `LOCAL HORIZON — the horizon is a landing-centered ${t.synthetic ? 'synthetic demo' : 'illustrative'} mask${reachNote}, not a measured regional distant-horizon model.`;
+}
+
 /** Collect honest, reproducible warnings for a site + result. */
 export function reportWarnings(site: LandingSite, sim: SimulationResult | null): string[] {
   const t = site.terrain;
@@ -43,6 +57,7 @@ export function reportWarnings(site: LandingSite, sim: SimulationResult | null):
   if (t.kind === 'dem' && !t.synthetic && !t.frameVerified) w.push('FRAME UNVERIFIED — terrain reference frame not confirmed compatible with the IAU 2015 ephemeris frame; quantitative mission visibility is blocked.');
   if (t.kind === 'dem' && !t.synthetic && (t.coveragePercent ?? 100) < 100) w.push(`Incomplete ray coverage (${(t.coveragePercent ?? 0).toFixed(1)}%) — quantitative mission visibility is blocked.`);
   if (t.kind === 'dem' && !t.synthetic && t.frameVerified) w.push(`Frame corrected ${t.frameTransform?.toUpperCase()} → IAU with a constant rotation; disclosed residual ≤ ${(t.frameResidualDeg ?? frameResidualDeg(t.frameTransform ?? null)).toFixed(4)}° (~120 m). Not a time-dependent rigorous transformation.`);
+  w.push(localHorizonDisclosure(t));
   if (conf !== 'measured') w.push(`Data confidence is "${conf}", not measured — do not treat the feasibility score as a measured-terrain ranking.`);
   w.push('Feasibility score is an application-defined heuristic, NOT a NASA methodology.');
   w.push('Earth visibility is geometric line-of-sight only — NOT an RF link budget.');
@@ -104,6 +119,8 @@ export function missionReportJSON(site: LandingSite, config: MissionConfig, sim:
       coveragePercent: t.coveragePercent ?? null,
       verticalUncertaintyM: t.verticalUncertaintyM ?? null,
       analysisScale: t.analysisScale ?? 'local',
+      horizonScale: 'LOCAL HORIZON',
+      horizonScaleNote: localHorizonDisclosure(t),
       angularUncertaintyDeg: t.uncertaintyDeg,
     },
     sampling: sim?.sampling ?? null,
@@ -133,7 +150,7 @@ export function missionReportJSON(site: LandingSite, config: MissionConfig, sim:
     product: 'CHANDRA mission planning report',
     schemaVersion: '1.7.0-product',
     generatedAt: new Date().toISOString(),
-    disclaimer: `Ephemeris: astronomy-engine + IAU 2015 Moon rotation. ${terrainDisclaimer} Power: idealized cosine model with system derate. Geometric center-of-disk LOS (not an RF link budget); no atmospheric refraction. Feasibility score is an application-defined heuristic, not a NASA methodology. Data confidence: ${conf}.`,
+    disclaimer: `Ephemeris: astronomy-engine + IAU 2015 Moon rotation. ${terrainDisclaimer} Horizon: LOCAL (landing-centered), not a regional distant-horizon model. Power: idealized cosine model with system derate. Geometric center-of-disk LOS (not an RF link budget); no atmospheric refraction. Feasibility score is an application-defined heuristic, not a NASA methodology. Data confidence: ${conf}.`,
     site,
     config,
     current: { ...current, mjd: mjd(current.timeMs) },

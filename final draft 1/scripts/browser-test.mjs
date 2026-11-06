@@ -107,13 +107,20 @@ try {
   await page.waitForTimeout(300);
   assert(await page.locator('[aria-label="Guided mission workflow"]').count() === 0, 'guided workflow dismisses');
 
+  // Accessibility: the visual charts expose text alternatives (not visual/color-only),
+  // and the time scrubber is a labelled, keyboard-operable slider.
+  assert(await page.locator('svg[aria-label*="Local horizon panorama"]').count() > 0, 'panorama chart has a text alternative');
+  assert(await page.locator('svg[aria-label*="Mission"]').count() > 0, 'timeline chart has a text alternative');
+  assert(await page.locator('canvas[aria-label*="Stereographic map"]').count() > 0, 'polar map has a text alternative');
+  assert(await page.getByLabel('Mission time scrubber').count() === 1, 'time scrubber is labelled + keyboard-operable');
+
   await page.locator('.site-item', { hasText: 'Apollo 11' }).click();
   await page.waitForTimeout(900);
   assert(await page.locator('text=Tranquility Base').count() > 0, 'Apollo 11 selected');
   await page.screenshot({ animations: 'disabled', path: `${OUT}/02-apollo11.png` });
 
   await page.locator('.site-item', { hasText: "Chang'e 4" }).click();
-  await page.waitForTimeout(900);
+  await page.waitForSelector('text=NEVER', { timeout: 20000 }); // wait for the mission summary, not a fixed delay
   assert(await page.locator('text=NEVER').count() > 0, 'far side reports NEVER');
   await page.screenshot({ animations: 'disabled', path: `${OUT}/03-farside.png` });
 

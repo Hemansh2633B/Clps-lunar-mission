@@ -402,3 +402,10 @@ input[type="range"].earth::-webkit-slider-thumb { background: var(--lagoon); }
   .planet-hud-top { max-width: calc(100% - 24px); }
   .planet-toggles { top: auto; bottom: 8px; right: 8px; }
 }
+
+/* Screen-reader-only: present for assistive tech, invisible on screen. Used for
+   text alternatives to the SVG charts so non-visual users get the same information. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}

@@ -134,7 +134,9 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions }
         </div>
       </div>
       <div style={{ position: 'relative', background: 'radial-gradient(ellipse at 50% 120%, #f6ead2 0%, #f7f1e6 70%)' }}>
-        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', display: 'block', cursor: 'crosshair' }} onMouseMove={handleMove} onMouseLeave={() => setHover(null)} onClick={() => { if (hover) setLocked(locked ? null : { az: hover.az, el: hover.el }); }}>
+        <svg viewBox={`0 0 ${W} ${H}`} role="img"
+          aria-label={`Local horizon panorama. Sun at ${current.sun.azimuthDeg.toFixed(0)} degrees azimuth and ${current.sun.elevationDeg.toFixed(1)} degrees elevation, ${current.sunVisibility.visible ? 'visible' : 'below the horizon or terrain-occulted'}. Earth at ${current.earth.azimuthDeg.toFixed(0)} degrees azimuth and ${current.earth.elevationDeg.toFixed(1)} degrees elevation, ${current.earthVisibility.visible ? 'visible, direct-to-Earth open' : 'not visible'}. A numeric horizon table is available from the site brief.`}
+          style={{ width: '100%', display: 'block', cursor: 'crosshair' }} onMouseMove={handleMove} onMouseLeave={() => setHover(null)} onClick={() => { if (hover) setLocked(locked ? null : { az: hover.az, el: hover.el }); }}>
           <defs>
             <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#f7f4ee" />

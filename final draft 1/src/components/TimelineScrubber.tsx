@@ -87,6 +87,9 @@ export function TimelineScrubber(props: Props) {
   const mx1 = xOf(win.missionEnd);
   const combinedDelta = missionSummary && baselineSummary ? missionSummary.combinedPct - baselineSummary.combinedPct : null;
   const energyDelta = missionSummary && baselineSummary ? missionSummary.selectedEnergyKWh - baselineSummary.selectedEnergyKWh : null;
+  const a11ySummary = missionSummary
+    ? `Mission window: ${missionSummary.illuminationPct.toFixed(0)} percent sunlit, ${missionSummary.dtePct.toFixed(0)} percent Earth line-of-sight, ${missionSummary.combinedPct.toFixed(0)} percent both at once. Longest eclipse ${missionSummary.longestEclipseHours.toFixed(1)} hours; longest communications gap ${missionSummary.longestDteGapHours.toFixed(1)} hours. Verdict ${missionSummary.verdict}. Use the time scrubber slider below to move through the window.`
+    : 'Mission timeline with three tracks: sunlight and power, direct-to-Earth communications, and combined mission viability. No computed window yet.';
 
   return (
     <section className="panel" style={{ flexShrink: 0 }}>
@@ -111,6 +114,7 @@ export function TimelineScrubber(props: Props) {
         <svg
           ref={svgRef}
           viewBox={`0 0 ${W} ${H}`}
+          role="img" aria-label={a11ySummary}
           style={{ width: '100%', display: 'block', cursor: 'crosshair' }}
           onMouseMove={(e) => setHoverT(tOfX(e.clientX))}
           onMouseLeave={() => setHoverT(null)}
@@ -153,7 +157,7 @@ export function TimelineScrubber(props: Props) {
         {loading && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(243,230,208,.6)', fontSize: 11, color: 'var(--ink-soft)' }} className="pulse">Recomputing window…</div>}
       </div>
       <div style={{ padding: '0 12px 6px' }}>
-        <input type="range" min={win.startMs} max={win.endMs} step={60000} value={timeMs} onChange={(e) => onTime(Number(e.target.value))} aria-label="Mission time scrubber" />
+        <input type="range" min={win.startMs} max={win.endMs} step={60000} value={timeMs} onChange={(e) => onTime(Number(e.target.value))} aria-label="Mission time scrubber" aria-valuetext={formatUTC(timeMs)} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '7px 12px', borderTop: '1px solid var(--border)', background: 'var(--panel-2)', flexWrap: 'wrap' }}>
