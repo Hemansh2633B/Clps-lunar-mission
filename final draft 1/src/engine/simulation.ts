@@ -42,6 +42,14 @@ export function evaluateAt(site: LandingSite, timeMs: number, config: MissionCon
 
 export const MAX_SAMPLES = 20_000;
 
+/** Coarse phase progress for long windows. Fractions are approximate phase weights,
+ *  not precise timing — the sampling loop dominates, refinement/integration follow. */
+export interface SimulationProgress {
+  phase: 'sampling' | 'transitions' | 'energy' | 'summary';
+  fraction: number;
+}
+export type ProgressCallback = (p: SimulationProgress) => void;
+
 /**
  * Sample the mission window uniformly, preserving BOTH endpoints and the full
  * requested interval. If the requested step would exceed MAX_SAMPLES, the step is
@@ -63,7 +71,7 @@ function blockedResult(site: LandingSite, config: MissionConfig, analysis: Analy
   return { site, config, samples: [], events: [], summary: null, computeMs: performance.now() - t0, sampling: EMPTY_SAMPLING, transitionDiagnostics: EMPTY_TRANSITION_DIAG, analysis };
 }
 
-export function simulateMission(site: LandingSite, startMs: number, endMs: number, config: MissionConfig): SimulationResult {
+export function simulateMission(site: LandingSite, startMs: number, endMs: number, config: MissionConfig, onProgress?: ProgressCallback): SimulationResult {
   const t0 = performance.now();
   // Defensive sanitization: invalid numeric values never propagate into a calculation.
   const cfg = sanitizeConfig(config);
@@ -85,11 +93,13 @@ export function simulateMission(site: LandingSite, startMs: number, endMs: numbe
     const samples: EvaluatedSample[] = [];
     let maxGapMs = 0;
     let prev = startMs;
+    const progressEvery = Math.max(1, Math.floor(count / 24));
     for (let i = 0; i < count; i++) {
       const timeMs = i === count - 1 ? endMs : startMs + i * effectiveStepMs;
       if (i > 0) maxGapMs = Math.max(maxGapMs, timeMs - prev);
       prev = timeMs;
       samples.push(evaluateAt(site, timeMs, cfg));
+      if (onProgress && i % progressEvery === 0) onProgress({ phase: 'sampling', fraction: (i / count) * 0.6 });
     }
     const sampling: SamplingInfo = {
       requestedStepMinutes,
@@ -101,12 +111,15 @@ export function simulateMission(site: LandingSite, startMs: number, endMs: numbe
         ? 'uniform; step coarsened to respect the 20,000-sample cap; adaptive transition refinement'
         : 'uniform; adaptive transition refinement',
     };
+    onProgress?.({ phase: 'transitions', fraction: 0.6 });
     const { events, diagnostics: transitionDiagnostics } = findTransitions(site, cfg, samples);
     // Never present apparently-complete results when the detector left intervals unresolved.
     if (transitionDiagnostics.resolutionStatus === 'degraded') {
       return { ...blockedResult(site, cfg, numericalResolutionBlocked(transitionDiagnostics.unresolvedIntervals.length), t0), samples, events, sampling, transitionDiagnostics };
     }
+    onProgress?.({ phase: 'energy', fraction: 0.8 });
     const integration = integrateMissionEnergy(site, cfg, events, startMs, endMs);
+    onProgress?.({ phase: 'summary', fraction: 0.95 });
     const summary = summarizeMission(samples, events, cfg, startMs, endMs, sampling, site, integration);
     return { site, config: cfg, samples, events, summary, computeMs: performance.now() - t0, sampling, transitionDiagnostics, analysis };
   } catch (err) {

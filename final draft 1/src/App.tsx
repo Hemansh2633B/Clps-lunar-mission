@@ -311,7 +311,7 @@ export default function App() {
           )}
         </main>
         <aside className="telemetry-rail">
-          <TelemetryPanel site={site} current={current} sim={missionSim.data} events={events} timeMs={timeMs} mode={mode} config={config} onSettings={() => setSettingsOpen(true)} loading={missionSim.loading} error={missionSim.error} />
+          <TelemetryPanel site={site} current={current} sim={missionSim.data} events={events} timeMs={timeMs} mode={mode} config={config} onSettings={() => setSettingsOpen(true)} loading={missionSim.loading} error={missionSim.error} progress={missionSim.progress} />
         </aside>
       </div>
       {!spaceView && (

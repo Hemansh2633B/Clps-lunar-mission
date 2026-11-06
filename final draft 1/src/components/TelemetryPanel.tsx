@@ -17,7 +17,15 @@ interface Props {
   onSettings: () => void;
   loading?: boolean;
   error?: string | null;
+  progress?: { phase: 'sampling' | 'transitions' | 'energy' | 'summary'; fraction: number } | null;
 }
+
+const PHASE_LABEL: Record<string, string> = {
+  sampling: 'Sampling illumination & visibility',
+  transitions: 'Refining rise/set transitions',
+  energy: 'Integrating power & battery',
+  summary: 'Summarizing mission window',
+};
 
 function nextEvent(events: TransitionEvent[], body: 'sun' | 'earth', timeMs: number, wantVisible: boolean) {
   return events.find((e) => e.body === body && e.timeMs > timeMs && e.visible === wantVisible) ?? null;
@@ -32,7 +40,7 @@ function Stat({ label, value, unit, color, tip }: { label: string; value: string
   );
 }
 
-export function TelemetryPanel({ site, current, sim, events, timeMs, mode, config, onSettings, loading, error }: Props) {
+export function TelemetryPanel({ site, current, sim, events, timeMs, mode, config, onSettings, loading, error, progress }: Props) {
   const sunNext = nextEvent(events, 'sun', timeMs, !current.sunVisibility.visible);
   const earthNext = nextEvent(events, 'earth', timeMs, !current.earthVisibility.visible);
   const summary = sim?.summary;
@@ -206,7 +214,13 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
               <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: 1 }} /> Mission window failed: {error}
             </div>
           ) : loading ? (
-            <div style={{ fontSize: 11, color: 'var(--dim)', display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={12} className="pulse" /> Computing mission window…</div>
+            <div style={{ fontSize: 11, color: 'var(--dim)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={12} className="pulse" /> {progress ? PHASE_LABEL[progress.phase] : 'Computing mission window'}…</span>
+              <div role="progressbar" aria-label="Mission window computation progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress ? Math.round(progress.fraction * 100) : undefined}
+                style={{ height: 5, background: 'var(--panel-2)', border: '1px solid var(--border)', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: progress ? `${Math.round(progress.fraction * 100)}%` : '30%', background: 'var(--navy)', transition: 'width .2s ease', animation: progress ? undefined : 'pulse 1.2s ease-in-out infinite' }} />
+              </div>
+            </div>
           ) : (
             <div style={{ fontSize: 11, color: 'var(--dim)', display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={12} /> No mission window yet — adjust the start date or duration.</div>
           )}
