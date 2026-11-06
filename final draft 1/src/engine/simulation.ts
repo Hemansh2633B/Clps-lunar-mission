@@ -3,6 +3,7 @@ import { DAY_MS, clamp } from './constants';
 import { computeEphemeris } from './ephemeris';
 import { findTransitions, visibilityFor } from './horizonPhysics';
 import { computePower, summarizeMission } from './powerComms';
+import { integrateMissionEnergy } from './integration';
 
 export const DEFAULT_CONFIG: MissionConfig = {
   durationDays: 10,
@@ -76,7 +77,8 @@ export function simulateMission(site: LandingSite, startMs: number, endMs: numbe
       : 'uniform; adaptive transition refinement',
   };
   const { events, diagnostics: transitionDiagnostics } = findTransitions(site, config, samples);
-  const summary = summarizeMission(samples, events, config, startMs, endMs, sampling, site);
+  const integration = integrateMissionEnergy(site, config, events, startMs, endMs);
+  const summary = summarizeMission(samples, events, config, startMs, endMs, sampling, site, integration);
   return { site, config, samples, events, summary, computeMs: performance.now() - t0, sampling, transitionDiagnostics };
 }
 

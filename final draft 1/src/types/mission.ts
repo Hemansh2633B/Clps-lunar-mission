@@ -1,3 +1,5 @@
+import type { IntegrationDiagnostics } from '../engine/integration';
+
 export type SiteCategory = 'polar' | 'reference';
 export type ArrayMode = 'horizontal' | 'vertical-tracking' | 'vertical-fixed';
 export type AppMode = 'planner' | 'educator';
@@ -215,6 +217,8 @@ export interface MissionSummary {
   dataConfidence: ScoreBreakdown['dataConfidence'];
   /** Whether the terrain frame is verified compatible with the ephemeris frame. */
   frameVerified: boolean;
+  /** Event-aware energy/battery integration quality (resolution + numerical uncertainty). */
+  integrationDiagnostics?: IntegrationDiagnostics;
 }
 
 export interface SimulationResult {

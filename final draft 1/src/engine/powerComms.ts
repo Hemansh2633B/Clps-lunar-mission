@@ -1,4 +1,5 @@
 import type { EvaluatedSample, LandingSite, MissionConfig, MissionSummary, PowerState, SamplingInfo, ScoreBreakdown, TransitionEvent, VisibilityState } from '../types/mission';
+import type { EnergyIntegrationResult } from './integration';
 import { AU_KM, HOUR_MS, SOLAR_CONSTANT_WM2, clamp, wrap180 } from './constants';
 
 export function solarFlux(distanceKm: number): number {
@@ -174,6 +175,7 @@ export function summarizeMission(
   endMs: number,
   sampling?: SamplingInfo,
   site?: LandingSite,
+  integration?: EnergyIntegrationResult,
 ): MissionSummary {
   const durationHours = (endMs - startMs) / HOUR_MS;
   const sunElevs = samples.map((s) => s.sun.elevationDeg);
@@ -188,11 +190,14 @@ export function summarizeMission(
   const illuminationPct = pctFromHours(visibleHoursFromEvents(samples, events, 'sun', startMs, endMs), durationHours);
   const dtePct = pctFromHours(visibleHoursFromEvents(samples, events, 'earth', startMs, endMs), durationHours);
   const combinedPct = pctFromHours(visibleHoursFromEvents(samples, events, 'combined', startMs, endMs), durationHours);
-  const horizontalEnergyKWh = integrate(samples, (s) => s.power.horizontalW) / 1000;
-  const verticalEnergyKWh = integrate(samples, (s) => s.power.verticalTrackingW) / 1000;
-  const selectedEnergyKWh = integrate(samples, (s) => s.power.selectedW) / 1000;
+  // Event-aware integration (adaptive Simpson partitioned at refined Sun transitions,
+  // battery on the same generation timeline) is the primary path. The coarse sample
+  // trapezoid remains only as a fallback for direct callers that lack an integration.
+  const horizontalEnergyKWh = integration ? integration.horizontalEnergyKWh : integrate(samples, (s) => s.power.horizontalW) / 1000;
+  const verticalEnergyKWh = integration ? integration.verticalEnergyKWh : integrate(samples, (s) => s.power.verticalTrackingW) / 1000;
+  const selectedEnergyKWh = integration ? integration.selectedEnergyKWh : integrate(samples, (s) => s.power.selectedW) / 1000;
   const meanHours = Math.max(durationHours, 1e-9);
-  const battery = simulateBattery(samples, config);
+  const battery = integration ? integration.battery : simulateBattery(samples, config);
   const earthNeverVisible = peakEarthElevationDeg < -5;
   const longestEclipseHours = longestGapHours(samples, events, 'sun', startMs, endMs);
   const longestDteGapHours = longestGapHours(samples, events, 'earth', startMs, endMs);
@@ -277,5 +282,6 @@ export function summarizeMission(
     scoreBreakdown,
     dataConfidence,
     frameVerified,
+    integrationDiagnostics: integration?.diagnostics,
   };
 }
