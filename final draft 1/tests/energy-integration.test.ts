@@ -23,10 +23,10 @@ describe('event-aware energy convergence', () => {
     const fine = simulateMission(site, POLAR_START, end, { ...DEFAULT_CONFIG, stepMinutes: 15 });
     // The quadrature partitions at refined transitions and adapts internally, so the
     // display sampling must not change the energy result beyond quadrature tolerance.
-    expect(Math.abs(coarse.summary.selectedEnergyKWh - fine.summary.selectedEnergyKWh)).toBeLessThan(0.1);
-    expect(Math.abs(medium.summary.selectedEnergyKWh - fine.summary.selectedEnergyKWh)).toBeLessThan(0.1);
-    expect(Math.abs(coarse.summary.minBatterySocPct - fine.summary.minBatterySocPct)).toBeLessThan(0.5);
-    expect(Math.abs(coarse.summary.depletionHours - fine.summary.depletionHours)).toBeLessThan(0.5);
+    expect(Math.abs(coarse.summary!.selectedEnergyKWh - fine.summary!.selectedEnergyKWh)).toBeLessThan(0.1);
+    expect(Math.abs(medium.summary!.selectedEnergyKWh - fine.summary!.selectedEnergyKWh)).toBeLessThan(0.1);
+    expect(Math.abs(coarse.summary!.minBatterySocPct - fine.summary!.minBatterySocPct)).toBeLessThan(0.5);
+    expect(Math.abs(coarse.summary!.depletionHours - fine.summary!.depletionHours)).toBeLessThan(0.5);
   }, 180000);
 
   it('matches an independent 1-min fine-grid reference (discontinuity handled, not smeared)', () => {
@@ -41,14 +41,14 @@ describe('event-aware energy convergence', () => {
       prev = w;
     }
     const refKWh = refWh / 1000;
-    const relErr = Math.abs(sim.summary.selectedEnergyKWh - refKWh) / Math.max(refKWh, 1e-9);
+    const relErr = Math.abs(sim.summary!.selectedEnergyKWh - refKWh) / Math.max(refKWh, 1e-9);
     expect(relErr).toBeLessThan(0.01);
   }, 120000);
 
   it('reports integration resolution + a small numerical uncertainty', () => {
     const site = siteById('shackleton-rim')!;
     const sim = simulateMission(site, POLAR_START, POLAR_START + 10 * DAY_MS, DEFAULT_CONFIG);
-    const d = sim.summary.integrationDiagnostics;
+    const d = sim.summary!.integrationDiagnostics;
     expect(d).toBeDefined();
     expect(d!.method).toContain('adaptive Simpson');
     expect(d!.quadratureEvaluations).toBeGreaterThan(0);
@@ -65,12 +65,12 @@ describe('battery uses the same generation timeline', () => {
     const days = 30;
     const config = { ...DEFAULT_CONFIG, loadW: 180, batteryCapacityKWh: 20, initialSocPct: 100 };
     const sim = simulateMission(site, start, start + days * DAY_MS, config);
-    expect(sim.summary.illuminationPct).toBeLessThan(0.5);
+    expect(sim.summary!.illuminationPct).toBeLessThan(0.5);
     // Analytic: capacity*dischargeEff/load = 20*0.95/0.18 = 105.56 h to empty.
     const analytic = days * 24 - (20 * BATTERY_DISCHARGE_EFF) / 0.18;
-    expect(sim.summary.depletionHours).toBeCloseTo(analytic, 0);
-    expect(sim.summary.minBatterySocPct).toBe(0);
-    expect(sim.summary.selectedEnergyKWh).toBeLessThan(0.01);
+    expect(sim.summary!.depletionHours).toBeCloseTo(analytic, 0);
+    expect(sim.summary!.minBatterySocPct).toBe(0);
+    expect(sim.summary!.selectedEnergyKWh).toBeLessThan(0.01);
   }, 120000);
 
   it('selected energy and battery are consistent for a surplus window (no depletion, charges to cap)', () => {

@@ -34,7 +34,7 @@ describe('JSON report reproducibility', () => {
     const r = JSON.parse(missionReportJSON(site, cfg, sim, current));
     expect(r.reproducibility).toBeDefined();
     expect(r.reproducibility.timeReference).toBe('UTC');
-    expect(r.reproducibility.interval.startUtc).toBe(new Date(sim.summary.startMs).toISOString());
+    expect(r.reproducibility.interval.startUtc).toBe(new Date(sim.summary!.startMs).toISOString());
     expect(r.reproducibility.ephemeris.moonRotation).toContain('IAU 2015');
     expect(r.reproducibility.ephemeris.lightTimeCorrected).toBe(true);
     expect(r.reproducibility.sampling.sampleCount).toBe(sim.sampling.sampleCount);

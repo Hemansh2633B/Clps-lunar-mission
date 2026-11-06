@@ -165,6 +165,10 @@ export default function App() {
     // current site/date/config (the hook returns null until the active key resolves).
     if (missionSim.loading) { notify('Mission window is still computing — export blocked to avoid stale results.'); return; }
     if (missionSim.error) { notify(`Mission window failed (${missionSim.error}) — nothing to export.`); return; }
+    if (missionSim.data?.analysis && !missionSim.data.analysis.demoEligible) {
+      notify(`Export blocked — analysis is ${missionSim.data.analysis.status}. Resolve the flagged issue before exporting.`);
+      return;
+    }
     const stamp = new Date(timeMs).toISOString().slice(0, 10);
     if (kind === 'json') download(`chandra-report-${stamp}.json`, missionReportJSON(site, config, missionSim.data, current), 'application/json');
     else if (kind === 'horizon') download(`chandra-horizon-${site.id}.csv`, horizonCSV(site, current), 'text/csv');

@@ -33,7 +33,11 @@ export function toCSV(rows: Record<string, unknown>[]): string {
 export function reportWarnings(site: LandingSite, sim: SimulationResult | null): string[] {
   const t = site.terrain;
   const w: string[] = [];
-  const conf = sim?.summary.dataConfidence ?? terrainDataConfidence(site);
+  if (sim?.analysis && !sim.analysis.demoEligible && 'reason' in sim.analysis) {
+    w.push(`ANALYSIS BLOCKED (${sim.analysis.status}): ${sim.analysis.reason} Resolution: ${sim.analysis.resolution}`);
+  }
+  if (sim?.transitionDiagnostics.fallbackUsed) w.push(`Transition detection used the fine-scan fallback for ${sim.transitionDiagnostics.exhaustedIntervals} interval(s); resolved to ${(sim.transitionDiagnostics.minStepMs / 1000).toFixed(0)} s.`);
+  const conf = sim?.summary?.dataConfidence ?? terrainDataConfidence(site);
   if (t.synthetic) w.push('Synthetic demo terrain — procedural, NOT real lunar data; not a scientific result.');
   else if (t.kind !== 'dem') w.push('Illustrative / user-edited terrain — NOT a measured flight DEM; ranking is indicative only.');
   if (t.kind === 'dem' && !t.synthetic && !t.frameVerified) w.push('FRAME UNVERIFIED — terrain reference frame not confirmed compatible with the IAU 2015 ephemeris frame; quantitative mission visibility is blocked.');
@@ -49,7 +53,7 @@ export function reportWarnings(site: LandingSite, sim: SimulationResult | null):
 
 export function missionReportJSON(site: LandingSite, config: MissionConfig, sim: SimulationResult | null, current: EvaluatedSample) {
   const t = site.terrain;
-  const conf = sim?.summary.dataConfidence ?? terrainDataConfidence(site);
+  const conf = sim?.summary?.dataConfidence ?? terrainDataConfidence(site);
   const terrainDisclaimer = t.kind === 'dem'
     ? t.synthetic
       ? 'Terrain: synthetic demo horizon from Terrain Lab, NOT real lunar data.'
@@ -61,7 +65,10 @@ export function missionReportJSON(site: LandingSite, config: MissionConfig, sim:
   // Full reproducibility metadata: everything needed to reconstruct and audit the run.
   const reproducibility = {
     timeReference: 'UTC',
-    interval: sim ? { startUtc: new Date(sim.summary.startMs).toISOString(), endUtc: new Date(sim.summary.endMs).toISOString(), durationHours: sim.summary.durationHours } : null,
+    interval: sim?.summary ? { startUtc: new Date(sim.summary.startMs).toISOString(), endUtc: new Date(sim.summary.endMs).toISOString(), durationHours: sim.summary.durationHours } : null,
+    analysisStatus: sim?.analysis ?? null,
+    energyIntegration: sim?.summary?.integrationDiagnostics ?? null,
+    transitionDetection: sim?.transitionDiagnostics ?? null,
     ephemeris: {
       model: 'astronomy-engine (JPL DE402/DE421-class ephemeris)',
       moonRotation: 'IAU 2015 (RotationAxis + Libration)',
@@ -118,13 +125,13 @@ export function missionReportJSON(site: LandingSite, config: MissionConfig, sim:
       dischargeEfficiency: BATTERY_DISCHARGE_EFF,
       note: 'Energy-balance model with hard SOC bounds; NOT thermal/radiation survival.',
     },
-    scoreMethodology: sim?.summary.scoreBreakdown ?? { heuristic: true, note: 'Application-defined heuristic, not a NASA methodology.' },
+    scoreMethodology: sim?.summary?.scoreBreakdown ?? { heuristic: true, note: 'Application-defined heuristic, not a NASA methodology.' },
     warnings: reportWarnings(site, sim),
   };
 
   return JSON.stringify({
     product: 'CHANDRA mission planning report',
-    schemaVersion: '1.6.0-audit',
+    schemaVersion: '1.7.0-product',
     generatedAt: new Date().toISOString(),
     disclaimer: `Ephemeris: astronomy-engine + IAU 2015 Moon rotation. ${terrainDisclaimer} Power: idealized cosine model with system derate. Geometric center-of-disk LOS (not an RF link budget); no atmospheric refraction. Feasibility score is an application-defined heuristic, not a NASA methodology. Data confidence: ${conf}.`,
     site,
@@ -174,10 +181,19 @@ export function horizonCSV(site: LandingSite, current: EvaluatedSample): string 
 
 export function summaryCSV(sim: SimulationResult): string {
   const s = sim.summary;
+  if (!s) {
+    // Blocked analysis: never emit ordinary-looking quantitative rows.
+    return toCSV([{ site: sim.site.name, analysis_status: sim.analysis.status, quantitative_eligible: 0, note: 'Analysis blocked — no quantitative summary exported.' }]);
+  }
   return toCSV([{
     site: sim.site.name,
+    analysis_status: sim.analysis.status,
+    quantitative_eligible: sim.analysis.quantitativeEligible ? 1 : 0,
     latitude: sim.site.latitude,
     longitude: sim.site.longitude,
+    energy_error_kwh: s.integrationDiagnostics?.estimatedEnergyErrorKWh.toFixed(6) ?? '',
+    integration_resolution: s.integrationDiagnostics?.resolutionStatus ?? '',
+    transition_resolution: sim.transitionDiagnostics.resolutionStatus,
     start_utc: new Date(s.startMs).toISOString(),
     end_utc: new Date(s.endMs).toISOString(),
     duration_hours: s.durationHours.toFixed(2),
@@ -218,20 +234,21 @@ export function comparisonCSV(rows: ComparisonRow[]): string {
     start_utc: new Date(scenario.startMs).toISOString(),
     duration_days: scenario.config.durationDays,
     array_mode: scenario.config.arrayMode,
-    illumination_pct: sim?.summary.illuminationPct.toFixed(2) ?? '',
-    dte_pct: sim?.summary.dtePct.toFixed(2) ?? '',
-    combined_pct: sim?.summary.combinedPct.toFixed(2) ?? '',
-    mean_sun_el_deg: sim?.summary.meanSunElevationDeg.toFixed(3) ?? '',
-    peak_sun_el_deg: sim?.summary.peakSunElevationDeg.toFixed(3) ?? '',
-    mean_horizontal_w: sim?.summary.meanHorizontalW.toFixed(1) ?? '',
-    mean_vertical_w: sim?.summary.meanVerticalTrackingW.toFixed(1) ?? '',
-    longest_eclipse_h: sim?.summary.longestEclipseHours.toFixed(2) ?? '',
-    min_battery_pct: sim?.summary.minBatterySocPct.toFixed(1) ?? '',
-    score: sim?.summary.feasibilityScore ?? '',
+    analysis_status: sim?.analysis.status ?? '',
+    illumination_pct: sim?.summary?.illuminationPct.toFixed(2) ?? '',
+    dte_pct: sim?.summary?.dtePct.toFixed(2) ?? '',
+    combined_pct: sim?.summary?.combinedPct.toFixed(2) ?? '',
+    mean_sun_el_deg: sim?.summary?.meanSunElevationDeg.toFixed(3) ?? '',
+    peak_sun_el_deg: sim?.summary?.peakSunElevationDeg.toFixed(3) ?? '',
+    mean_horizontal_w: sim?.summary?.meanHorizontalW.toFixed(1) ?? '',
+    mean_vertical_w: sim?.summary?.meanVerticalTrackingW.toFixed(1) ?? '',
+    longest_eclipse_h: sim?.summary?.longestEclipseHours.toFixed(2) ?? '',
+    min_battery_pct: sim?.summary?.minBatterySocPct.toFixed(1) ?? '',
+    score: sim?.summary?.feasibilityScore ?? '',
     score_is_heuristic: sim ? 1 : '',
-    verdict: sim?.summary.verdict ?? '',
-    data_confidence: sim?.summary.dataConfidence ?? '',
-    frame_verified: sim ? (sim.summary.frameVerified ? 1 : 0) : '',
-    effective_step_min: sim?.summary.sampling.effectiveStepMinutes.toFixed(3) ?? '',
+    verdict: sim?.summary?.verdict ?? '',
+    data_confidence: sim?.summary?.dataConfidence ?? '',
+    frame_verified: sim?.summary ? (sim.summary.frameVerified ? 1 : 0) : '',
+    effective_step_min: sim?.summary?.sampling.effectiveStepMinutes.toFixed(3) ?? '',
   })));
 }

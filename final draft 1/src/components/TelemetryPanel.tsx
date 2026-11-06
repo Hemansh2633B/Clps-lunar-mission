@@ -2,6 +2,7 @@ import { Activity, BatteryCharging, Clock, Earth, Radio, Sun, Zap, AlertTriangle
 import type { AppMode, EvaluatedSample, LandingSite, MissionConfig, SimulationResult, TransitionEvent } from '../types/mission';
 import { formatDuration, LIGHT_SPEED_KMS } from '../engine/constants';
 import { ProvenanceIndicator } from './ProvenanceIndicator';
+import { AnalysisStatusNotice } from './AnalysisStatusNotice';
 
 interface Props {
   site: LandingSite;
@@ -36,6 +37,7 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
   const maxW = current.power.fluxWm2 * config.arrayAreaM2 * config.cellEfficiency * config.systemDerate;
   const verdictColor = summary?.verdict === 'NOMINAL' ? 'var(--nominal)' : summary?.verdict === 'CONDITIONAL' ? 'var(--solar)' : 'var(--blocked)';
   const educator = mode === 'educator';
+  const blocked = !!sim?.analysis && !sim.analysis.demoEligible;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -52,13 +54,9 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
 
         <ProvenanceIndicator site={site} summary={summary} />
 
-        {site.terrain.kind === 'dem' && !site.terrain.synthetic && !site.terrain.frameVerified && (
-          <div role="alert" style={{ display: 'flex', gap: 7, alignItems: 'flex-start', padding: 9, border: '1px solid var(--blocked)', background: '#f8e3df', color: '#8f2b23', fontSize: 10.5, lineHeight: 1.45 }}>
-            <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-            <span><strong>FRAME UNVERIFIED.</strong> This DEM's reference frame is not confirmed compatible with the IAU 2015 ephemeris frame. The numbers below are <strong>not quantitative mission visibility</strong> — view the terrain in Terrain Lab and verify its frame before operational use.</span>
-          </div>
-        )}
+        {sim?.analysis && <AnalysisStatusNotice analysis={sim.analysis} />}
 
+        {!blocked && (<>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <div className="panel" style={{ padding: 10, borderColor: current.sunVisibility.visible ? '#d9b877' : '#e0a99f' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--solar)', fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase' }}><Sun size={12} /> {current.sunVisibility.visible ? 'Sunlit' : 'Dark'}</div>
@@ -209,6 +207,7 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
             <div style={{ fontSize: 11, color: 'var(--dim)', display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={12} /> No mission window yet — adjust the start date or duration.</div>
           )}
         </section>
+        </>)}
       </div>
     </div>
   );

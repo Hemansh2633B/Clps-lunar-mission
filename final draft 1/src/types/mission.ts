@@ -179,6 +179,33 @@ export interface TransitionDiagnostics {
   resolutionStatus: 'resolved' | 'fallback-resolved' | 'degraded';
 }
 
+/**
+ * Scientific-analysis status, enforced at the COMPUTATION boundary (not just the UI).
+ * A discriminated result: eligible variants carry data confidence; blocked variants
+ * carry a reason + an actionable resolution. `quantitativeEligible` means the result
+ * may be presented as a measured-science conclusion; `demoEligible` means it may be
+ * shown as a clearly-labeled demonstration. Blocked results produce NO ordinary
+ * quantitative summary (summary === null) so a bypassed UI path cannot surface them.
+ */
+export type AnalysisStatus =
+  | 'VALID' | 'SYNTHETIC_DEMO' | 'ILLUSTRATIVE'
+  | 'FRAME_UNVERIFIED' | 'INCOMPLETE_COVERAGE' | 'FRAME_MODEL_OUTSIDE_VALIDATED_RANGE'
+  | 'NUMERICAL_RESOLUTION_INSUFFICIENT' | 'COMPUTATION_FAILED';
+
+interface AssessmentFlags { quantitativeEligible: boolean; demoEligible: boolean }
+interface BlockedAssessment extends AssessmentFlags {
+  quantitativeEligible: false; demoEligible: false; reason: string; resolution: string;
+}
+export type AnalysisAssessment =
+  | (AssessmentFlags & { status: 'VALID'; quantitativeEligible: true; demoEligible: true; dataConfidence: 'measured' })
+  | (AssessmentFlags & { status: 'SYNTHETIC_DEMO'; quantitativeEligible: false; demoEligible: true; dataConfidence: 'synthetic'; note: string })
+  | (AssessmentFlags & { status: 'ILLUSTRATIVE'; quantitativeEligible: false; demoEligible: true; dataConfidence: 'illustrative' | 'region-approximate'; note: string })
+  | (BlockedAssessment & { status: 'FRAME_UNVERIFIED' })
+  | (BlockedAssessment & { status: 'INCOMPLETE_COVERAGE' })
+  | (BlockedAssessment & { status: 'FRAME_MODEL_OUTSIDE_VALIDATED_RANGE' })
+  | (BlockedAssessment & { status: 'NUMERICAL_RESOLUTION_INSUFFICIENT' })
+  | (BlockedAssessment & { status: 'COMPUTATION_FAILED' });
+
 export interface MissionSummary {
   startMs: number;
   endMs: number;
@@ -226,11 +253,14 @@ export interface SimulationResult {
   config: MissionConfig;
   samples: EvaluatedSample[];
   events: TransitionEvent[];
-  summary: MissionSummary;
+  /** Null when the analysis is blocked — no ordinary quantitative conclusions exist. */
+  summary: MissionSummary | null;
   computeMs: number;
   sampling: SamplingInfo;
   /** Reliability of the adaptive transition detection (budget/fallback/unresolved). */
   transitionDiagnostics: TransitionDiagnostics;
+  /** Computation-boundary scientific status (discriminated). */
+  analysis: AnalysisAssessment;
 }
 
 export interface Scenario {
