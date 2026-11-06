@@ -421,6 +421,30 @@ try {
   assert(await page.locator('text=not an RF link budget').count() > 0, 'geometric LOS != RF disclosed');
   await page.screenshot({ animations: 'disabled', path: `${OUT}/13-provenance-score.png` });
 
+  // ---- Scenario C (technical) + D (invalid data): presets + numeric validation ----
+  await page.getByRole('button', { name: 'Mission parameters' }).click();
+  await page.waitForSelector('[role="dialog"]');
+  const settings = page.locator('[role="dialog"]');
+  assert(await settings.locator('text=illustrative configurations').count() > 0, 'presets disclosed as illustrative, not NASA vehicle specs');
+  // Selecting a preset applies its configuration (Small robotic lander -> 2 m² array).
+  await settings.getByRole('button', { name: /Small robotic lander/ }).click();
+  await page.waitForTimeout(200);
+  const areaInput = settings.getByLabel('Array area', { exact: false });
+  assert(await areaInput.inputValue() === '2', 'preset applies its array area (2 m²)');
+  // Scenario D: an out-of-range value shows an actionable error and is NOT applied.
+  await areaInput.fill('-5');
+  await page.waitForTimeout(150);
+  assert(await settings.locator('[role="alert"]').count() > 0, 'invalid numeric input shows an actionable error');
+  assert(await settings.locator('text=must be between 0.1 and 200').count() > 0, 'error states the valid range + unit');
+  await areaInput.blur();
+  await page.waitForTimeout(150);
+  assert(await areaInput.inputValue() === '2', 'invalid input reverts to the last valid value on blur (never propagated)');
+  // Best-effort capture: screenshots with an open modal can hang under SwiftShader; the
+  // assertions above are the actual verification, so never let the capture fail the suite.
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/14-parameters-validation.png`, timeout: 8000 }).catch(() => {});
+  await settings.getByRole('button', { name: 'Done' }).click();
+  await page.waitForTimeout(300);
+
   const unexpectedConsole = consoleErrors.filter((e) => !e.includes('status of 400')); // real-DEM-without-DEM 400 is an expected, tested safeguard
   assert(pageErrors.length === 0, `page errors: ${pageErrors.join(' | ')}`);
   assert(unexpectedConsole.length === 0, `console errors: ${unexpectedConsole.join(' | ')}`);
