@@ -1,6 +1,13 @@
-# Verification evidence · CHANDRA v1.6 (scientific audit)
+# Verification evidence · CHANDRA v1.7 (product hardening)
 
-This file records what was actually executed in the Arena sandbox. It distinguishes software-path verification from scientific validation. The v1.6 audit added independent SPICE frame/ephemeris validation, sampling/battery correctness fixes, frame gating, provenance, and export integrity — see `docs/SCIENTIFIC_METHOD.md` for the method and limits.
+This file records what was actually executed in the Arena sandbox. It distinguishes software-path
+verification from scientific validation, and **passed from skipped** (a skipped SPICE test is never
+reported as a passed validation). The v1.6 audit added independent SPICE frame/ephemeris validation,
+sampling/battery correctness fixes, frame gating, provenance, and export integrity. The **v1.7**
+pass (below) hardened the frame allowlist, transition reliability, event-aware energy integration,
+computation-boundary validation, the catalogue/Artemis context, first-time UX, the guided workflow,
+explicit UTC, worker performance, accessibility, report horizon labeling, and CI. See
+`docs/SCIENTIFIC_METHOD.md` for the method and limits.
 
 ## Automated suites
 
@@ -8,14 +15,57 @@ This file records what was actually executed in the Arena sandbox. It distinguis
 |---|---|---|
 | TypeScript typecheck | `npm run typecheck` | clean |
 | Production build | `npm run build` | clean; React / Three / ephemeris split into separate chunks |
-| Engine + SPICE validation + frame gating + sampling/battery + catalogue + export + DEM-profile + vehicle/geo unit tests | `npm test` | **77 passed** (Vitest, 8 files) |
-| Backend / DEM / horizon / downloader / API errors / lunar-frame module | `npm run test:python` | **88 passed** (pytest) |
+| Engine + SPICE-reference validation + frame allowlist + transition stress + event-aware energy + analysis status + sampling/battery + catalogue + presets + explanations + UTC + workflow + simulation client + export + DEM-profile + vehicle/geo unit tests | `npm test` | **151 passed** (Vitest, 17 files) |
+| Backend / DEM / horizon / downloader / API errors / lunar-frame module | `npm run test:python` | **92 passed, 4 skipped** (pytest). The 4 skips are the SPICE-kernel-gated frame tests (kernels not fetched in the ordinary run) — **skipped, not passed**; the optional CI `spice-validation` job fetches kernels and runs them for real. |
 | Geometry checks | `npm run test:geometry` | passed: curvature, pole coordinates, Sun directions, exact landing origin, shadow casting, NoData topology, synthetic demo, horizon ray-marching |
 | Horizon parity | `npm run test:parity` | passed: TypeScript and Python ray-marchers agree on elevations, coverage, edge inset, obstacle ranges |
-| Mission + Terrain Lab + Space views browser E2E | `npm run test:browser` | passed: catalog, Apollo/far-side, comparison, educator, custom site, modal keyboard guard/focus, export (blocked while computing), playback; Terrain Lab orbit drag, keyboard orbit, top/oblique presets, inspection pin, exaggeration, shadow pixel brightening, Sun extremes, all grid qualities, radius, horizon CSV/import, real-mode no-DEM safeguard, 390 px mobile layout; **Space views**: planet markers/labels, time-lapse clock + sub-solar sweep, south-pole preset, fleet stack/HLS/CLPS switching, stage separation, engine plume, hover part callout, view close; **audit features**: Artemis III tab shows exactly nine region-approximate regions, UTC mission-start selector drives recompute, persistent provenance indicator, heuristic score breakdown + "not an RF link budget" disclosure |
+| Mission + Terrain Lab + Space views browser E2E | `npm run test:browser` | passed: catalog, Apollo/far-side, comparison, educator, custom site, modal keyboard guard/focus, export (blocked while computing), playback; Terrain Lab orbit drag, keyboard orbit, top/oblique presets, inspection pin, exaggeration, shadow pixel brightening, Sun extremes, all grid qualities, radius, horizon CSV/import, real-mode no-DEM safeguard, 390 px mobile layout; **Space views**: planet markers/labels, time-lapse clock + sub-solar sweep, south-pole preset, fleet stack/HLS/CLPS switching, stage separation, engine plume, hover part callout, view close; **v1.7 features**: first-run onboarding offers demo / real-DEM choice and dismisses cleanly; guided six-step workflow opens, shows six steps and advances; chart text alternatives (panorama/timeline/polar-map `role="img"`) and a labelled keyboard time scrubber; **2024 Regions** tab shows exactly nine region-approximate regions; explicit **UTC date + time** mission-start fields drive recompute; persistent provenance indicator; heuristic score breakdown + "not an RF link budget" disclosure |
 | Real-DEM browser smoke | `npm run test:real-dem` | passed against the verification fixture below |
 
 Python warnings are Rasterio `Affine` `*` vs `@` PendingDeprecationWarnings from the installed wheel; they do not indicate a CHANDRA failure.
+
+## v1.7 product hardening — executed evidence
+
+All counts below were executed at the v1.7 HEAD (typecheck clean, `npm run build` clean,
+**151 unit tests / 17 files**, **92 pytest passed + 4 SPICE-gated skipped**, geometry + parity
+passed, browser E2E passed).
+
+- **Explicit frame allowlist + epoch validation** (`tests/frame-allowlist.test.ts`, 20 tests;
+  `tests/python/test_lunar_frame.py`): exact allowlist match after suffix-stripping; rejects
+  `MOON_ME_DE440`, `NOT_MOON_ME`, `WEIRD_IAU_FRAME`; validated window 2020–2035 with
+  `frameEpochInRange` / `frameIntervalValidated`. TS↔Python `classifyFrame` parity preserved.
+- **Transition reliability** (`tests/transition-stress.test.ts`, 6 tests): budget exhaustion is
+  disclosed with a safe 15 s fallback; unresolved intervals surface as
+  `NUMERICAL_RESOLUTION_INSUFFICIENT`; the pruning rate bound is documented as a heuristic.
+- **Event-aware energy** (`tests/energy-integration.test.ts`, 6 tests): adaptive Simpson over
+  event-partitioned intervals; 240/60/15-min partitions agree to <0.1 kWh and <0.5% SOC and match
+  a 1-min reference grid to <1%; separate charge/discharge efficiencies and SOC bounds.
+- **Computation-boundary validation** (`tests/analysis-status.test.ts`, 10 tests): discriminated
+  statuses; blocked results carry no samples/events/summary; exports blocked and rankings exclude
+  blocked rows; no silent synthetic substitution.
+- **Catalogue + Artemis context** (`tests/catalogue.test.ts`, 7 tests): tab renamed
+  "NASA South Polar Candidate Regions — 2024 Dataset"; nine 2024 regions keep provenance; current
+  Artemis context (III = 2027 LEO demo, IV = early-2028 first crewed landing; NASA 2026-10-23)
+  shown separately, not as a 2024-list selection.
+- **Presets + validated inputs** (`tests/mission-presets.test.ts`, 3 tests): three illustrative
+  presets (each description states "illustrative"), `matchingPresetId(DEFAULT_CONFIG)` =
+  general-surface; `NumberField` never propagates invalid/cleared values.
+- **Explanations + glossary** (`tests/explanations.test.ts`, 6 tests): plain-language sentences
+  beside technical values; score labeled heuristic; DTE labeled not-an-RF-link-budget.
+- **Guided workflow + explicit UTC** (`tests/workflow.test.ts` + `tests/utc.test.ts`, 10 tests):
+  six ordered steps; UTC parsing invariant across six process timezones; malformed/out-of-range/
+  rolled-over input rejected.
+- **Worker performance** (`tests/simulation-client.test.ts`, 9 tests): LRU eviction at 36,
+  in-flight dedup, reference-counted cancellation, StrictMode release-then-re-request is NOT
+  cancelled (no wasteful respawn), cancelling one request preserves another, phase progress.
+- **LOCAL HORIZON in reports + accessibility** (`tests/export-integrity.test.ts`): report carries
+  `horizonScale = "LOCAL HORIZON"`, a warning, and a disclaimer clause; DEM disclosure notes the
+  ray-marched local crop, not a regional model. Browser E2E asserts chart text alternatives.
+- **CI** (`.github/workflows/ci.yml`): a `quality` job (typecheck, build, unit, geometry, parity,
+  pytest) that reports the 4 kernel-gated SPICE tests as **SKIPPED, never passed**; an optional
+  `spice-validation` job that fetches checksummed GitHub-mirror kernels (not NASA), asserts they
+  are present, and runs the real frame tests; and a `browser` job using portable Playwright
+  Chromium against a live dev server + terrain API.
 
 ## v1.6 scientific audit — executed evidence
 
@@ -164,4 +214,10 @@ Browser evidence: `screenshots/09-real-dem-lab.png`, `screenshots/10-real-dem-mi
 - Flight-certified illumination, power, RF link budgets, thermal survival, or landing safety.
 - The constant ME/PA→IAU correction is a planning-grade approximation (residual ≤0.0039°), not
   a rigorous time-dependent geodetic transformation.
-- Hardware GPU performance; browser tests use software WebGL (SwiftShader).
+- Hardware GPU performance; browser tests use software WebGL (SwiftShader). Terrain-init under
+  SwiftShader is occasionally slow; the browser E2E uses condition waits, but a flaky terrain-init
+  timeout remains possible on constrained runners.
+- The GitHub Actions workflow (`.github/workflows/ci.yml`) was authored and every command in it was
+  verified locally, but the workflow itself has **not** been executed on a GitHub Actions runner
+  here. The optional `spice-validation` job's kernel fetch depends on the GitHub mirror remaining
+  available; if it fails, that job fails loudly rather than reporting a skipped test as passed.

@@ -50,18 +50,29 @@ The residual (~0.0039°, ≈120 m on the surface) is **disclosed everywhere** as
 uncertainty. This is a *constant* approximation, **not** a rigorous time-dependent
 transformation; it is adequate for planning-grade visibility, not for geodesy.
 
-### Gating (never mix frames silently)
+### Gating (never mix frames silently) — explicit allowlist + epoch validation
 
-`src/engine/lunarFrame.ts` `classifyFrame` recognizes MOON_ME / MOON_PA / IAU tokens
-(including parenthetical qualifiers such as `MOON_ME (JPL DE421)`).
+`src/engine/lunarFrame.ts` `classifyFrame` (mirrored by `backend/lunar_frame.py`
+`classify_frame`, kept in parity by tests) does **not** accept a frame merely because its
+text contains `IAU` / `MOON_ME` / `MOON_PA`. It strips any descriptive suffix (after `—`, `;`,
+`,`, or ` - `), normalizes the head, and matches it against an **explicit allowlist**:
 
-- **Recognized frame** → `frameVerified = true`: the site coordinates are rotated into IAU
-  (`convertSite`) and the horizon mask azimuths are rotated by the matching offset
-  (`rotateMaskAzimuths`); the residual is recorded.
-- **Unrecognized frame** → `frameVerified = false`: the terrain is **viewable in Terrain Lab**
-  but **blocked from quantitative mission visibility** (`horizonImportBlocked` returns a
-  `FRAME UNVERIFIED` message; the "Use in mission" button is disabled). The Telemetry panel
-  shows a red banner and the export carries the warning.
+- **ME** = {MOON_ME, MOON_ME_DE421, MOON_ME_JPL_DE421, ME, ME_DE421}; **PA** = the analogous
+  DE421 set; **IAU** = {IAU_MOON, IAU_2015_MOON, IAU_MOON_2015, IAU_2015}.
+- An unknown realization (e.g. `MOON_ME_DE440`, `NOT_MOON_ME`, `WEIRD_IAU_FRAME`) is **rejected**,
+  not silently coerced — a substring match would wrongly accept these.
+- The constant correction is only validated over **2020-01-01 → 2035-12-31 UTC**.
+  `frameEpochInRange` / `frameIntervalValidated` check the mission interval; outside it the
+  analysis is blocked as `FRAME_MODEL_OUTSIDE_VALIDATED_RANGE` rather than extrapolated silently.
+
+Gate outcomes:
+
+- **Allow-listed frame, interval in range** → `frameVerified = true`: site coordinates rotated
+  into IAU (`convertSite`), horizon azimuths rotated by the matching offset (`rotateMaskAzimuths`),
+  residual recorded and disclosed.
+- **Unrecognized frame** → `frameVerified = false`: terrain **viewable in Terrain Lab** but
+  **blocked from quantitative mission visibility** (`FRAME_UNVERIFIED`; "Use in mission" disabled,
+  red banner, export warning, excluded from rankings).
 - **Synthetic demo** → allowed as a clearly labeled demo; never frame-verified as real data.
 
 ---
@@ -109,6 +120,17 @@ conversion test asserts **angular position separation**, bounded by the disclose
   subdivided (pruning safe halves) down to 15 s and bisected (`refineCrossing`). A per-interval
   node budget bounds worst-case work. This is ~6× faster than a uniform fine sub-scan and
   resolves short windows the coarse grid would skip.
+- **Budget exhaustion is disclosed, never hidden.** When an interval exhausts its node budget,
+  the detector falls back to a uniform 15 s re-scan of that interval; if the fallback itself
+  caps out, the interval is recorded in `TransitionDiagnostics.unresolvedIntervals` and the
+  resolution status becomes `degraded`. A degraded result is surfaced as
+  `NUMERICAL_RESOLUTION_INSUFFICIENT` (data kept for inspection, rankings/exports blocked) —
+  the tool never presents apparently-complete numbers over an unresolved interval. The
+  countdown uses the same refined events, so it stays consistent with the detector.
+- **The pruning rate bound is a documented heuristic, not a proved conservative bound.**
+  `clearanceRateBound = 0.6 + maxGradient·4.0` (deg/hr) is used only to prune provably-safe
+  halves; it is disclosed as a heuristic because the terrain-gradient term is not a rigorous
+  kinematic ceiling. Intervals near zero are always subdivided regardless of the bound.
 - **Percentages and gaps** integrate the **refined crossing timestamps** (exact interval
   boundaries), not a coarse trapezoid over samples, so they converge as sampling is refined.
   Convergence is asserted in `tests/sampling-battery.test.ts` (coarse 240 min vs fine 30 min
@@ -125,9 +147,45 @@ conversion test asserts **angular position separation**, bounded by the disclose
   hard SOC bounds [0, capacity], configurable initial SOC, per-interval integration (valid for
   irregular steps), zero-crossing interpolated within the crossing interval. Robustness tests
   cover irregular steps, saturation, long darkness, large surplus, initial SOC, and empty input.
+- **Event-aware energy integration** (`src/engine/integration.ts` `integrateMissionEnergy`) is
+  what drives the mission summary. The window is partitioned at the **refined Sun rise/set
+  timestamps** (terrain shadow included), so each interval has a stable illumination state;
+  selected power is integrated with **adaptive Simpson quadrature** over the smoothly varying
+  Sun elevation/azimuth and distance (dark intervals forced to 0 W), with a Richardson error
+  estimate. Battery SOC is advanced per interval with separate charge/discharge efficiencies and
+  hard [0, capacity] bounds, interpolating the depletion crossing. `IntegrationDiagnostics`
+  reports the estimated energy error and a resolution status (`converged` / `adequate` / `coarse`).
+  Convergence tests (`tests/energy-integration.test.ts`) show 240/60/15-min event partitions agree
+  to <0.1 kWh and <0.5% SOC, and match a 1-min reference grid to <1%. The sample-based
+  `simulateBattery` remains as a tested fallback/API.
 - This is an **energy-balance model only**. It does **not** model thermal survival, radiation,
   depth-of-discharge life, or heater loads. The verdict `ENERGY DEFICIT` (renamed from the
   misleading `SURVIVAL RISK`) reflects the battery model reaching 0%, not spacecraft survival.
+
+---
+
+## 4b. Computation-boundary scientific validation (discriminated status)
+
+Every simulation returns a discriminated `AnalysisAssessment` (`src/engine/analysisStatus.ts`),
+a **scientific gate independent of any UI import restriction**:
+
+| Status | Meaning | Quantitative use |
+|---|---|---|
+| `VALID` | real DEM, allow-listed frame verified, full coverage, interval in validated epoch | eligible |
+| `SYNTHETIC_DEMO` | procedural demo terrain | labeled demo only |
+| `ILLUSTRATIVE` | non-DEM (illustrative / user-edited) terrain | indicative only |
+| `FRAME_UNVERIFIED` | real DEM, frame not on the allowlist | blocked |
+| `INCOMPLETE_COVERAGE` | real DEM coverage <100% or NoData elevation | blocked |
+| `FRAME_MODEL_OUTSIDE_VALIDATED_RANGE` | ME/PA correction used outside 2020–2035 | blocked |
+| `NUMERICAL_RESOLUTION_INSUFFICIENT` | detector left intervals unresolved | blocked (data kept for inspection) |
+| `COMPUTATION_FAILED` | invalid interval or thrown error | blocked |
+
+Blocked statuses carry **no samples/events/summary** (terrain stays viewable via `site.terrain`).
+The UI replaces numbers with an actionable `AnalysisStatusNotice` (what is wrong + how to fix it),
+the comparison matrix excludes blocked rows from ranking, and exports are blocked. `demoEligible`
+(VALID / SYNTHETIC_DEMO / ILLUSTRATIVE) governs whether a result may be exported at all;
+`quantitativeEligible` governs whether it may be ranked as measured. Invalid data is never
+silently substituted with synthetic terrain.
 
 ---
 
@@ -167,6 +225,13 @@ confidence tier present, so illustrative/synthetic terrain is never crowned over
   landing points**. The catalogue uses **approximate region centers** (`coordinateType =
   region-center`, `dataConfidence = region-approximate`, ±0.5° uncertainty) with the source URL
   and date — never invented precise coordinates. Terrain relief is illustrative.
+- **Current mission context is shown separately from the 2024 dataset.** The tab is renamed
+  **"NASA South Polar Candidate Regions — 2024 Dataset"** (rendered "2024 Regions"), and a
+  banner records the current Artemis posture (NASA, as of **2026-10-23**): **Artemis III** is a
+  crewed **LEO demonstration (2027), not a lunar landing**; **Artemis IV** is the **first crewed
+  Artemis lunar surface landing (early 2028)**. The 2024 candidate list is **not** an Artemis IV
+  landing-site selection; the nine regions keep their 2024 provenance and source date. Context
+  source URLs: `nasa.gov/mission/artemis-iii/` and `/artemis-iv/`.
 - **Historical polar candidates** (Shackleton Rim, Connecting Ridge, Leibnitz β) are labeled
   `Historical polar candidate` / `illustrative`, distinct from the Artemis III set.
 - **Apollo 11 / 17 and Chang'e 4** are kept separate with **published surveyed coordinates**
@@ -205,9 +270,47 @@ resolution is never presented as vertical accuracy.
   frame metadata, UTC interval, and config). `useSimulation` returns **cached-or-null for the
   active key** with a render-time guard, so a date/site change never shows stale results, and
   superseded worker requests cannot overwrite a newer key.
+- **Worker performance:** an **LRU cache** (36 entries, re-inserted on access) and in-flight
+  deduplication avoid recomputation. Requests are **reference-counted**; when the last consumer
+  abandons a still-pending window it is **cancelled** (coalesced terminate-and-respawn that
+  re-posts only still-wanted requests). Cancellation is **debounced (40 ms)** so a release
+  immediately followed by a re-request (React StrictMode remount, or a quick drag back) does not
+  waste a respawn. **Phase progress** (sampling → transitions → energy → summary) is posted from
+  the worker and shown as an accessible progressbar; it reaches the main thread in real time
+  because `postMessage` queues to the main thread even while the worker's loop runs.
 - Exports are **blocked while computing or errored**. The JSON report carries a full
   `reproducibility` block (UTC interval, ephemeris model + frame, terrain source/resolution/
   coverage/radius/frame, sampling, power/battery assumptions, score methodology, site
   provenance, and warnings). CSVs include `data_confidence`, `frame_verified`, and effective
   sampling step. Heuristic scores, illustrative terrain, and frame-unverified DEMs are always
   disclosed, never exported as measured/scientific.
+
+---
+
+## 10. First-time UX, explicit UTC, accessibility, and report horizon labeling
+
+- **Guided six-step workflow** (`WorkflowGuide`): region → UTC date → mission preset →
+  plain-language results → comparison → report. Each step drives the real app and advances;
+  back/skip/close are supported. It guides the actual product, never replaces the controls.
+- **Dismissible onboarding** offers an explicit choice between **Explore demo mode** (labeled
+  illustrative terrain) and **Analyze real DEM data** (Terrain Lab). Real mode never silently
+  substitutes synthetic data when no DEM is configured. Reopenable from Help.
+- **Mission presets** are illustrative engineering starting points, **not NASA vehicle specs**;
+  every assumption is explained, and a "Custom" option preserves the current configuration.
+- **Every numeric input** has min/max/step/unit/default, an actionable validation message, and a
+  sane cleared-input behavior (invalid values are never propagated; they revert on blur).
+- **UTC is explicit everywhere.** The mission start uses separate **UTC date + time fields**
+  (not a timezone-converting `datetime-local` picker), parsed with an explicit `Z` so the same
+  input is the same instant in every browser timezone (`tests/utc.test.ts` verifies invariance
+  across six timezones). Timelines, clocks, and exports are all UTC.
+- **Plain-language explanations + tooltips + a searchable glossary** sit alongside the technical
+  values in both operator modes; the score is always labeled a heuristic, and Earth visibility
+  is always labeled geometric LOS, not an RF link budget.
+- **Accessibility:** the SVG panorama/timeline and the polar-map canvas expose `role="img"` text
+  alternatives; the time scrubber is a labelled keyboard slider announcing UTC; status is never
+  color-only (text labels accompany every state); dialogs trap focus and close on Escape;
+  toasts are `aria-live`; existing keyboard shortcuts are preserved.
+- **LOCAL HORIZON everywhere, including reports.** No regional distant-horizon model is
+  fabricated (PGDA products were unavailable). The JSON report carries an explicit
+  `horizonScale = "LOCAL HORIZON"` field, a matching warning, and a disclaimer clause; DEM
+  horizons disclose the ray-marched local crop and that distant obstructions are not captured.
