@@ -3,6 +3,7 @@ import { GraduationCap, BookOpen, ListChecks } from 'lucide-react';
 import type { AppMode, GuidedScenario, LandingSite, MissionConfig, Scenario } from './types/mission';
 import { LANDING_SITES, makeCustomSite } from './data/landingSites';
 import { DEFAULT_CONFIG, analysisWindow, evaluateAt } from './engine/simulation';
+import { assessTerrainEligibility } from './engine/analysisStatus';
 import { DAY_MS, HOUR_MS, clamp } from './engine/constants';
 import { useSimulation } from './hooks/useSimulation';
 import { cachedSimulation } from './engine/simulationClient';
@@ -85,6 +86,10 @@ export default function App() {
   const site = sites.find((s) => s.id === selectedId) ?? sites[0];
   const win = useMemo(() => analysisWindow(baselineMs, slipDays, config.durationDays, viewDays), [baselineMs, slipDays, config.durationDays, viewDays]);
   const current = useMemo(() => evaluateAt(site, timeMs, config), [site, timeMs, config]);
+  // Instantaneous visibility claims must pass the same frame/coverage gate as the
+  // window analysis — scrubbing to an unvalidated epoch must not surface Sunlit/DTE
+  // claims against an untrusted mask (ephemeris positions remain valid).
+  const instantBlocked = useMemo(() => !assessTerrainEligibility(site, timeMs, timeMs).demoEligible, [site, timeMs]);
   const analysisConfig = useMemo(() => ({ ...config, stepMinutes: Math.max(config.stepMinutes, viewDays >= 90 ? 30 : 15) }), [config, viewDays]);
   const activeSim = useSimulation(site, win.startMs, win.endMs, analysisConfig);
   const missionSim = useSimulation(site, win.missionStart, win.missionEnd, config);
@@ -389,16 +394,16 @@ export default function App() {
                   <span style={{ fontSize: 10, color: 'var(--dim)' }}>New here? Follow the six-step path, or join the 14-day-window briefing.</span>
                 </div>
               )}
-              <HorizonPanorama site={site} current={current} sim={activeSim.data} mode={mode} options={panorama} onOptions={setPanorama} />
+              <HorizonPanorama site={site} current={current} sim={activeSim.data} mode={mode} options={panorama} onOptions={setPanorama} visibilityBlocked={instantBlocked} />
               <div className="lower-grid">
                 <PolarMap sites={sites} selected={site} current={current} onSelect={setSelectedId} onPlaceCustom={placeCustom} layers={mapLayers} onLayers={setMapLayers} />
-                <SiteBrief site={site} current={current} onHorizonTable={() => setHorizonOpen(true)} onPin={pinCurrent} />
+                <SiteBrief site={site} current={current} onHorizonTable={() => setHorizonOpen(true)} onPin={pinCurrent} visibilityBlocked={instantBlocked} />
               </div>
             </>
           )}
         </main>
         <aside className="telemetry-rail" data-tour="telemetry">
-          <TelemetryPanel site={site} current={current} sim={missionSim.data} events={events} timeMs={timeMs} mode={mode} config={config} onSettings={() => setSettingsOpen(true)} loading={missionSim.loading} error={missionSim.error} progress={missionSim.progress} />
+          <TelemetryPanel site={site} current={current} sim={missionSim.data} events={events} timeMs={timeMs} mode={mode} config={config} onSettings={() => setSettingsOpen(true)} loading={missionSim.loading} error={missionSim.error} progress={missionSim.progress} visibilityBlocked={instantBlocked} />
         </aside>
       </div>
       {!spaceView && (

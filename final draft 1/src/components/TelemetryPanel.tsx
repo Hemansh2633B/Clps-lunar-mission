@@ -18,6 +18,8 @@ interface Props {
   loading?: boolean;
   error?: string | null;
   progress?: { phase: 'sampling' | 'transitions' | 'energy' | 'summary'; fraction: number } | null;
+  /** Instantaneous frame/coverage gate (epoch-aware), independent of the window analysis. */
+  visibilityBlocked?: boolean;
 }
 
 const PHASE_LABEL: Record<string, string> = {
@@ -40,7 +42,7 @@ function Stat({ label, value, unit, color, tip }: { label: string; value: string
   );
 }
 
-export function TelemetryPanel({ site, current, sim, events, timeMs, mode, config, onSettings, loading, error, progress }: Props) {
+export function TelemetryPanel({ site, current, sim, events, timeMs, mode, config, onSettings, loading, error, progress, visibilityBlocked }: Props) {
   const sunNext = nextEvent(events, 'sun', timeMs, !current.sunVisibility.visible);
   const earthNext = nextEvent(events, 'earth', timeMs, !current.earthVisibility.visible);
   const summary = sim?.summary;
@@ -53,7 +55,7 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="panel-header">
         <span className="panel-title"><Activity size={13} /> Telemetry</span>
-        <span className={`chip ${current.viable ? 'nominal' : 'blocked'}`}>{current.viable ? 'Window viable' : 'Window gap'}</span>
+        <span className={`chip ${visibilityBlocked ? 'blocked' : current.viable ? 'nominal' : 'blocked'}`}>{visibilityBlocked ? 'Visibility blocked' : current.viable ? 'Window viable' : 'Window gap'}</span>
       </div>
       <div style={{ flex: 1, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
@@ -65,8 +67,13 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
         <ProvenanceIndicator site={site} summary={summary} />
 
         {sim?.analysis && <AnalysisStatusNotice analysis={sim.analysis} />}
+        {visibilityBlocked && !blocked && (
+          <div role="note" style={{ fontSize: 10.5, lineHeight: 1.5, color: 'var(--blocked)', border: '1px solid var(--blocked)', padding: '8px 10px', background: '#fbeae5' }}>
+            Instantaneous terrain visibility is blocked at this epoch — the frame correction is not validated here. Sky positions (elevation/azimuth) remain valid; scrub into the validated range for visibility.
+          </div>
+        )}
 
-        {!blocked && (<>
+        {!blocked && !visibilityBlocked && (<>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <div className="panel" style={{ padding: 10, borderColor: current.sunVisibility.visible ? '#d9b877' : '#e0a99f' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--solar)', fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase' }}><Sun size={12} /> {current.sunVisibility.visible ? 'Sunlit' : 'Dark'}</div>

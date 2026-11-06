@@ -16,7 +16,8 @@
     "test:geometry": "tsx scripts/geometry-check.ts",
     "test:all": "npm test && npm run test:python && npm run test:geometry && npm run test:parity",
     "test:parity": "tsx scripts/horizon-parity.ts",
-    "test:real-dem": "node scripts/real-dem-browser-test.mjs"
+    "test:real-dem": "node scripts/real-dem-browser-test.mjs",
+    "test:story": "node scripts/story-browser-test.mjs"
   },
   "dependencies": {
     "@fontsource/fraunces": "^5.3.0",
