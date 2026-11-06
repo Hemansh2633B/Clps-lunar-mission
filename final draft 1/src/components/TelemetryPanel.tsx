@@ -74,7 +74,7 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
             <div style={{ fontSize: 10, color: 'var(--dim)', marginTop: 2 }}>{current.sunVisibility.visible ? 'to sunset' : 'to sunrise'}{!sunNext ? ' · none in window' : ''}</div>
           </div>
           <div className="panel" style={{ padding: 10, borderColor: current.earthVisibility.visible ? '#9fc6d2' : '#e0a99f' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--earth)', fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase' }}><Radio size={12} /> {current.earthVisibility.visible ? 'DTE open' : 'LOS'}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--earth)', fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase' }}><Radio size={12} /> {current.earthVisibility.visible ? 'DTE open' : 'Earth blocked'}</div>
             <div className="mono" style={{ fontSize: 16, marginTop: 6 }}>{summary?.earthNeverVisible ? 'NEVER' : earthNext ? formatDuration((earthNext.timeMs - timeMs) / 3_600_000) : '—'}</div>
             <div style={{ fontSize: 10, color: 'var(--dim)', marginTop: 2 }}>{summary?.earthNeverVisible ? 'far side · relay needed' : current.earthVisibility.visible ? 'to Earthset' : 'to AOS'}{!earthNext && !summary?.earthNeverVisible ? ' · none in window' : ''}</div>
           </div>
@@ -168,7 +168,7 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: verdictColor }}>
                     {summary.verdict === 'NOMINAL' ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {summary.verdict}
                   </div>
-                  <div style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.45, marginTop: 3 }}>{educator ? (summary.verdict === 'NOMINAL' ? 'This window looks good: power and Earth line-of-sight overlap for most of the mission.' : summary.verdict === 'RELAY REQUIRED' ? 'Earth never rises here. The lander must talk through a relay satellite.' : summary.verdict === 'ENERGY DEFICIT' ? 'The battery model runs out of stored energy before the window ends — more array area or less load is needed.' : 'This window has gaps. The team would need to store energy and schedule radio passes carefully.') : summary.verdictReason}</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.45, marginTop: 3 }}>{educator ? (summary.verdict === 'NOMINAL' ? 'This window looks good: power and Earth line-of-sight overlap for most of the mission.' : summary.verdict === 'RELAY REQUIRED' ? 'Earth never rises here. The lander must talk through a relay satellite.' : summary.verdict === 'ENERGY DEFICIT' ? 'The battery model runs out of stored energy before the window ends — more array area or less load is needed.' : 'This window has gaps. The team would need to store energy and schedule Earth-visibility passes carefully.') : summary.verdictReason}</div>
                 </div>
               </div>
 

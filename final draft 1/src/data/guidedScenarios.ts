@@ -15,7 +15,7 @@ export const GUIDED_SCENARIOS: GuidedScenario[] = [
     arrayMode: 'vertical-tracking',
     steps: [
       { title: 'Start at Shackleton Rim', body: 'The Sun never climbs more than a couple of degrees above the horizon. Crater rims can block it even when it is geometrically “up”.', action: 'panorama' },
-      { title: 'Watch Earth wobble', body: 'Earth hovers near the horizon and drifts in a slow libration loop. A ridge only a few degrees high can cut the radio link for days.', action: 'panorama' },
+      { title: 'Watch Earth wobble', body: 'Earth hovers near the horizon and drifts in a slow libration loop. A ridge only a few degrees high can close the geometric Direct-to-Earth window for days — line-of-sight geometry, not a radio-link prediction.', action: 'panorama' },
       { title: 'Compare with Apollo 11', body: 'Open Compare and pin Apollo 11 for the same dates. Its Sun reaches overhead, and Earth stays high in the sky — no terrain-driven DTE blackouts.', action: 'compare' },
     ],
   },
@@ -30,9 +30,9 @@ export const GUIDED_SCENARIOS: GuidedScenario[] = [
     slipDays: 14,
     arrayMode: 'vertical-tracking',
     steps: [
-      { title: 'Baseline window', body: 'The green track shows when both Sun and Earth are visible. This is the only time the lander can generate power and talk to Earth directly.', action: 'slip' },
+      { title: 'Baseline window', body: 'The green track shows when both Sun and Earth are visible. Power needs only the Sun; direct-to-Earth needs only Earth clearance. Green marks when both hold at once.', action: 'slip' },
       { title: 'Slip +14 days', body: 'Drag the mission window or use the slip slider. The terrain mask stays fixed, but the Sun and Earth move — a ridge that was harmless can now block Earth.', action: 'slip' },
-      { title: 'Read the verdict', body: 'Check minimum battery state-of-charge and longest combined gap. A “CONDITIONAL” verdict means the mission survives only with careful energy and comms scheduling.', action: 'slip' },
+      { title: 'Read the verdict', body: 'Check minimum battery state-of-charge and longest combined gap. A “CONDITIONAL” verdict means the window works only with stored-energy management and scheduled Earth-visibility passes — an energy-balance statement, not a survival prediction.', action: 'slip' },
     ],
   },
   {
@@ -48,7 +48,7 @@ export const GUIDED_SCENARIOS: GuidedScenario[] = [
     steps: [
       { title: 'Horizontal deck', body: 'Power scales with sin(elevation). At 1.5° elevation a horizontal panel sees only ~2.6% of the flux — often less than the lander’s idle load.', action: 'panorama' },
       { title: 'Switch to vertical mast', body: 'Open Mission Parameters and choose “Vertical mast (azimuth tracking)”. Power now scales with cos(elevation) — nearly full flux at grazing angles.', action: 'panorama' },
-      { title: 'Compare the energy budget', body: 'Pin both configurations in Compare. The vertical mast can turn a survival-risk mission into a nominal one without moving the lander.', action: 'compare' },
+      { title: 'Compare the energy budget', body: 'Pin both configurations in Compare. The vertical mast can turn an ENERGY DEFICIT window into a NOMINAL one without moving the lander.', action: 'compare' },
     ],
   },
   {
@@ -65,18 +65,7 @@ export const GUIDED_SCENARIOS: GuidedScenario[] = [
       { title: 'Open Terrain Lab', body: 'Press T or use the header button. The lab starts in a clearly labeled synthetic demo. Choose “Real lunar DEM” only after configuring a local DEM backend.', action: 'terrain' },
       { title: 'Inspect the surface', body: 'Drag to orbit, scroll to zoom, and click the mesh to pin a sample. The inspector reports east/north position, elevation, distance, and latitude/longitude.', action: 'terrain' },
       { title: 'Compute the horizon', body: 'Press “Compute 360° horizon”. The tool ray-marches the loaded grid and reports coverage. NoData rays are flagged, never filled with invented terrain.', action: 'terrain' },
-      { title: 'Send it to the mission planner', body: '“Use in mission” creates a custom site with the DEM-derived mask. Check the source frame warning: DEM MOON_ME/DE421 and the IAU ephemeris frame must be reconciled before operational use.', action: 'terrain' },
+      { title: 'Send it to the mission planner', body: '“Use in mission” creates a custom site with the DEM-derived mask. Check the frame gate: allowlisted frames (MOON_ME / MOON_PA · DE421, IAU 2015) are rotated into the ephemeris frame with a disclosed residual; unknown frames are blocked from quantitative mission use, and incomplete coverage is flagged.', action: 'terrain' },
     ],
   },
-];
-
-export const GLOSSARY: { term: string; definition: string }[] = [
-  { term: 'DTE', definition: 'Direct-to-Earth. A radio link that does not need a relay satellite. Requires Earth to be above the local terrain horizon.' },
-  { term: 'LOS / AOS', definition: 'Loss of Signal / Acquisition of Signal. The moments Earth sets behind terrain or rises above it.' },
-  { term: 'Libration', definition: 'The Moon’s slow wobble. From the surface, Earth traces a small loop in the sky over ~27.3 days, moving ±6.7° in latitude and ±7.9° in longitude.' },
-  { term: 'Horizon mask', definition: 'A 360° profile of terrain elevation angle. An object is visible only if its elevation exceeds the mask at that azimuth.' },
-  { term: 'Cosine loss', definition: 'Solar output scales with the cosine of the angle between sunlight and the panel normal. Grazing light punishes horizontal panels.' },
-  { term: 'Synodic day', definition: 'The ~29.53 Earth-day cycle from one lunar noon to the next. At the pole the Sun circles the horizon instead of rising high.' },
-  { term: 'MJD', definition: 'Modified Julian Date. A continuous day count used in ephemeris and mission operations.' },
-  { term: 'PSR', definition: 'Permanently Shadowed Region. Terrain that never receives direct sunlight — a cold trap for water ice.' },
 ];
