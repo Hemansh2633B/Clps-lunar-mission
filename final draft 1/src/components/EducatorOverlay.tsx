@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { BookOpen, ChevronLeft, ChevronRight, Play, X, Lightbulb } from 'lucide-react';
+import { BookOpen, ChevronLeft, ChevronRight, Play, X, Lightbulb, Search } from 'lucide-react';
 import type { GuidedScenario } from '../types/mission';
-import { GUIDED_SCENARIOS, GLOSSARY } from '../data/guidedScenarios';
+import { GUIDED_SCENARIOS } from '../data/guidedScenarios';
+import { GLOSSARY } from '../data/glossary';
 
 interface Props {
   open: boolean;
@@ -26,7 +27,9 @@ const FAQS: { q: string; a: string }[] = [
 
 export function EducatorOverlay({ open, onClose, active, step, onStart, onStep, onApply }: Props) {
   const [faqOpen, setFaqOpen] = useState<number | null>(0);
+  const [glossaryQuery, setGlossaryQuery] = useState('');
   if (!open) return null;
+  const filteredGlossary = GLOSSARY.filter((g) => `${g.term} ${g.plain} ${g.technical}`.toLowerCase().includes(glossaryQuery.toLowerCase()));
   return (
     <div className="drawer fade-in">
       <div className="modal-header">
@@ -122,14 +125,20 @@ export function EducatorOverlay({ open, onClose, active, step, onStart, onStep, 
         </div>
 
         <div>
-          <div className="panel-title" style={{ marginBottom: 8 }}>Glossary</div>
+          <div className="panel-title" style={{ marginBottom: 8 }}>Glossary · plain language + technical definition</div>
+          <div style={{ position: 'relative', marginBottom: 8 }}>
+            <Search size={13} style={{ position: 'absolute', left: 8, top: 8, color: 'var(--dim)' }} />
+            <input className="input" style={{ paddingLeft: 28 }} placeholder="Search the glossary…" value={glossaryQuery} onChange={(e) => setGlossaryQuery(e.target.value)} aria-label="Search the glossary" />
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {GLOSSARY.map((g) => (
-              <div key={g.term} style={{ fontSize: 11, lineHeight: 1.5, padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
-                <span className="mono" style={{ color: 'var(--earth)', fontWeight: 600 }}>{g.term}</span>
-                <span style={{ color: 'var(--muted)' }}> — {g.definition}</span>
+            {filteredGlossary.map((g) => (
+              <div key={g.id} style={{ fontSize: 11, lineHeight: 1.5, padding: '7px 0', borderBottom: '1px solid var(--line)' }}>
+                <span className="mono" style={{ color: 'var(--earth)', fontWeight: 600 }}>{g.term}{g.unit ? ` (${g.unit})` : ''}</span>
+                <div style={{ color: 'var(--muted)', marginTop: 2 }}>{g.plain}</div>
+                <div style={{ color: 'var(--dim)', fontSize: 10, marginTop: 3 }}>{g.technical}</div>
               </div>
             ))}
+            {filteredGlossary.length === 0 && <div style={{ fontSize: 11, color: 'var(--dim)', padding: '8px 0' }}>No glossary terms match “{glossaryQuery}”.</div>}
           </div>
         </div>
 

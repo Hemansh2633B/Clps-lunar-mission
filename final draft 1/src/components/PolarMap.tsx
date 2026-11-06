@@ -226,6 +226,8 @@ export function PolarMap({ sites, selected, current, onSelect, onPlaceCustom, la
           ref={canvasRef}
           width={SIZE}
           height={SIZE}
+          role="img"
+          aria-label={`Stereographic map of the lunar south pole. Selected site ${selected.shortName} at ${selected.latitude.toFixed(2)} degrees latitude, ${selected.longitude.toFixed(1)} degrees longitude. Choose a named site from the catalogue, or click the map to drop a custom site.`}
           style={{ width: '100%', maxWidth: 250, aspectRatio: '1', cursor: 'crosshair', borderRadius: '50%' }}
           onClick={handleClick}
           onMouseMove={(e) => { const { x, y } = toCanvas(e); const ll = unproject(x, y, extent); setHover(ll ? { x: e.clientX, y: e.clientY, ...ll } : null); }}

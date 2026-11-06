@@ -9,10 +9,12 @@ const BASE = process.env.BASE_URL || 'http://localhost:5173/';
 const OUT = 'screenshots';
 mkdirSync(OUT, { recursive: true });
 
-// The sandbox blocks Playwright's CDN. @sparticuz/chromium ships an npm-distributed
-// binary plus Amazon Linux 2023 shared libraries; extract them once if missing.
+// CI mode uses Playwright's own bundled Chromium (portable across Linux distros).
+// The sandbox blocks Playwright's CDN, so locally we fall back to @sparticuz/chromium
+// (an npm-distributed binary + Amazon Linux 2023 shared libraries, extracted once).
+const CI_BROWSER = process.env.CHANDRA_BROWSER_CI === '1';
 const LIB = '/tmp/al2023/lib';
-if (!existsSync(join(LIB, 'libnss3.so'))) {
+if (!CI_BROWSER && !existsSync(join(LIB, 'libnss3.so'))) {
   const bin = 'node_modules/@sparticuz/chromium/bin';
   for (const [file, dir] of [['al2023.tar.br', '/tmp/al2023'], ['fonts.tar.br', '/tmp/fonts']]) {
     mkdirSync(dir, { recursive: true });
@@ -22,13 +24,14 @@ if (!existsSync(join(LIB, 'libnss3.so'))) {
   }
 }
 
-const exe = process.env.CHROMIUM_PATH || (await sparticuz.executablePath());
-const browser = await pw.launch({
-  executablePath: exe,
-  args: sparticuz.args,
-  headless: true,
-  env: { ...process.env, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH || '/tmp/al2023/lib', FONTCONFIG_PATH: '/tmp/fonts' },
-});
+const browser = CI_BROWSER
+  ? await pw.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] })
+  : await pw.launch({
+      executablePath: process.env.CHROMIUM_PATH || (await sparticuz.executablePath()),
+      args: sparticuz.args,
+      headless: true,
+      env: { ...process.env, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH || '/tmp/al2023/lib', FONTCONFIG_PATH: '/tmp/fonts' },
+    });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 page.setDefaultTimeout(45000);
 const consoleErrors = [];
@@ -76,9 +79,40 @@ try {
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await page.waitForSelector('.app-header .display');
   assert(await page.locator('.app-header .display').innerText().then((t) => t.includes('CHANDRA')), 'header brand renders');
+  // First-run onboarding: verify it offers the demo / real-DEM choice, capture it, then
+  // dismiss (Skip keeps the default workspace state for the rest of the flow).
+  if (await page.locator('text=Welcome to CHANDRA').count()) {
+    assert(await page.locator('text=Explore demo mode').count() > 0, 'onboarding offers demo mode');
+    assert(await page.locator('text=Analyze real DEM data').count() > 0, 'onboarding offers real DEM mode');
+    await page.screenshot({ animations: 'disabled', path: `${OUT}/00-onboarding.png` });
+    await page.locator('button', { hasText: 'Skip for now' }).click();
+    await page.waitForTimeout(400);
+  }
   await page.waitForTimeout(1200);
   await page.screenshot({ animations: 'disabled', path: `${OUT}/01-workspace.png` });
   assert(await page.locator('.site-item').count() >= 10, 'catalog has 10+ sites');
+
+  // Scenario A (student): the guided six-step workflow opens, shows all six steps, and
+  // advancing the first step moves to the UTC-date step. It drives the real workspace.
+  await page.getByRole('button', { name: 'Guided workflow' }).click();
+  await page.waitForSelector('[aria-label="Guided mission workflow"]');
+  const guide = page.locator('[aria-label="Guided mission workflow"]');
+  assert(await guide.locator('ol > li').count() === 6, 'guided workflow shows six steps');
+  assert(await guide.locator('text=Select a region').count() > 0, 'workflow starts at region selection');
+  await guide.getByRole('button', { name: 'Browse regions' }).click();
+  await page.waitForTimeout(300);
+  assert(await guide.locator('h3', { hasText: 'Set the UTC start date' }).count() > 0, 'workflow advances to the UTC-date step');
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/01b-guided-workflow.png` });
+  await guide.getByRole('button', { name: 'Close guided workflow' }).click();
+  await page.waitForTimeout(300);
+  assert(await page.locator('[aria-label="Guided mission workflow"]').count() === 0, 'guided workflow dismisses');
+
+  // Accessibility: the visual charts expose text alternatives (not visual/color-only),
+  // and the time scrubber is a labelled, keyboard-operable slider.
+  assert(await page.locator('svg[aria-label*="Local horizon panorama"]').count() > 0, 'panorama chart has a text alternative');
+  assert(await page.locator('svg[aria-label*="Mission"]').count() > 0, 'timeline chart has a text alternative');
+  assert(await page.locator('canvas[aria-label*="Stereographic map"]').count() > 0, 'polar map has a text alternative');
+  assert(await page.getByLabel('Mission time scrubber').count() === 1, 'time scrubber is labelled + keyboard-operable');
 
   await page.locator('.site-item', { hasText: 'Apollo 11' }).click();
   await page.waitForTimeout(900);
@@ -86,7 +120,7 @@ try {
   await page.screenshot({ animations: 'disabled', path: `${OUT}/02-apollo11.png` });
 
   await page.locator('.site-item', { hasText: "Chang'e 4" }).click();
-  await page.waitForTimeout(900);
+  await page.waitForSelector('text=NEVER', { timeout: 20000 }); // wait for the mission summary, not a fixed delay
   assert(await page.locator('text=NEVER').count() > 0, 'far side reports NEVER');
   await page.screenshot({ animations: 'disabled', path: `${OUT}/03-farside.png` });
 
@@ -348,11 +382,11 @@ try {
   await page.locator('.site-item', { hasText: 'Shackleton Rim' }).click();
   await page.waitForTimeout(600);
 
-  // Artemis III tab lists exactly the nine NASA Oct-2024 candidate regions.
-  await page.getByRole('button', { name: 'Artemis III', exact: true }).click();
+  // The 2024 Regions tab lists exactly the nine NASA Oct-2024 candidate regions.
+  await page.getByRole('button', { name: '2024 Regions', exact: true }).click();
   await page.waitForTimeout(300);
   const artemisCount = await page.locator('.site-item').count();
-  assert(artemisCount === 9, `Artemis III tab shows nine regions (got ${artemisCount})`);
+  assert(artemisCount === 9, `2024 Regions tab shows nine regions (got ${artemisCount})`);
   for (const region of ['Cabeus B', 'Haworth', 'Malapert', 'Mouton', 'Nobile', 'de Gerlache', 'Slater']) {
     assert(await page.locator('.site-item', { hasText: region }).count() > 0, `Artemis region present: ${region}`);
   }
@@ -366,13 +400,36 @@ try {
   assert(await page.locator('text=ILLUSTRATIVE TERRAIN').count() > 0, 'illustrative provenance state shown');
 
   // UTC mission-start selector exists and drives a recompute (no stale results).
-  const startInput = page.getByLabel('Mission start date and time (UTC)');
-  assert(await startInput.count() === 1, 'UTC mission-start selector present');
-  await startInput.fill('2027-03-01T00:00');
-  await startInput.dispatchEvent('change');
+  const startDate = page.getByLabel('Mission start date (UTC)');
+  const startTime = page.getByLabel('Mission start time (UTC)');
+  assert(await startDate.count() === 1, 'UTC mission-start date field present');
+  assert(await startTime.count() === 1, 'UTC mission-start time field present');
+  await startDate.fill('2027-03-01');
+  await startDate.dispatchEvent('change');
+  await startTime.fill('00:00');
+  await startTime.dispatchEvent('change');
   await page.waitForSelector('text=How this score is computed', { timeout: 30000 });
-  assert(await startInput.inputValue() === '2027-03-01T00:00', 'UTC start selector retains the chosen value');
+  assert(await startDate.inputValue() === '2027-03-01', 'UTC date field retains the chosen value');
+  assert(await startTime.inputValue() === '00:00', 'UTC time field retains the chosen value');
   assert(await page.locator('text=SAMPLING').count() > 0, 'sampling disclosure strip present');
+
+  // Multi-timezone check: the same UTC date+time must mean the same mission instant in
+  // a browser running in a different local timezone (Asia/Kolkata, UTC+5:30).
+  const tzContext = await browser.newContext({ timezoneId: 'Asia/Kolkata', viewport: { width: 1600, height: 1000 } });
+  const tzPage = await tzContext.newPage();
+  tzPage.setDefaultTimeout(45000);
+  await tzPage.addInitScript(() => localStorage.setItem('chandra-onboarded-v1', '1'));
+  await tzPage.goto(BASE, { waitUntil: 'load' });
+  await tzPage.waitForSelector('.app-header .display');
+  await tzPage.getByLabel('Mission start date (UTC)').fill('2027-03-01');
+  await tzPage.getByLabel('Mission start time (UTC)').fill('00:00');
+  await tzPage.waitForSelector('text=How this score is computed', { timeout: 30000 });
+  const mainSlip = (await page.locator('text=slip →').innerText()).trim();
+  const tzSlip = (await tzPage.locator('text=slip →').innerText()).trim();
+  assert(mainSlip === tzSlip && mainSlip.includes('2027-03-01'), `UTC start is timezone-independent (${mainSlip} vs ${tzSlip})`);
+  // Do NOT close tzContext mid-run: Sparticuz Chromium runs --single-process, and closing
+  // a second context can tear down the shared renderer (killing the main page too).
+  // The idle tz page is cleaned up by the final browser.close() in `finally`.
 
   // Score transparency: expand the heuristic breakdown and check components + confidence.
   await page.locator('text=How this score is computed').click();
@@ -381,6 +438,30 @@ try {
   assert(await page.locator('text=Application-defined heuristic').count() > 0, 'score disclosed as heuristic');
   assert(await page.locator('text=not an RF link budget').count() > 0, 'geometric LOS != RF disclosed');
   await page.screenshot({ animations: 'disabled', path: `${OUT}/13-provenance-score.png` });
+
+  // ---- Scenario C (technical) + D (invalid data): presets + numeric validation ----
+  await page.getByRole('button', { name: 'Mission parameters' }).click();
+  await page.waitForSelector('[role="dialog"]');
+  const settings = page.locator('[role="dialog"]');
+  assert(await settings.locator('text=illustrative configurations').count() > 0, 'presets disclosed as illustrative, not NASA vehicle specs');
+  // Selecting a preset applies its configuration (Small robotic lander -> 2 m² array).
+  await settings.getByRole('button', { name: /Small robotic lander/ }).click();
+  await page.waitForTimeout(200);
+  const areaInput = settings.getByLabel('Array area', { exact: false });
+  assert(await areaInput.inputValue() === '2', 'preset applies its array area (2 m²)');
+  // Scenario D: an out-of-range value shows an actionable error and is NOT applied.
+  await areaInput.fill('-5');
+  await page.waitForTimeout(150);
+  assert(await settings.locator('[role="alert"]').count() > 0, 'invalid numeric input shows an actionable error');
+  assert(await settings.locator('text=must be between 0.1 and 200').count() > 0, 'error states the valid range + unit');
+  await areaInput.blur();
+  await page.waitForTimeout(150);
+  assert(await areaInput.inputValue() === '2', 'invalid input reverts to the last valid value on blur (never propagated)');
+  // Best-effort capture: screenshots with an open modal can hang under SwiftShader; the
+  // assertions above are the actual verification, so never let the capture fail the suite.
+  await page.screenshot({ animations: 'disabled', path: `${OUT}/14-parameters-validation.png`, timeout: 8000 }).catch(() => {});
+  await settings.getByRole('button', { name: 'Done' }).click();
+  await page.waitForTimeout(300);
 
   const unexpectedConsole = consoleErrors.filter((e) => !e.includes('status of 400')); // real-DEM-without-DEM 400 is an expected, tested safeguard
   assert(pageErrors.length === 0, `page errors: ${pageErrors.join(' | ')}`);

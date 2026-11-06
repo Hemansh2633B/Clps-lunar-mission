@@ -40,6 +40,32 @@ def test_classify_unrecognized(frame):
     assert "blocked" in c["note"].lower()
 
 
+@pytest.mark.parametrize("frame,transform", [
+    ("MOON_ME (DE421) — third-party 512px verification downsample; gap-filled; NOT flight data", "me"),
+    ("MOON_ME_DE421", "me"),
+    ("IAU 2015 Moon", "iau"),
+])
+def test_classify_allowlist_with_description(frame, transform):
+    c = lf.classify_frame(frame)
+    assert c["recognized"] is True
+    assert c["transform"] == transform
+    assert c["identifier"]
+
+
+@pytest.mark.parametrize("frame", [
+    "MOON_ME_DE440",   # different ephemeris realization — not validated
+    "MOON_PA_DE440",
+    "NOT_MOON_ME",     # substring trap
+    "WEIRD_IAU_FRAME", # substring trap
+    "MOONMEME",
+])
+def test_classify_rejects_unknown_realizations_and_substring_traps(frame):
+    c = lf.classify_frame(frame)
+    assert c["recognized"] is False
+    assert c["transform"] is None
+    assert "allowlist" in c["note"].lower()
+
+
 def test_convert_site_identity_is_noop():
     out = lf.convert_site(-45.0, 30.0, np.eye(3))
     assert out["latitude"] == pytest.approx(-45.0, abs=1e-9)

@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { CalendarClock, Pause, Play, SkipBack, SkipForward, RotateCcw, GripVertical } from 'lucide-react';
 import type { EvaluatedSample, MissionSummary, SimulationResult } from '../types/mission';
 import { DAY_MS, clamp, formatDate, formatUTC } from '../engine/constants';
+import { UtcDateTimeInput } from './UtcDateTimeInput';
 
 interface Props {
   sim: SimulationResult | null;
@@ -42,7 +43,6 @@ const SPEED_LABEL: Record<number, string> = { 1: '1×', 60: '1 min/s', 3600: '1 
 export function TimelineScrubber(props: Props) {
   const { sim, loading, window: win, timeMs, onTime, baselineMs, onBaseline, slipDays, onSlip, durationDays, onDuration, playing, onPlay, speed, onSpeed, viewDays, onViewDays, missionSummary, baselineSummary } = props;
   const sampling = sim?.sampling ?? null;
-  const baselineInput = new Date(baselineMs).toISOString().slice(0, 16);
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverT, setHoverT] = useState<number | null>(null);
   const drag = useRef<{ x: number; slip: number } | null>(null);
@@ -87,6 +87,9 @@ export function TimelineScrubber(props: Props) {
   const mx1 = xOf(win.missionEnd);
   const combinedDelta = missionSummary && baselineSummary ? missionSummary.combinedPct - baselineSummary.combinedPct : null;
   const energyDelta = missionSummary && baselineSummary ? missionSummary.selectedEnergyKWh - baselineSummary.selectedEnergyKWh : null;
+  const a11ySummary = missionSummary
+    ? `Mission window: ${missionSummary.illuminationPct.toFixed(0)} percent sunlit, ${missionSummary.dtePct.toFixed(0)} percent Earth line-of-sight, ${missionSummary.combinedPct.toFixed(0)} percent both at once. Longest eclipse ${missionSummary.longestEclipseHours.toFixed(1)} hours; longest communications gap ${missionSummary.longestDteGapHours.toFixed(1)} hours. Verdict ${missionSummary.verdict}. Use the time scrubber slider below to move through the window.`
+    : 'Mission timeline with three tracks: sunlight and power, direct-to-Earth communications, and combined mission viability. No computed window yet.';
 
   return (
     <section className="panel" style={{ flexShrink: 0 }}>
@@ -111,6 +114,7 @@ export function TimelineScrubber(props: Props) {
         <svg
           ref={svgRef}
           viewBox={`0 0 ${W} ${H}`}
+          role="img" aria-label={a11ySummary}
           style={{ width: '100%', display: 'block', cursor: 'crosshair' }}
           onMouseMove={(e) => setHoverT(tOfX(e.clientX))}
           onMouseLeave={() => setHoverT(null)}
@@ -153,7 +157,7 @@ export function TimelineScrubber(props: Props) {
         {loading && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(243,230,208,.6)', fontSize: 11, color: 'var(--ink-soft)' }} className="pulse">Recomputing window…</div>}
       </div>
       <div style={{ padding: '0 12px 6px' }}>
-        <input type="range" min={win.startMs} max={win.endMs} step={60000} value={timeMs} onChange={(e) => onTime(Number(e.target.value))} aria-label="Mission time scrubber" />
+        <input type="range" min={win.startMs} max={win.endMs} step={60000} value={timeMs} onChange={(e) => onTime(Number(e.target.value))} aria-label="Mission time scrubber" aria-valuetext={formatUTC(timeMs)} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '7px 12px', borderTop: '1px solid var(--border)', background: 'var(--panel-2)', flexWrap: 'wrap' }}>
@@ -168,15 +172,7 @@ export function TimelineScrubber(props: Props) {
           <button className="btn sm" onClick={() => onSlip(clamp(slipDays + 14, 0, 60))}>+14 d</button>
           <button className="btn sm ghost icon" onClick={() => onSlip(0)}><RotateCcw size={12} /></button>
         </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--muted)' }} title="Mission start in UTC. All ephemeris, timelines and exports use UTC (no local timezone).">
-          Start (UTC)
-          <input
-            type="datetime-local" className="input" style={{ height: 22, fontSize: 11, width: 182 }}
-            value={baselineInput}
-            onChange={(e) => { const v = e.target.value; if (!v) return; const ms = Date.parse(`${v}:00Z`); if (!Number.isNaN(ms)) onBaseline(ms); }}
-            aria-label="Mission start date and time (UTC)"
-          />
-        </label>
+        <UtcDateTimeInput valueMs={baselineMs} onChange={onBaseline} id="mission-start-date" />
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--muted)' }}>Duration
           <select className="input" style={{ width: 66, height: 22, fontSize: 11 }} value={durationDays} onChange={(e) => onDuration(Number(e.target.value))} aria-label="Mission duration days">
             {[3, 7, 10, 14, 30, 90].map((d) => <option key={d} value={d}>{d} d</option>)}

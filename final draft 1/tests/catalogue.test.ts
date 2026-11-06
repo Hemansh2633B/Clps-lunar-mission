@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { LANDING_SITES, siteById } from '../src/data/landingSites';
+import { ARTEMIS_CONTEXT, CANDIDATE_DATASET_LABEL, CANDIDATE_DATASET_NOTE, ARTEMIS_CONTEXT_AS_OF } from '../src/data/missionContext';
 
 const ARTEMIS_REGIONS = [
   'Peak near Cabeus B', 'Haworth', 'Malapert Massif', 'Mons Mouton Plateau',
@@ -41,6 +42,25 @@ describe('Artemis III catalogue', () => {
       expect(s.category, s.id).toBe('polar');
       expect(s.latitude, s.id).toBeLessThan(-80);
     }
+  });
+});
+
+describe('current Artemis mission context (2026)', () => {
+  it('labels the nine-region list as a historical 2024 dataset', () => {
+    expect(CANDIDATE_DATASET_LABEL).toContain('2024 Dataset');
+    expect(CANDIDATE_DATASET_NOTE.toLowerCase()).toContain('historical');
+    expect(CANDIDATE_DATASET_NOTE).toContain('not a newly announced Artemis IV selection');
+  });
+
+  it('reflects NASA’s redesignation: Artemis III LEO demo, Artemis IV first crewed landing', () => {
+    const iii = ARTEMIS_CONTEXT.find((m) => m.mission === 'Artemis III')!;
+    const iv = ARTEMIS_CONTEXT.find((m) => m.mission === 'Artemis IV')!;
+    expect(iii.role.toLowerCase()).toContain('low-earth-orbit');
+    expect(iii.target).toBe('2027');
+    expect(iv.role.toLowerCase()).toContain('first crewed artemis lunar surface landing');
+    expect(iv.target).toContain('2028');
+    for (const m of ARTEMIS_CONTEXT) expect(m.sourceUrl).toContain('nasa.gov/mission/');
+    expect(ARTEMIS_CONTEXT_AS_OF).toBe('2026-10-23');
   });
 });
 

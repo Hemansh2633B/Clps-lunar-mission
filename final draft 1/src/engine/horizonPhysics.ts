@@ -1,4 +1,4 @@
-import type { BodyKind, EvaluatedSample, LandingSite, MissionConfig, TerrainFeature, TerrainProfile, TransitionEvent, VisibilityState } from '../types/mission';
+import type { BodyKind, EvaluatedSample, LandingSite, MissionConfig, TerrainFeature, TerrainProfile, TransitionDiagnostics, TransitionEvent, UnresolvedInterval, VisibilityState } from '../types/mission';
 import { HOUR_MS, clamp, wrap180, wrap360 } from './constants';
 import { computeEphemeris } from './ephemeris';
 
@@ -146,121 +146,181 @@ function clearanceAt(site: LandingSite, config: MissionConfig, t: number, body: 
   return Math.min(sun, earth);
 }
 
+/** Resolution floor for transition refinement (15 s). Crossings are bisected to here. */
+export const TRANSITION_MIN_STEP_MS = 15_000;
+/** Adaptive node budget per coarse interval before the safe fine-scan fallback engages. */
+export const TRANSITION_NODE_BUDGET = 256;
+
 /**
- * Conservative upper bound on |d(clearance)/dt| (deg/hour) for this terrain.
- * clearance = body elevation - terrain(azimuth); its rate is bounded by the
- * elevation rate plus the terrain's max azimuthal gradient times the azimuth
- * rate. Used to flag intervals where a crossing is kinematically possible so a
- * short visibility window entirely inside one coarse step is not missed.
+ * Upper bound on |d(clearance)/dt| (deg/hour) used to PRUNE intervals that cannot
+ * contain a crossing. clearance = body elevation − terrain(azimuth), so
+ * |dc/dt| ≤ |d(el)/dt| + G·|d(az)/dt| with G the mask's exact max azimuthal gradient.
+ *
+ * Assumptions (validated empirically against brute-force fine scanning in
+ * tests/transition-stress.test.ts across polar AND low-latitude sites, 2020–2035):
+ *  - Sun elevation rate ≤ the synodic angular rate (~0.51°/h); we allow 0.6°/h.
+ *    Earth's libration-driven rate is smaller, so the same allowance over-bounds it.
+ *  - A crossing only matters while elevation ≈ terrain (≤14°), where the azimuth-rate
+ *    amplification 1/cos(el) ≤ 1.03. We nonetheless allow a generous 4°/h azimuth rate
+ *    to cover low-latitude rise/set geometry. Near zenith the azimuth rate can spike,
+ *    but clearance there is ≫0 (el − 14°) so no crossing is pruned incorrectly.
+ * The bound is deliberately generous (larger ⇒ less pruning ⇒ safer). It is NOT
+ * claimed as a tight analytic bound; it is a validated pruning heuristic, and any
+ * interval where the adaptive budget is exhausted falls back to a uniform fine scan
+ * so completeness never depends on the bound alone.
  */
-function clearanceRateBound(profile: TerrainProfile): number {
+export function clearanceRateBound(profile: TerrainProfile): number {
   const e = profile.elevations;
   let maxGradient = 0;
   for (let i = 0; i < e.length; i++) {
     const g = Math.abs(e[(i + 1) % e.length] - e[i]) / profile.resolutionDeg;
     if (g > maxGradient) maxGradient = g;
   }
-  // Lunar rotation ~0.55 deg/h; libration adds Earth motion. Use a generous
-  // azimuth-rate allowance; elevation rate is small at the pole.
-  return Math.min(40, Math.max(2, 0.6 + maxGradient * 2.0));
+  return 0.6 + maxGradient * 4.0; // no cap: steep terrain must not be under-bounded
 }
+
+export type { TransitionDiagnostics, UnresolvedInterval } from '../types/mission';
+
+interface BodyDetection {
+  events: TransitionEvent[];
+  exhaustedCount: number;
+  fallbackUsed: boolean;
+  unresolved: UnresolvedInterval[];
+  nodes: number;
+}
+
+/** Core adaptive detector for one body over coarse (time, clearance) samples. */
+function detectBodyTransitions(
+  site: LandingSite, config: MissionConfig, body: BodyKind | 'combined',
+  coarse: { timeMs: number; c: number }[], rateBoundPerMs: number,
+): BodyDetection {
+  const events: TransitionEvent[] = [];
+  const minStepMs = TRANSITION_MIN_STEP_MS;
+  const evalC = (t: number) => clearanceAt(site, config, t, body);
+  let exhaustedCount = 0;
+  let fallbackUsed = false;
+  let nodes = 0;
+  const unresolved: UnresolvedInterval[] = [];
+  const record = (t0: number, t1: number, c1: number) => {
+    const targetVisible = c1 >= 0;
+    const tc = refineCrossing(site, config, t0, t1, body, targetVisible);
+    events.push({ timeMs: tc, body, visible: targetVisible });
+  };
+  for (let i = 1; i < coarse.length; i++) {
+    const a = coarse[i - 1];
+    const b = coarse[i];
+    if (b.timeMs - a.timeMs <= 0) continue;
+    let budget = TRANSITION_NODE_BUDGET;
+    let hitBudget = false;
+    const examine = (t0: number, cc0: number, t1: number, cc1: number): void => {
+      const span = t1 - t0;
+      if (span <= 0) return;
+      if (budget <= 0) { hitBudget = true; return; }
+      const signChange = (cc0 >= 0) !== (cc1 >= 0);
+      const nearZero = Math.min(Math.abs(cc0), Math.abs(cc1)) < rateBoundPerMs * span;
+      if (!signChange && !nearZero) return; // crossing kinematically impossible under the bound
+      if (span <= minStepMs) { if (signChange) record(t0, t1, cc1); return; }
+      budget--; nodes++;
+      const tm = (t0 + t1) / 2;
+      const cm = evalC(tm);
+      examine(t0, cc0, tm, cm);
+      examine(tm, cm, t1, cc1);
+    };
+    examine(a.timeMs, a.c, b.timeMs, b.c);
+    if (hitBudget) {
+      // Never silently return apparently-complete results: fall back to a uniform
+      // fine scan of the WHOLE interval at the resolution floor, bisecting every sign
+      // change. Duplicates with the partial adaptive pass are merged below.
+      exhaustedCount++;
+      fallbackUsed = true;
+      const steps = Math.ceil((b.timeMs - a.timeMs) / minStepMs);
+      const FALLBACK_CAP = 20_000;
+      if (steps > FALLBACK_CAP) {
+        unresolved.push({ startMs: a.timeMs, endMs: b.timeMs, body });
+      } else {
+        let pt = a.timeMs, pc = a.c;
+        for (let k = 1; k <= steps; k++) {
+          const nt = k === steps ? b.timeMs : a.timeMs + k * minStepMs;
+          const nc = k === steps ? b.c : evalC(nt);
+          nodes++;
+          if ((pc >= 0) !== (nc >= 0)) record(pt, nt, nc);
+          pt = nt; pc = nc;
+        }
+      }
+    }
+  }
+  return { events, exhaustedCount, fallbackUsed, unresolved, nodes };
+}
+
+/** Merge duplicate crossings (same body + direction within the resolution floor). */
+function dedupEvents(events: TransitionEvent[]): TransitionEvent[] {
+  const sorted = [...events].sort((x, y) => x.timeMs - y.timeMs);
+  const out: TransitionEvent[] = [];
+  for (const e of sorted) {
+    const dup = out.some((o) => o.body === e.body && o.visible === e.visible && Math.abs(o.timeMs - e.timeMs) <= TRANSITION_MIN_STEP_MS);
+    if (!dup) out.push(e);
+  }
+  return out;
+}
+
+export interface TransitionResult { events: TransitionEvent[]; diagnostics: TransitionDiagnostics }
 
 /**
- * Detect visibility transitions with adaptive temporal refinement.
- *
- * Consecutive-sample sign changes alone miss a short window that begins and ends
- * inside one coarse interval. For each interval we flag a crossing as possible
- * when the endpoint clearances change sign OR approach zero within the kinematic
- * rate bound, then sub-sample flagged intervals finely and bisect each crossing.
- * The effective coarse step is uniform (see simulateMission), so this resolves
- * windows down to ~15 s without assuming a fixed step is always sufficient.
+ * Detect visibility transitions with adaptive temporal refinement + explicit
+ * reliability diagnostics. Consecutive-sample sign changes alone miss a short window
+ * that begins and ends inside one coarse interval, so flagged intervals are subdivided
+ * adaptively and each crossing bisected to TRANSITION_MIN_STEP_MS. If the adaptive node
+ * budget is exhausted the interval is re-scanned uniformly at the resolution floor
+ * (safe fallback) and the diagnostics disclose it — results are never silently incomplete.
  */
 export function findTransitions(
-  site: LandingSite,
-  config: MissionConfig,
-  samples: EvaluatedSample[],
-): TransitionEvent[] {
-  const events: TransitionEvent[] = [];
-  if (samples.length < 2) return events;
-  const rateBoundPerMs = clearanceRateBound(site.terrain) / HOUR_MS;
-  const MIN_STEP_MS = 15_000;
-  const NODE_BUDGET = 256; // bounds worst-case work per coarse interval
-  const bodies: (BodyKind | 'combined')[] = ['sun', 'earth', 'combined'];
-
-  for (const body of bodies) {
-    const seen = new Set<number>();
-    const record = (t0: number, t1: number, c1: number) => {
-      const targetVisible = c1 >= 0;
-      const tc = refineCrossing(site, config, t0, t1, body, targetVisible);
-      const key = Math.round(tc / 1000);
-      if (!seen.has(key)) {
-        seen.add(key);
-        events.push({ timeMs: tc, body, visible: targetVisible });
-      }
-    };
-    for (let i = 1; i < samples.length; i++) {
-      const a = samples[i - 1];
-      const b = samples[i];
-      const c0 = clearanceOf(a, body, config.commsMarginDeg);
-      const c1 = clearanceOf(b, body, config.commsMarginDeg);
-      if (b.timeMs - a.timeMs <= 0) continue;
-      // Recursive adaptive subdivision: a crossing can hide in [t0,t1] only if the
-      // endpoints change sign OR approach zero within the kinematic rate bound.
-      // Halves where no crossing is possible are pruned immediately, so effort
-      // concentrates near real crossings instead of uniformly sampling every
-      // flagged interval. Resolves down to MIN_STEP_MS, then bisects each crossing.
-      let budget = NODE_BUDGET;
-      const examine = (t0: number, cc0: number, t1: number, cc1: number): void => {
-        const span = t1 - t0;
-        if (span <= 0 || budget <= 0) return;
-        const signChange = (cc0 >= 0) !== (cc1 >= 0);
-        const nearZero = Math.min(Math.abs(cc0), Math.abs(cc1)) < rateBoundPerMs * span;
-        if (!signChange && !nearZero) return; // crossing kinematically impossible
-        if (span <= MIN_STEP_MS) {
-          if (signChange) record(t0, t1, cc1);
-          return;
-        }
-        budget--;
-        const tm = (t0 + t1) / 2;
-        const cm = clearanceAt(site, config, tm, body);
-        examine(t0, cc0, tm, cm);
-        examine(tm, cm, t1, cc1);
-      };
-      examine(a.timeMs, c0, b.timeMs, c1);
-    }
-  }
-  return events.sort((x, y) => x.timeMs - y.timeMs);
-}
-
-export interface NextEvent {
-  timeMs: number;
-  visible: boolean;
-}
-
-/** Forward scan for countdowns when the active simulation window has no crossing. */
-export function findNextTransition(
-  site: LandingSite,
-  config: MissionConfig,
-  fromMs: number,
-  body: BodyKind,
-  maxDays = 40,
-): NextEvent | null {
-  const stateAt = (t: number) => {
-    const s = computeEphemeris(site, t);
-    return body === 'sun'
-      ? visibilityFor('sun', s.sun.elevationDeg, s.sun.azimuthDeg, site.terrain).visible
-      : visibilityFor('earth', s.earth.elevationDeg, s.earth.azimuthDeg, site.terrain, config.commsMarginDeg).visible;
+  site: LandingSite, config: MissionConfig, samples: EvaluatedSample[],
+): TransitionResult {
+  const rateBound = clearanceRateBound(site.terrain);
+  const diagnostics: TransitionDiagnostics = {
+    nodeBudgetPerInterval: TRANSITION_NODE_BUDGET, minStepMs: TRANSITION_MIN_STEP_MS,
+    rateBoundDegPerHour: rateBound, budgetExhausted: false, exhaustedIntervals: 0,
+    fallbackUsed: false, unresolvedIntervals: [], nodesEvaluated: 0, resolutionStatus: 'resolved',
   };
-  const initial = stateAt(fromMs);
-  const step = HOUR_MS;
-  let prev = initial;
-  for (let t = fromMs + step; t <= fromMs + maxDays * 24 * HOUR_MS; t += step) {
-    const now = stateAt(t);
-    if (now !== prev) {
-      const refined = refineCrossing(site, config, t - step, t, body, now);
-      return { timeMs: refined, visible: now };
-    }
-    prev = now;
+  if (samples.length < 2) return { events: [], diagnostics };
+  const rateBoundPerMs = rateBound / HOUR_MS;
+  const bodies: (BodyKind | 'combined')[] = ['sun', 'earth', 'combined'];
+  let all: TransitionEvent[] = [];
+  for (const body of bodies) {
+    const coarse = samples.map((s) => ({ timeMs: s.timeMs, c: clearanceOf(s, body, config.commsMarginDeg) }));
+    const det = detectBodyTransitions(site, config, body, coarse, rateBoundPerMs);
+    all = all.concat(det.events);
+    diagnostics.exhaustedIntervals += det.exhaustedCount;
+    diagnostics.fallbackUsed = diagnostics.fallbackUsed || det.fallbackUsed;
+    diagnostics.unresolvedIntervals.push(...det.unresolved);
+    diagnostics.nodesEvaluated += det.nodes;
   }
-  return null;
+  diagnostics.budgetExhausted = diagnostics.exhaustedIntervals > 0;
+  diagnostics.resolutionStatus = diagnostics.unresolvedIntervals.length > 0
+    ? 'degraded'
+    : diagnostics.fallbackUsed ? 'fallback-resolved' : 'resolved';
+  return { events: dedupEvents(all), diagnostics };
+}
+
+export interface NextEvent { timeMs: number; visible: boolean }
+
+/**
+ * Forward scan for countdowns when the active window has no crossing. Uses the SAME
+ * adaptive detector as findTransitions (not an independent hourly sign-change scan that
+ * could miss a short window): a coarse forward grid is built and passed through the
+ * adaptive refinement, so a brief visibility window inside one coarse step is still found.
+ */
+export function findNextTransition(
+  site: LandingSite, config: MissionConfig, fromMs: number, body: BodyKind, maxDays = 40,
+): NextEvent | null {
+  const endMs = fromMs + maxDays * 24 * HOUR_MS;
+  const step = HOUR_MS;
+  const coarse: { timeMs: number; c: number }[] = [];
+  for (let t = fromMs; t <= endMs; t += step) coarse.push({ timeMs: t, c: clearanceAt(site, config, t, body) });
+  if (coarse.length < 2) return null;
+  const rateBoundPerMs = clearanceRateBound(site.terrain) / HOUR_MS;
+  const det = detectBodyTransitions(site, config, body, coarse, rateBoundPerMs);
+  const future = dedupEvents(det.events).filter((e) => e.timeMs > fromMs).sort((a, b) => a.timeMs - b.timeMs);
+  if (future.length === 0) return null;
+  return { timeMs: future[0].timeMs, visible: future[0].visible };
 }

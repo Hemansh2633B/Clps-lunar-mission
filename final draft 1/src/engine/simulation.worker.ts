@@ -9,6 +9,12 @@ export interface SimulationRequest {
   config: MissionConfig;
 }
 
+export interface SimulationProgressMessage {
+  progress: number; // request id
+  phase: 'sampling' | 'transitions' | 'energy' | 'summary';
+  fraction: number;
+}
+
 export interface SimulationResponse {
   id: number;
   ok: boolean;
@@ -16,12 +22,17 @@ export interface SimulationResponse {
   error?: string;
 }
 
+export type WorkerOutbound = SimulationResponse | SimulationProgressMessage;
+
 self.onmessage = (event: MessageEvent<SimulationRequest>) => {
   const { id, site, startMs, endMs, config } = event.data;
+  const post = (msg: WorkerOutbound) => (self as unknown as Worker).postMessage(msg);
   try {
-    const result = simulateMission(site, startMs, endMs, config);
-    (self as unknown as Worker).postMessage({ id, ok: true, result } satisfies SimulationResponse);
+    // Progress messages reach the main thread in real time even though this loop is
+    // synchronous: postMessage queues to the main thread, whose event loop is free.
+    const result = simulateMission(site, startMs, endMs, config, (p) => post({ progress: id, phase: p.phase, fraction: p.fraction }));
+    post({ id, ok: true, result });
   } catch (err) {
-    (self as unknown as Worker).postMessage({ id, ok: false, error: err instanceof Error ? err.message : String(err) } satisfies SimulationResponse);
+    post({ id, ok: false, error: err instanceof Error ? err.message : String(err) });
   }
 };

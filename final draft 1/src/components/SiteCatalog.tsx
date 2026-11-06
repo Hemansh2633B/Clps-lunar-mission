@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Crosshair, MapPin, Plus, Search, Table2, Pin } from 'lucide-react';
+import { Crosshair, MapPin, Plus, Search, Table2, Pin, History, Rocket } from 'lucide-react';
 import type { LandingSite } from '../types/mission';
 import { formatCoord } from '../engine/constants';
+import { CANDIDATE_DATASET_LABEL, CANDIDATE_DATASET_NOTE, ARTEMIS_CONTEXT, ARTEMIS_CONTEXT_AS_OF } from '../data/missionContext';
 
 interface Props {
   sites: LandingSite[];
@@ -43,9 +44,28 @@ export function SiteCatalog({ sites, selectedId, onSelect, onCustom, onHorizonTa
         </div>
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           {(['all', 'artemis', 'polar', 'reference', 'custom'] as Tab[]).map((t) => (
-            <button key={t} className={`btn sm ${tab === t ? 'active' : 'ghost'}`} style={{ flex: 1, textTransform: 'capitalize', whiteSpace: 'nowrap' }} onClick={() => setTab(t)}>{t === 'artemis' ? 'Artemis III' : t}</button>
+            <button key={t} className={`btn sm ${tab === t ? 'active' : 'ghost'}`} style={{ flex: 1, textTransform: 'capitalize', whiteSpace: 'nowrap' }} onClick={() => setTab(t)} aria-pressed={tab === t}>{t === 'artemis' ? '2024 Regions' : t}</button>
           ))}
         </div>
+        {tab === 'artemis' && (
+          <div style={{ border: '1px solid var(--border)', background: '#fffdf7', padding: 9, display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 700, color: 'var(--navy)' }}>
+              <History size={12} /> {CANDIDATE_DATASET_LABEL}
+            </div>
+            <p style={{ margin: 0, fontSize: 10, color: 'var(--muted)', lineHeight: 1.5 }}>{CANDIDATE_DATASET_NOTE}</p>
+            <div style={{ borderTop: '1px dashed var(--border)', paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9.5, fontWeight: 700, color: 'var(--ink-soft)' }}>
+                <Rocket size={11} /> Current mission context (NASA, as of {ARTEMIS_CONTEXT_AS_OF})
+              </div>
+              {ARTEMIS_CONTEXT.map((m) => (
+                <div key={m.mission} style={{ fontSize: 9.5, color: 'var(--muted)', lineHeight: 1.45 }}>
+                  <strong style={{ color: 'var(--ink)' }}>{m.mission}</strong> · {m.target} — {m.role}{' '}
+                  <a href={m.sourceUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--navy)' }}>NASA ↗</a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       <div style={{ flex: 1, overflow: 'auto', padding: 6 }}>
         {filtered.map((s) => (

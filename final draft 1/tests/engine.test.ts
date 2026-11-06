@@ -148,8 +148,8 @@ describe('power and survival', () => {
     const site = siteById('shackleton-rim')!;
     const config = { ...DEFAULT_CONFIG, arrayMode: 'horizontal' as const, arrayAreaM2: 2, loadW: 400, batteryCapacityKWh: 5, stepMinutes: 60 };
     const sim = simulateMission(site, START, START + 5 * DAY_MS, config);
-    expect(sim.summary.depletionHours).toBeGreaterThan(0);
-    expect(sim.summary.verdict).toBe('ENERGY DEFICIT');
+    expect(sim.summary!.depletionHours).toBeGreaterThan(0);
+    expect(sim.summary!.verdict).toBe('ENERGY DEFICIT');
   });
 });
 
@@ -157,20 +157,20 @@ describe('mission simulation', () => {
   it('Apollo 11 shows the classic ~14 day day/night cycle', () => {
     const site = siteById('apollo-11')!;
     const sim = simulateMission(site, START, START + 30 * DAY_MS, cfg);
-    expect(sim.summary.illuminationPct).toBeGreaterThan(40);
-    expect(sim.summary.illuminationPct).toBeLessThan(60);
-    expect(sim.summary.longestEclipseHours).toBeGreaterThan(300);
-    expect(sim.summary.longestEclipseHours).toBeLessThan(400);
-    expect(sim.summary.dtePct).toBe(100);
-    expect(sim.summary.earthNeverVisible).toBe(false);
+    expect(sim.summary!.illuminationPct).toBeGreaterThan(40);
+    expect(sim.summary!.illuminationPct).toBeLessThan(60);
+    expect(sim.summary!.longestEclipseHours).toBeGreaterThan(300);
+    expect(sim.summary!.longestEclipseHours).toBeLessThan(400);
+    expect(sim.summary!.dtePct).toBe(100);
+    expect(sim.summary!.earthNeverVisible).toBe(false);
   });
 
   it("Chang'e 4 reports 0% DTE and relay required", () => {
     const site = siteById('change-4')!;
     const sim = simulateMission(site, START, START + 10 * DAY_MS, cfg);
-    expect(sim.summary.dtePct).toBe(0);
-    expect(sim.summary.earthNeverVisible).toBe(true);
-    expect(sim.summary.verdict).toBe('RELAY REQUIRED');
+    expect(sim.summary!.dtePct).toBe(0);
+    expect(sim.summary!.earthNeverVisible).toBe(true);
+    expect(sim.summary!.verdict).toBe('RELAY REQUIRED');
   });
 
   it('catalog contains all required sites', () => {

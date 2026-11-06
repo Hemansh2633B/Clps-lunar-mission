@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
-import { GraduationCap, BookOpen } from 'lucide-react';
+import { GraduationCap, BookOpen, ListChecks } from 'lucide-react';
 import type { AppMode, GuidedScenario, LandingSite, MissionConfig, Scenario } from './types/mission';
 import { LANDING_SITES, makeCustomSite } from './data/landingSites';
 import { DEFAULT_CONFIG, analysisWindow, evaluateAt } from './engine/simulation';
@@ -19,11 +19,23 @@ const TerrainLab = lazy(() => import('./components/TerrainLab').then((m) => ({ d
 import type { TerrainSiteInput } from './components/TerrainLab';
 const SpaceView = lazy(() => import('./components/SpaceView').then((m) => ({ default: m.SpaceView })));
 import { EducatorOverlay } from './components/EducatorOverlay';
+import { Onboarding } from './components/Onboarding';
+import { WorkflowGuide } from './components/WorkflowGuide';
+import { MISSION_PRESETS, CUSTOM_PRESET_ID, matchingPresetId } from './data/missionPresets';
+import { formatUtcStamp } from './utils/utc';
+import type { WorkflowStepId } from './utils/workflow';
 import { CustomSiteModal, SettingsModal, HorizonTableModal, ShortcutsModal, type CustomSiteInput } from './components/Modals';
 import { download, missionReportJSON, timeseriesCSV, horizonCSV, summaryCSV, comparisonCSV, type ComparisonRow } from './utils/export';
 
 const BASELINE = Date.parse('2026-12-18T00:00:00Z');
 const INITIAL_TIME = Date.parse('2026-12-20T08:00:00Z');
+const ONBOARD_KEY = 'chandra-onboarded-v1';
+function hasOnboarded(): boolean {
+  try { return window.localStorage.getItem(ONBOARD_KEY) === '1'; } catch { return true; }
+}
+function markOnboarded() {
+  try { window.localStorage.setItem(ONBOARD_KEY, '1'); } catch { /* storage unavailable */ }
+}
 const TICKER = [
   '1.54° AXIAL TILT', '709h SYNODIC DAY', '±6.7° LAT LIBRATION', '±7.9° LON LIBRATION',
   '0.0″ AIRLESS REFRACTION', '1361 W/m² SOLAR CONSTANT', 'IAU 2015 MOON ROTATION',
@@ -56,6 +68,9 @@ export default function App() {
   const [activeTour, setActiveTour] = useState<GuidedScenario | null>(null);
   const [tourStep, setTourStep] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [onboardingOpen, setOnboardingOpen] = useState(() => !hasOnboarded());
+  const [workflowOpen, setWorkflowOpen] = useState(false);
+  const [exported, setExported] = useState(false);
 
   const site = sites.find((s) => s.id === selectedId) ?? sites[0];
   const win = useMemo(() => analysisWindow(baselineMs, slipDays, config.durationDays, viewDays), [baselineMs, slipDays, config.durationDays, viewDays]);
@@ -65,11 +80,32 @@ export default function App() {
   const missionSim = useSimulation(site, win.missionStart, win.missionEnd, config);
   const baselineSim = useSimulation(site, baselineMs, baselineMs + config.durationDays * DAY_MS, config);
   const events = activeSim.data?.events ?? [];
+  const presetName = useMemo(() => {
+    const id = matchingPresetId(config);
+    return id === CUSTOM_PRESET_ID ? 'Custom' : MISSION_PRESETS.find((p) => p.id === id)?.label ?? 'Custom';
+  }, [config]);
 
   const notify = useCallback((msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 2600);
   }, []);
+
+  const dismissOnboarding = useCallback(() => { markOnboarded(); setOnboardingOpen(false); }, []);
+  const startDemo = useCallback(() => {
+    markOnboarded(); setOnboardingOpen(false);
+    setTerrainView(false); setSpaceView(false); setCompareMode(false);
+    setSelectedId('connecting-ridge');
+    setBaselineMs(Date.parse('2026-09-01T00:00:00Z'));
+    setSlipDays(0);
+    setMode('planner');
+    setWorkflowOpen(true);
+    notify('Demo mode — illustrative terrain (not measured flight data). Follow the guided workflow or explore freely.');
+  }, [notify]);
+  const startRealDem = useCallback(() => {
+    markOnboarded(); setOnboardingOpen(false);
+    setSpaceView(false); setCompareMode(false); setTerrainView(true);
+    notify('Terrain Lab opened — configure a compatible lunar DEM (MOON_ME/PA · DE421, or IAU 2015). Real mode never silently substitutes synthetic data.');
+  }, [notify]);
 
   useEffect(() => {
     if (!playing) return;
@@ -94,7 +130,7 @@ export default function App() {
     setCompareMode(true);
   }, [site.id, win.missionStart, config, notify]);
 
-  const overlayOpen = customOpen || settingsOpen || horizonOpen || shortcutsOpen || guideOpen;
+  const overlayOpen = customOpen || settingsOpen || horizonOpen || shortcutsOpen || guideOpen || onboardingOpen;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -165,12 +201,17 @@ export default function App() {
     // current site/date/config (the hook returns null until the active key resolves).
     if (missionSim.loading) { notify('Mission window is still computing — export blocked to avoid stale results.'); return; }
     if (missionSim.error) { notify(`Mission window failed (${missionSim.error}) — nothing to export.`); return; }
+    if (missionSim.data?.analysis && !missionSim.data.analysis.demoEligible) {
+      notify(`Export blocked — analysis is ${missionSim.data.analysis.status}. Resolve the flagged issue before exporting.`);
+      return;
+    }
     const stamp = new Date(timeMs).toISOString().slice(0, 10);
     if (kind === 'json') download(`chandra-report-${stamp}.json`, missionReportJSON(site, config, missionSim.data, current), 'application/json');
     else if (kind === 'horizon') download(`chandra-horizon-${site.id}.csv`, horizonCSV(site, current), 'text/csv');
     else if (!missionSim.data) { notify('Mission window is still computing.'); return; }
     else if (kind === 'timeseries') download(`chandra-timeseries-${site.id}.csv`, timeseriesCSV(missionSim.data), 'text/csv');
     else download(`chandra-summary-${site.id}.csv`, summaryCSV(missionSim.data), 'text/csv');
+    setExported(true);
     notify(`Exported ${kind}`);
   }, [site, config, missionSim.data, missionSim.loading, missionSim.error, current, timeMs, notify]);
 
@@ -181,6 +222,25 @@ export default function App() {
     notify('Comparison exported');
   }, [notify]);
 
+  // Each guided-workflow step drives the real app, then the guide advances.
+  const handleWorkflowAction = useCallback((id: WorkflowStepId) => {
+    if (id === 'region') {
+      document.querySelector<HTMLElement>('.site-rail .site-item')?.focus();
+    } else if (id === 'date') {
+      const el = document.getElementById('mission-start-date');
+      el?.scrollIntoView({ block: 'nearest' });
+      el?.focus();
+    } else if (id === 'preset') {
+      setSettingsOpen(true);
+    } else if (id === 'results') {
+      document.querySelector<HTMLElement>('.telemetry-rail')?.scrollIntoView({ block: 'nearest' });
+    } else if (id === 'compare') {
+      pinCurrent();
+    } else if (id === 'report') {
+      handleExport('json');
+    }
+  }, [pinCurrent, handleExport]);
+
   return (
     <div className="app-shell">
       <HeaderBar
@@ -189,6 +249,7 @@ export default function App() {
         terrainActive={terrainView} onTerrain={() => { setSpaceView(false); setTerrainView((v) => !v); }}
         spaceActive={spaceView} onSpace={() => { setTerrainView(false); setCompareMode(false); setSpaceView((v) => !v); }}
         onGuide={() => setGuideOpen(true)}
+        onHelp={() => setOnboardingOpen(true)}
         onSettings={() => setSettingsOpen(true)} onShortcuts={() => setShortcutsOpen(true)}
         onExport={handleExport} playing={playing}
         subSolar={{ lat: current.subsolarLatitudeDeg, lon: current.subsolarLongitudeDeg }}
@@ -227,6 +288,20 @@ export default function App() {
               onPin={pinCurrent} onClose={() => setCompareMode(false)} onExport={handleComparisonExport} mode={mode} />
           ) : (
             <>
+              {workflowOpen ? (
+                <WorkflowGuide onClose={() => setWorkflowOpen(false)} onAction={handleWorkflowAction}
+                  context={{
+                    siteName: site.shortName, startUtc: formatUtcStamp(win.missionStart), presetName,
+                    verdict: missionSim.data?.summary?.verdict ?? null, scenarioCount: scenarios.length,
+                    simReady: !!missionSim.data?.summary && !missionSim.loading,
+                    exportBlocked: !!missionSim.data?.analysis && !missionSim.data.analysis.demoEligible,
+                  }} />
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <button className="btn sm ghost" onClick={() => setWorkflowOpen(true)}><ListChecks size={12} /> Guided workflow</button>
+                  <span style={{ fontSize: 10, color: 'var(--dim)' }}>New here? Follow the six-step path from region to report.</span>
+                </div>
+              )}
               <HorizonPanorama site={site} current={current} sim={activeSim.data} mode={mode} options={panorama} onOptions={setPanorama} />
               <div className="lower-grid">
                 <PolarMap sites={sites} selected={site} current={current} onSelect={setSelectedId} onPlaceCustom={placeCustom} layers={mapLayers} onLayers={setMapLayers} />
@@ -236,7 +311,7 @@ export default function App() {
           )}
         </main>
         <aside className="telemetry-rail">
-          <TelemetryPanel site={site} current={current} sim={missionSim.data} events={events} timeMs={timeMs} mode={mode} config={config} onSettings={() => setSettingsOpen(true)} loading={missionSim.loading} error={missionSim.error} />
+          <TelemetryPanel site={site} current={current} sim={missionSim.data} events={events} timeMs={timeMs} mode={mode} config={config} onSettings={() => setSettingsOpen(true)} loading={missionSim.loading} error={missionSim.error} progress={missionSim.progress} />
         </aside>
       </div>
       {!spaceView && (
@@ -260,7 +335,8 @@ export default function App() {
       {customOpen && <CustomSiteModal onClose={() => setCustomOpen(false)} onCreate={createCustom} initial={customInitial} />}
       {settingsOpen && <SettingsModal config={config} onChange={setConfig} onClose={() => setSettingsOpen(false)} />}
       {horizonOpen && <HorizonTableModal site={site} current={current} onClose={() => setHorizonOpen(false)} onExport={() => handleExport('horizon')} />}
-      {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
+      {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} onReopenWelcome={() => { setShortcutsOpen(false); setOnboardingOpen(true); }} />}
+      <Onboarding open={onboardingOpen} onClose={dismissOnboarding} onDemo={startDemo} onRealDem={startRealDem} />
       <EducatorOverlay open={guideOpen} onClose={() => setGuideOpen(false)} active={activeTour} step={tourStep}
         onStart={applyGuided} onStep={(d) => setTourStep((s) => clamp(s + d, 0, (activeTour?.steps.length ?? 1) - 1))} onApply={applyGuided} />
       {toast && (

@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'arena/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: 'final draft 1'
+
+jobs:
+  # Ordinary CI never depends on an external NASA download. SPICE-kernel-gated tests
+  # are skipped here and reported as SKIPPED (never as a passed validation). The
+  # separate spice-validation job runs them for real when kernels are fetched.
+  quality:
+    name: Typecheck · build · unit · geometry · parity · Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: 'final draft 1/package-lock.json'
+      - name: Install Node dependencies
+        run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Python dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements-dev.txt
+      - name: TypeScript typecheck
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
+      - name: Unit tests (engine, ephemeris validation, frames, sampling, energy, exports, catalogue)
+        run: npm test
+      - name: Geometry checks
+        run: npm run test:geometry
+      - name: TypeScript / Python horizon parity
+        run: npm run test:parity
+      - name: Python tests (kernel-gated SPICE tests skip without kernels)
+        run: .venv/bin/python -m pytest -q -rs
+      - name: Report SPICE validation status honestly
+        run: |
+          .venv/bin/python - <<'PY'
+          from backend import lunar_frame as lf
+          available = lf.kernels_available()
+          print(f"SPICE kernels available: {available}")
+          if not available:
+              print("Independent SPICE validation: SKIPPED in this job (kernels not fetched).")
+              print("A skipped SPICE test is NOT a passed validation. See the spice-validation job.")
+          else:
+              print("SPICE kernels present; kernel-gated tests executed in the pytest step above.")
+          PY
+
+  # Real independent SPICE validation. Runs on demand and on pushes to main, not on
+  # every PR, so ordinary CI does not depend on the kernel fetch. Kernels come from
+  # checksummed public GitHub mirrors (not NASA), recorded in data/kernels/PROVENANCE.json.
+  spice-validation:
+    name: Independent SPICE validation (fetched kernels)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Python dependencies + spiceypy
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements-dev.txt spiceypy
+      - name: Fetch SPICE kernels (checksummed GitHub mirrors)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .venv/bin/python scripts/fetch-spice-kernels.py
+      - name: Verify kernels are present (fail rather than silently skip)
+        run: |
+          .venv/bin/python - <<'PY'
+          from backend import lunar_frame as lf
+          assert lf.kernels_available(), "SPICE kernels missing — refusing to report a skipped validation as passed."
+          print("SPICE kernels present; running the independent validation for real.")
+          PY
+      - name: Run kernel-gated SPICE frame tests
+        run: .venv/bin/python -m pytest tests/python/test_lunar_frame.py -q -rs
+
+  # Browser E2E against a live dev server + terrain API (no DEM configured, so the
+  # real-mode no-DEM safeguard is exercised). Uses Playwright's portable Chromium.
+  browser:
+    name: Browser E2E (mission · terrain · space · onboarding)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: 'final draft 1/package-lock.json'
+      - name: Install Node dependencies
+        run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Python dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements-dev.txt
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Start terrain API + dev console
+        run: |
+          npm run dev:full -- --api-port 8000 --web-port 5173 > /tmp/devfull.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:5173/ >/dev/null 2>&1 && curl -sf http://localhost:8000/api/config >/dev/null 2>&1; then
+              echo "servers up"; break
+            fi
+            sleep 2
+          done
+          curl -sf http://localhost:5173/ >/dev/null || (echo "dev server failed"; cat /tmp/devfull.log; exit 1)
+          curl -sf http://localhost:8000/api/config >/dev/null || (echo "terrain API failed"; cat /tmp/devfull.log; exit 1)
+      - name: Run browser E2E
+        env:
+          CHANDRA_BROWSER_CI: '1'
+          BASE_URL: http://localhost:5173/
+        run: npm run test:browser
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-screenshots
+          path: 'final draft 1/screenshots/'

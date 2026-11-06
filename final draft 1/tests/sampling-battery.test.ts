@@ -127,7 +127,7 @@ describe('transition refinement convergence', () => {
     const fine = simulateMission(site, start, end, { ...DEFAULT_CONFIG, stepMinutes: 30 });
     // Event-based percentages use refined crossings, so coarse sampling already
     // resolves them: the two must agree closely (convergence, not coarse-step bias).
-    expect(Math.abs(coarse.summary.illuminationPct - fine.summary.illuminationPct)).toBeLessThan(0.5);
+    expect(Math.abs(coarse.summary!.illuminationPct - fine.summary!.illuminationPct)).toBeLessThan(0.5);
     const coarseSun = coarse.events.filter((e) => e.body === 'sun').length;
     const fineSun = fine.events.filter((e) => e.body === 'sun').length;
     // Adaptive sub-sampling must not miss short windows the coarse grid would skip.
@@ -141,9 +141,9 @@ describe('transition refinement convergence', () => {
     const sim = simulateMission(site, START, START + days * DAY_MS, { ...DEFAULT_CONFIG, stepMinutes: 60 });
     // Illumination fraction + longest eclipse cannot exceed the window, and the
     // illumination percentage must match the event-integrated visible time.
-    expect(sim.summary.illuminationPct).toBeGreaterThan(40);
-    expect(sim.summary.illuminationPct).toBeLessThan(60);
-    expect(sim.summary.longestEclipseHours).toBeGreaterThan(0);
-    expect(sim.summary.longestEclipseHours).toBeLessThan(days * 24);
+    expect(sim.summary!.illuminationPct).toBeGreaterThan(40);
+    expect(sim.summary!.illuminationPct).toBeLessThan(60);
+    expect(sim.summary!.longestEclipseHours).toBeGreaterThan(0);
+    expect(sim.summary!.longestEclipseHours).toBeLessThan(days * 24);
   }, 60000);
 });

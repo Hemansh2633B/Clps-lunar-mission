@@ -34,7 +34,7 @@ describe('JSON report reproducibility', () => {
     const r = JSON.parse(missionReportJSON(site, cfg, sim, current));
     expect(r.reproducibility).toBeDefined();
     expect(r.reproducibility.timeReference).toBe('UTC');
-    expect(r.reproducibility.interval.startUtc).toBe(new Date(sim.summary.startMs).toISOString());
+    expect(r.reproducibility.interval.startUtc).toBe(new Date(sim.summary!.startMs).toISOString());
     expect(r.reproducibility.ephemeris.moonRotation).toContain('IAU 2015');
     expect(r.reproducibility.ephemeris.lightTimeCorrected).toBe(true);
     expect(r.reproducibility.sampling.sampleCount).toBe(sim.sampling.sampleCount);
@@ -59,6 +59,26 @@ describe('JSON report reproducibility', () => {
     // Apollo-11 horizon is idealized flat -> never exported as measured terrain.
     expect(r.reproducibility.siteProvenance.dataConfidence).not.toBe('measured');
     expect(warnings.some((w) => w.includes('not measured'))).toBe(true);
+  });
+
+  it('labels the horizon LOCAL HORIZON in metadata, warnings and disclaimer (no fabricated regional horizon)', () => {
+    const site = siteById('apollo-11')!;
+    const sim = simulateMission(site, START, START + 10 * 86400000, cfg);
+    const current = evaluateAt(site, START, cfg);
+    const r = JSON.parse(missionReportJSON(site, cfg, sim, current));
+    expect(r.reproducibility.terrain.horizonScale).toBe('LOCAL HORIZON');
+    expect(r.reproducibility.terrain.horizonScaleNote).toContain('not a measured regional');
+    expect(r.disclaimer).toContain('LOCAL (landing-centered)');
+    const warnings: string[] = r.reproducibility.warnings;
+    expect(warnings.some((w) => w.startsWith('LOCAL HORIZON'))).toBe(true);
+  });
+
+  it('LOCAL HORIZON disclosure for a DEM notes the ray-marched local crop, not a regional model', () => {
+    const site = makeCustomSite({ name: 'Local DEM', latitude: -89.5, longitude: 45, elevationM: 0, preset: 'flat', horizon: unknownFrameMask() });
+    const warnings = reportWarnings(site, null);
+    const horizon = warnings.find((w) => w.startsWith('LOCAL HORIZON'))!;
+    expect(horizon).toContain('ray-marched from the local elevation crop');
+    expect(horizon).toContain('NOT a regional distant-horizon model');
   });
 
   it('flags a frame-unverified DEM and blocks it from quantitative use', () => {

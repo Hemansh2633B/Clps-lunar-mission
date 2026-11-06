@@ -157,36 +157,57 @@ def constant_corrections(start_year: int = 2020, end_year: int = 2035) -> dict:
 
 
 
+# Explicit supported-frame allowlist (normalized: uppercase, alphanumeric only).
+# Mirrors src/engine/lunarFrame.ts exactly. A frame is accepted ONLY when its leading
+# identifier exactly matches a validated realization -- never because the text merely
+# contains "IAU"/"MOONME"/"MOONPA". Unknown realizations (e.g. MOON_ME_DE440) are rejected.
+_ME_ALLOW = {"MOONME", "MOONMEDE421", "MOONMEJPLDE421", "ME", "MEDE421"}
+_PA_ALLOW = {"MOONPA", "MOONPADE421", "MOONPAJPLDE421", "PA", "PADE421"}
+_IAU_ALLOW = {"IAUMOON", "IAU2015MOON", "IAUMOON2015", "IAU2015"}
+
+# Validated interval of the constant ME/PA->IAU corrections (UTC). Outside it the
+# residual is not validated and quantitative use of a frame-corrected DEM is blocked.
+FRAME_VALIDATED_START_ISO = "2020-01-01T00:00:00Z"
+FRAME_VALIDATED_END_ISO = "2035-12-31T23:59:59Z"
+
+
+def _frame_head(frame: str) -> str:
+    """Strip a trailing free-text description, keeping identifier + ephemeris qualifier.
+
+    Real product strings look like 'MOON_ME (DE421) -- third-party downsample; ...'.
+    The identifier uses underscores, so em-dash / semicolon / comma / spaced-hyphen
+    separators safely delimit the descriptive tail. Mirrors the frontend frameHead().
+    """
+    import re
+    return re.split(r"\s*[—;,]\s*|\s+-{1,2}\s+", frame)[0].strip()
+
+
 def _normalize(frame: Optional[str]) -> str:
     if not frame:
         return ""
-    return "".join(ch for ch in frame.upper() if ch.isalnum())
+    return "".join(ch for ch in _frame_head(frame).upper() if ch.isalnum())
 
 
 def classify_frame(frame: Optional[str]) -> dict:
-    """Return {recognized, transform, note} for a declared DEM frame.
+    """Return {recognized, transform, note, identifier, realization} for a declared DEM frame.
 
     transform is one of 'me', 'pa', 'iau', or None (unrecognized). Matching mirrors
-    the frontend (src/engine/lunarFrame.ts): ME/PA are matched on the MOONME/MOONPA
-    stems (or bare ME/PA tokens), tolerant of parenthetical ephemeris qualifiers such
-    as 'MOON_ME (JPL DE421)'. A bare 'ME'/'PA' substring inside an unrelated word is
-    never matched. Unknown frames are left UNVERIFIED.
+    the frontend (src/engine/lunarFrame.ts): the leading identifier (with any
+    parenthetical ephemeris qualifier) is extracted, normalized, and matched EXACTLY
+    against an explicit allowlist. Unknown frames / realizations are left UNVERIFIED.
     """
     n = _normalize(frame)
-    is_me = "MOONME" in n or n in ("ME", "MEDE421") or n.startswith("MEDE")
-    is_pa = "MOONPA" in n or n in ("PA", "PADE421") or n.startswith("PADE")
-    is_iau = "IAU" in n
-    if is_me:
-        return {"recognized": True, "transform": "me",
-                "note": "MOON_ME (DE421). Compatible with the IAU 2015 ephemeris frame after a verified <=0.004 deg correction."}
-    if is_pa:
-        return {"recognized": True, "transform": "pa",
-                "note": "MOON_PA (DE421). Converted to the IAU 2015 ephemeris frame via the fixed 0.0288 deg PA->ME rotation plus a verified <=0.004 deg residual."}
-    if is_iau:
-        return {"recognized": True, "transform": "iau",
+    if n in _ME_ALLOW:
+        return {"recognized": True, "transform": "me", "identifier": n, "realization": "DE421",
+                "note": "MOON_ME (DE421). Compatible with the IAU 2015 ephemeris frame after a verified <=0.004 deg correction (validated 2020-2035)."}
+    if n in _PA_ALLOW:
+        return {"recognized": True, "transform": "pa", "identifier": n, "realization": "DE421",
+                "note": "MOON_PA (DE421). Converted to the IAU 2015 ephemeris frame via the fixed 0.0288 deg PA->ME rotation plus a verified <=0.004 deg residual (validated 2020-2035)."}
+    if n in _IAU_ALLOW:
+        return {"recognized": True, "transform": "iau", "identifier": n, "realization": "IAU 2015",
                 "note": "Already an IAU Moon frame; no correction required (verify the report version matches IAU 2015)."}
-    return {"recognized": False, "transform": None,
-            "note": f"Unrecognized lunar reference frame '{frame or '(unspecified)'}'. Cannot verify compatibility with the IAU 2015 ephemeris frame; blocked from quantitative mission visibility."}
+    return {"recognized": False, "transform": None, "identifier": None, "realization": None,
+            "note": f"Unrecognized lunar reference frame '{frame or '(unspecified)'}'. Not on the supported-frame allowlist (validated: MOON_ME/MOON_PA with DE421, IAU 2015 Moon); blocked from quantitative mission visibility."}
 
 
 def convert_site(lat_deg: float, lon_deg: float, R: np.ndarray) -> dict:

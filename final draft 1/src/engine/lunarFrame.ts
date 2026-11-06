@@ -27,35 +27,76 @@ export interface FrameClassification {
   recognized: boolean;
   transform: FrameTransform | null;
   note: string;
+  /** Normalized allowlisted identifier that matched (null when unrecognized). */
+  identifier?: string | null;
+  /** Ephemeris / report realization the identifier is validated against. */
+  realization?: string | null;
+}
+
+/**
+ * Explicit supported-frame allowlist (normalized: uppercase, alphanumeric only).
+ *
+ * A frame is accepted ONLY when its leading identifier exactly matches one of these
+ * validated realizations — never because the text merely *contains* "IAU", "MOONME"
+ * or "MOONPA". This rejects unfamiliar realizations such as MOON_ME_DE440 (a different
+ * ephemeris) or NOT_MOON_ME / WEIRD_IAU_FRAME (substring traps) until their
+ * transformations have been independently validated. Bare MOON_ME / MOON_PA are
+ * interpreted as the standard DE421 realization (the one SPICE-verified here); any
+ * explicitly different ephemeris is rejected.
+ */
+const ME_ALLOW = new Set(['MOONME', 'MOONMEDE421', 'MOONMEJPLDE421', 'ME', 'MEDE421']);
+const PA_ALLOW = new Set(['MOONPA', 'MOONPADE421', 'MOONPAJPLDE421', 'PA', 'PADE421']);
+const IAU_ALLOW = new Set(['IAUMOON', 'IAU2015MOON', 'IAUMOON2015', 'IAU2015']);
+
+/** Strip a trailing free-text description, keeping the frame identifier + ephemeris qualifier.
+ * Real product strings look like "MOON_ME (DE421) — third-party downsample; …"; the frame
+ * identifier uses underscores, so em-dash / semicolon / comma / spaced-hyphen separators
+ * safely delimit the descriptive tail without touching the identifier itself. */
+function frameHead(frame: string): string {
+  return frame.split(/\s*[—;,]\s*|\s+-{1,2}\s+/)[0].trim();
 }
 
 function normalize(frame?: string): string {
   if (!frame) return '';
-  return frame.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return frameHead(frame).toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
 /**
- * Classify a declared lunar body-fixed frame. Matching is tolerant of ephemeris
- * qualifiers in parentheses (e.g. "MOON_ME (JPL DE421)" -> MOONMEJPLDE421) so the
- * real LOLA product frame string is recognized. ME/PA are matched on the MOONME /
- * MOONPA stems (or bare ME/PA tokens) — never a bare "ME"/"PA" substring, which
- * would mis-match unrelated words. Unknown frames are left UNVERIFIED.
+ * Classify a declared lunar body-fixed frame against the explicit allowlist. The
+ * identifier (with any parenthetical ephemeris qualifier) is extracted from the head
+ * of the string, normalized, and matched EXACTLY. Unknown frames / realizations are
+ * left UNVERIFIED and blocked from quantitative mission visibility.
  */
 export function classifyFrame(frame?: string): FrameClassification {
   const n = normalize(frame);
-  const isMe = n.includes('MOONME') || n === 'ME' || n === 'MEDE421' || n.startsWith('MEDE');
-  const isPa = n.includes('MOONPA') || n === 'PA' || n === 'PADE421' || n.startsWith('PADE');
-  const isIau = n.includes('IAU');
-  if (isMe) {
-    return { recognized: true, transform: 'me', note: 'MOON_ME (DE421): compatible with the IAU 2015 ephemeris frame after a verified constant correction (residual ≤0.0039°).' };
+  if (ME_ALLOW.has(n)) {
+    return { recognized: true, transform: 'me', identifier: n, realization: 'DE421', note: 'MOON_ME (DE421): compatible with the IAU 2015 ephemeris frame after a verified constant correction (residual ≤0.0039°, validated 2020–2035).' };
   }
-  if (isPa) {
-    return { recognized: true, transform: 'pa', note: 'MOON_PA (DE421): converted to the IAU 2015 ephemeris frame via the fixed 0.0288° PA→ME rotation plus a verified residual ≤0.0039°.' };
+  if (PA_ALLOW.has(n)) {
+    return { recognized: true, transform: 'pa', identifier: n, realization: 'DE421', note: 'MOON_PA (DE421): converted to the IAU 2015 ephemeris frame via the fixed 0.0288° PA→ME rotation plus a verified residual ≤0.0039° (validated 2020–2035).' };
   }
-  if (isIau) {
-    return { recognized: true, transform: 'iau', note: 'Declared IAU Moon frame: no rotation applied. Confirm the report version matches IAU 2015.' };
+  if (IAU_ALLOW.has(n)) {
+    return { recognized: true, transform: 'iau', identifier: n, realization: 'IAU 2015', note: 'Declared IAU Moon frame: no rotation applied. Confirm the report version matches IAU 2015.' };
   }
-  return { recognized: false, transform: null, note: `Unrecognized lunar reference frame "${frame || '(unspecified)'}". Compatibility with the IAU 2015 ephemeris frame cannot be verified; blocked from quantitative mission visibility (viewable in Terrain Lab only).` };
+  return { recognized: false, transform: null, identifier: null, realization: null, note: `Unrecognized lunar reference frame "${frame || '(unspecified)'}". It is not on the supported-frame allowlist (validated realizations: MOON_ME/MOON_PA with DE421, IAU 2015 Moon). Compatibility with the IAU 2015 ephemeris frame cannot be verified; blocked from quantitative mission visibility (viewable in Terrain Lab only).` };
+}
+
+/**
+ * The constant ME/PA→IAU corrections are SPICE-validated over 2020-01 … 2035-12.
+ * Outside that interval the residual is NOT validated and must never be extrapolated
+ * silently. Quantitative use of a frame-corrected DEM outside this range is blocked.
+ */
+export const FRAME_VALIDATED_START_MS = Date.parse('2020-01-01T00:00:00Z');
+export const FRAME_VALIDATED_END_MS = Date.parse('2035-12-31T23:59:59Z');
+export const FRAME_VALIDATED_RANGE_LABEL = '2020-01-01 … 2035-12-31 (UTC)';
+
+export function frameEpochInRange(timeMs: number): boolean {
+  return Number.isFinite(timeMs) && timeMs >= FRAME_VALIDATED_START_MS && timeMs <= FRAME_VALIDATED_END_MS;
+}
+
+/** Whether a whole mission interval lies inside the validated frame-correction range. */
+export function frameIntervalValidated(startMs: number, endMs: number): boolean {
+  return frameEpochInRange(startMs) && frameEpochInRange(endMs);
 }
 
 const IDENTITY = [1, 0, 0, 0, 1, 0, 0, 0, 1];

@@ -6,6 +6,8 @@ import { cachedSimulation } from '../engine/simulationClient';
 import { DAY_MS, formatCoord } from '../engine/constants';
 import type { ComparisonRow } from '../utils/export';
 import { ProvenanceIndicator, provenanceOf } from './ProvenanceIndicator';
+import { AnalysisStatusNotice, AnalysisStatusBadge } from './AnalysisStatusNotice';
+import { UtcDateTimeInput } from './UtcDateTimeInput';
 
 const CONF_RANK: Record<string, number> = { measured: 3, 'region-approximate': 2, illustrative: 1, synthetic: 0, mixed: 1 };
 const CONF_LABEL: Record<string, string> = { measured: 'measured DEM', 'region-approximate': 'region approx.', illustrative: 'illustrative', synthetic: 'synthetic demo', mixed: 'mixed' };
@@ -49,8 +51,8 @@ function ScenarioCard({ scenario, sites, onUpdate, onRemove, best, indicative }:
         <select className="input" value={scenario.siteId} onChange={(e) => onUpdate(scenario.id, { siteId: e.target.value })}>
           {sites.map((s) => <option key={s.id} value={s.id}>{s.shortName}</option>)}
         </select>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px', gap: 6 }}>
-          <input className="input mono" type="datetime-local" title="Scenario start (UTC)" aria-label="Scenario start date and time (UTC)" value={new Date(scenario.startMs).toISOString().slice(0, 16)} onChange={(e) => { const v = e.target.value; if (!v) return; const t = Date.parse(`${v}:00Z`); if (Number.isFinite(t)) onUpdate(scenario.id, { startMs: t }); }} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px', gap: 6, alignItems: 'start' }}>
+          <UtcDateTimeInput valueMs={scenario.startMs} onChange={(t) => onUpdate(scenario.id, { startMs: t })} ariaPrefix="Scenario start" />
           <select className="input" value={scenario.config.durationDays} onChange={(e) => onUpdate(scenario.id, { config: { ...scenario.config, durationDays: Number(e.target.value) } })} aria-label="Scenario duration days">
             {[3, 7, 10, 14, 30, 90].map((d) => <option key={d} value={d}>{d} d</option>)}
           </select>
@@ -63,10 +65,13 @@ function ScenarioCard({ scenario, sites, onUpdate, onRemove, best, indicative }:
         <div className="mono" style={{ fontSize: 10, color: 'var(--dim)' }}>{formatCoord(site.latitude, site.longitude)}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <ProvenanceIndicator site={site} summary={s} compact />
+          {sim?.analysis && <AnalysisStatusBadge analysis={sim.analysis} />}
           {s && <span className="chip neutral" style={{ fontSize: 8.5 }} title="Data confidence is separate from performance. Illustrative terrain is not ranked as measured.">{CONF_LABEL[s.dataConfidence] ?? s.dataConfidence}</span>}
         </div>
 
-        {loading || !s ? (
+        {sim?.analysis && !sim.analysis.demoEligible ? (
+          <AnalysisStatusNotice analysis={sim.analysis} compact />
+        ) : loading || !s ? (
           <div style={{ height: 180, display: 'grid', placeItems: 'center', color: 'var(--dim)', fontSize: 11 }} className="pulse">Computing…</div>
         ) : (
           <>
@@ -115,14 +120,16 @@ export function ComparisonMatrix({ scenarios, sites, onUpdate, onRemove, onPin, 
   // synthetic terrain is never crowned "best" over a measured DEM. When the top tier
   // is not measured, the ranking is flagged indicative.
   const { bestId, bestIndicative } = useMemo(() => {
-    const withSim = rows.filter((r) => r.sim);
-    if (withSim.length === 0) return { bestId: null as string | null, bestIndicative: false };
-    const topRank = Math.max(...withSim.map((r) => CONF_RANK[r.sim!.summary.dataConfidence] ?? 0));
+    // Only results with a quantitative summary are rankable; blocked analyses (null
+    // summary) are excluded so an invalid dataset can never win a candidate ranking.
+    const rankable = rows.filter((r) => r.sim?.summary).map((r) => ({ id: r.scenario.id, summary: r.sim!.summary! }));
+    if (rankable.length === 0) return { bestId: null as string | null, bestIndicative: false };
+    const topRank = Math.max(...rankable.map((r) => CONF_RANK[r.summary.dataConfidence] ?? 0));
     let best: string | null = null;
     let score = -1;
-    for (const r of withSim) {
-      if ((CONF_RANK[r.sim!.summary.dataConfidence] ?? 0) !== topRank) continue;
-      if (r.sim!.summary.feasibilityScore > score) { score = r.sim!.summary.feasibilityScore; best = r.scenario.id; }
+    for (const r of rankable) {
+      if ((CONF_RANK[r.summary.dataConfidence] ?? 0) !== topRank) continue;
+      if (r.summary.feasibilityScore > score) { score = r.summary.feasibilityScore; best = r.id; }
     }
     return { bestId: best, bestIndicative: topRank < CONF_RANK.measured };
     // eslint-disable-next-line react-hooks/exhaustive-deps
