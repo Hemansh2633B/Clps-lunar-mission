@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GraduationCap, BookOpen, ListChecks } from 'lucide-react';
 import type { AppMode, GuidedScenario, LandingSite, MissionConfig, Scenario } from './types/mission';
 import { LANDING_SITES, makeCustomSite } from './data/landingSites';
@@ -21,6 +21,9 @@ const SpaceView = lazy(() => import('./components/SpaceView').then((m) => ({ def
 import { EducatorOverlay } from './components/EducatorOverlay';
 import { Onboarding } from './components/Onboarding';
 import { WorkflowGuide } from './components/WorkflowGuide';
+import { StoryTutorial, StorySuggestion } from './tutorial/StoryTutorial';
+import { useStoryTutorial, type StoryActions, type StorySignals } from './tutorial/useStoryTutorial';
+import type { StoryWorld } from './tutorial/narrative';
 import { MISSION_PRESETS, CUSTOM_PRESET_ID, matchingPresetId } from './data/missionPresets';
 import { formatUtcStamp } from './utils/utc';
 import type { WorkflowStepId } from './utils/workflow';
@@ -70,7 +73,14 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(() => !hasOnboarded());
   const [workflowOpen, setWorkflowOpen] = useState(false);
-  const [exported, setExported] = useState(false);
+  const [exportCount, setExportCount] = useState(0);
+  const [glossaryFocus, setGlossaryFocus] = useState<string | undefined>();
+
+  // Pre-story mission snapshot: exiting the briefing restores exactly what the user had.
+  const storySnapshot = useRef<null | {
+    selectedId: string; baselineMs: number; slipDays: number; config: MissionConfig;
+    viewDays: number; timeMs: number; mode: AppMode; compareMode: boolean; terrainView: boolean; spaceView: boolean;
+  }>(null);
 
   const site = sites.find((s) => s.id === selectedId) ?? sites[0];
   const win = useMemo(() => analysisWindow(baselineMs, slipDays, config.durationDays, viewDays), [baselineMs, slipDays, config.durationDays, viewDays]);
@@ -90,7 +100,10 @@ export default function App() {
     window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 2600);
   }, []);
 
-  const dismissOnboarding = useCallback(() => { markOnboarded(); setOnboardingOpen(false); }, []);
+  const dismissOnboarding = useCallback(() => {
+    markOnboarded(); setOnboardingOpen(false);
+    window.setTimeout(() => storyRef.current?.suggestAfterOnboarding(), 0);
+  }, []);
   const startDemo = useCallback(() => {
     markOnboarded(); setOnboardingOpen(false);
     setTerrainView(false); setSpaceView(false); setCompareMode(false);
@@ -98,8 +111,8 @@ export default function App() {
     setBaselineMs(Date.parse('2026-09-01T00:00:00Z'));
     setSlipDays(0);
     setMode('planner');
-    setWorkflowOpen(true);
-    notify('Demo mode — illustrative terrain (not measured flight data). Follow the guided workflow or explore freely.');
+    notify('Demo mode — illustrative terrain (not measured flight data). Explore freely, or try the interactive briefing.');
+    window.setTimeout(() => storyRef.current?.suggestAfterOnboarding(), 0);
   }, [notify]);
   const startRealDem = useCallback(() => {
     markOnboarded(); setOnboardingOpen(false);
@@ -151,7 +164,11 @@ export default function App() {
       else if (e.key.toLowerCase() === 'g') setGuideOpen((v) => !v);
       else if (e.key.toLowerCase() === 'p') pinCurrent();
       else if (e.key === '?') setShortcutsOpen(true);
-      else if (e.key === 'Escape') { setCustomOpen(false); setSettingsOpen(false); setHorizonOpen(false); setShortcutsOpen(false); setGuideOpen(false); }
+      else if (e.key === 'Escape') {
+        const anyModal = customOpen || settingsOpen || horizonOpen || shortcutsOpen || guideOpen || onboardingOpen;
+        setCustomOpen(false); setSettingsOpen(false); setHorizonOpen(false); setShortcutsOpen(false); setGuideOpen(false);
+        if (!anyModal && storyRef.current?.active) storyRef.current.pause();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -211,7 +228,7 @@ export default function App() {
     else if (!missionSim.data) { notify('Mission window is still computing.'); return; }
     else if (kind === 'timeseries') download(`chandra-timeseries-${site.id}.csv`, timeseriesCSV(missionSim.data), 'text/csv');
     else download(`chandra-summary-${site.id}.csv`, summaryCSV(missionSim.data), 'text/csv');
-    setExported(true);
+    setExportCount((n) => n + 1);
     notify(`Exported ${kind}`);
   }, [site, config, missionSim.data, missionSim.loading, missionSim.error, current, timeMs, notify]);
 
@@ -241,6 +258,72 @@ export default function App() {
     }
   }, [pinCurrent, handleExport]);
 
+  // ---- THE 14-DAY WINDOW · interactive briefing -------------------------------
+  const configKey = useMemo(() => JSON.stringify(config), [config]);
+  const storySignals: StorySignals = useMemo(() => ({
+    selectedId: site.id, timeMs, slipDays, configKey,
+    scenarioCount: scenarios.length, compareMode, exportCount,
+  }), [site.id, timeMs, slipDays, configKey, scenarios.length, compareMode, exportCount]);
+
+  const loadTrainingMission = useCallback(() => {
+    storySnapshot.current = { selectedId, baselineMs, slipDays, config, viewDays, timeMs, mode, compareMode, terrainView, spaceView };
+    setTerrainView(false); setSpaceView(false); setCompareMode(false); setWorkflowOpen(false);
+    setSelectedId('connecting-ridge');
+    setBaselineMs(Date.parse('2026-09-01T00:00:00Z'));
+    setSlipDays(0);
+    setConfig(DEFAULT_CONFIG);
+    setViewDays(30);
+    setTimeMs(Date.parse('2026-09-01T00:00:00Z') + 2 * DAY_MS);
+    notify('Training mission loaded — illustrative terrain, clearly labeled. Your previous setup is saved and restored when you exit the briefing.');
+  }, [selectedId, baselineMs, slipDays, config, viewDays, timeMs, mode, compareMode, terrainView, spaceView, notify]);
+
+  const restoreMission = useCallback(() => {
+    const snap = storySnapshot.current;
+    if (!snap) return;
+    storySnapshot.current = null;
+    setSelectedId(snap.selectedId); setBaselineMs(snap.baselineMs); setSlipDays(snap.slipDays);
+    setConfig(snap.config); setViewDays(snap.viewDays); setTimeMs(snap.timeMs); setMode(snap.mode);
+    setCompareMode(snap.compareMode); setTerrainView(snap.terrainView); setSpaceView(snap.spaceView);
+    notify('Briefing closed — your previous mission setup was restored.');
+  }, [notify]);
+
+  const focusStoryTarget = useCallback((key: string) => {
+    const el = document.querySelector<HTMLElement>(`[data-tour="${key}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    const focusable = el.matches('button, input, select, [tabindex]') ? el : el.querySelector<HTMLElement>('button, input, select, [tabindex]');
+    focusable?.focus({ preventScroll: true });
+  }, []);
+
+  const storyActions: StoryActions = useMemo(() => ({
+    loadTrainingMission,
+    restoreMission,
+    ensureView: (view) => {
+      setTerrainView(false); setSpaceView(false);
+      if (view === 'planner') setCompareMode(false);
+      else setCompareMode(true);
+    },
+    focusTarget: focusStoryTarget,
+    openSettings: () => setSettingsOpen(true),
+    openGlossary: (term) => { setGlossaryFocus(term); setGuideOpen(true); },
+    openGuide: () => setGuideOpen(true),
+    openTerrainLab: () => { setSpaceView(false); setCompareMode(false); setTerrainView(true); },
+    pinCurrent,
+    exportReport: () => handleExport('json'),
+    notify,
+  }), [loadTrainingMission, restoreMission, focusStoryTarget, pinCurrent, handleExport, notify]);
+
+  const story = useStoryTutorial(storySignals, storyActions);
+  const storyRef = useRef(story);
+  storyRef.current = story;
+
+  const storyWorld: StoryWorld = useMemo(() => ({
+    site, current, config, presetName, slipDays, missionStartMs: win.missionStart,
+    summary: missionSim.data?.summary ?? null, baselineSummary: baselineSim.data?.summary ?? null,
+    analysis: missionSim.data?.analysis ?? null, loading: missionSim.loading,
+    scenarioCount: scenarios.length, compareMode,
+  }), [site, current, config, presetName, slipDays, win.missionStart, missionSim.data, missionSim.loading, baselineSim.data, scenarios.length, compareMode]);
+
   return (
     <div className="app-shell">
       <HeaderBar
@@ -267,7 +350,7 @@ export default function App() {
         </div>
       )}
       <div className={`workspace ${compareMode && !terrainView && !spaceView ? 'compare' : ''} ${terrainView ? 'terrain' : ''} ${spaceView ? 'orbital' : ''}`}>
-        <aside className="site-rail">
+        <aside className="site-rail" data-tour="catalog">
           <SiteCatalog sites={sites} selectedId={site.id} onSelect={setSelectedId}
             onCustom={() => { setCustomInitial(undefined); setCustomOpen(true); }}
             onHorizonTable={() => setHorizonOpen(true)} onPin={pinCurrent} compareMode={compareMode} />
@@ -288,6 +371,9 @@ export default function App() {
               onPin={pinCurrent} onClose={() => setCompareMode(false)} onExport={handleComparisonExport} mode={mode} />
           ) : (
             <>
+              {story.suggestOpen && !story.active && (
+                <StorySuggestion onStart={story.start} onDismiss={story.dismissSuggestion} />
+              )}
               {workflowOpen ? (
                 <WorkflowGuide onClose={() => setWorkflowOpen(false)} onAction={handleWorkflowAction}
                   context={{
@@ -297,9 +383,10 @@ export default function App() {
                     exportBlocked: !!missionSim.data?.analysis && !missionSim.data.analysis.demoEligible,
                   }} />
               ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
                   <button className="btn sm ghost" onClick={() => setWorkflowOpen(true)}><ListChecks size={12} /> Guided workflow</button>
-                  <span style={{ fontSize: 10, color: 'var(--dim)' }}>New here? Follow the six-step path from region to report.</span>
+                  <button className="btn sm ghost" onClick={story.start} data-tour="story-launch"><BookOpen size={12} /> {story.progress && story.progress.status === 'paused' ? 'Resume briefing' : story.progress && story.progress.status === 'completed' ? 'Briefing debrief' : 'Story briefing'}</button>
+                  <span style={{ fontSize: 10, color: 'var(--dim)' }}>New here? Follow the six-step path, or join the 14-day-window briefing.</span>
                 </div>
               )}
               <HorizonPanorama site={site} current={current} sim={activeSim.data} mode={mode} options={panorama} onOptions={setPanorama} />
@@ -310,7 +397,7 @@ export default function App() {
             </>
           )}
         </main>
-        <aside className="telemetry-rail">
+        <aside className="telemetry-rail" data-tour="telemetry">
           <TelemetryPanel site={site} current={current} sim={missionSim.data} events={events} timeMs={timeMs} mode={mode} config={config} onSettings={() => setSettingsOpen(true)} loading={missionSim.loading} error={missionSim.error} progress={missionSim.progress} />
         </aside>
       </div>
@@ -337,8 +424,11 @@ export default function App() {
       {horizonOpen && <HorizonTableModal site={site} current={current} onClose={() => setHorizonOpen(false)} onExport={() => handleExport('horizon')} />}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} onReopenWelcome={() => { setShortcutsOpen(false); setOnboardingOpen(true); }} />}
       <Onboarding open={onboardingOpen} onClose={dismissOnboarding} onDemo={startDemo} onRealDem={startRealDem} />
+      <StoryTutorial controller={story} world={storyWorld} timeMs={timeMs} />
       <EducatorOverlay open={guideOpen} onClose={() => setGuideOpen(false)} active={activeTour} step={tourStep}
-        onStart={applyGuided} onStep={(d) => setTourStep((s) => clamp(s + d, 0, (activeTour?.steps.length ?? 1) - 1))} onApply={applyGuided} />
+        onStart={applyGuided} onStep={(d) => setTourStep((s) => clamp(s + d, 0, (activeTour?.steps.length ?? 1) - 1))} onApply={applyGuided}
+        glossaryFocus={glossaryFocus}
+        story={{ status: story.progress?.status ?? 'none', chapter: story.progress?.chapter ?? 0, onStart: story.start, onReplay: story.replay }} />
       {toast && (
         <div role="status" aria-live="polite" className="fade-in" style={{ position: 'fixed', bottom: 44, left: '50%', transform: 'translateX(-50%)', background: 'var(--paper-2)', border: '1px solid var(--ink)', borderRadius: 0, padding: '8px 14px', fontSize: 12, zIndex: 80, boxShadow: '4px 4px 0 rgba(28,36,48,.2)' }}>{toast}</div>
       )}

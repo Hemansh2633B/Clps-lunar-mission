@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BookOpen, ChevronLeft, ChevronRight, Play, X, Lightbulb, Search } from 'lucide-react';
 import type { GuidedScenario } from '../types/mission';
 import { GUIDED_SCENARIOS } from '../data/guidedScenarios';
-import { GLOSSARY } from '../data/glossary';
+import { GLOSSARY, GLOSSARY_BY_ID } from '../data/glossary';
 
 interface Props {
   open: boolean;
@@ -12,6 +12,10 @@ interface Props {
   onStart: (s: GuidedScenario) => void;
   onStep: (delta: number) => void;
   onApply: (s: GuidedScenario) => void;
+  /** Deep-link from the story's "Go deeper": a glossary id to pre-filter + scroll to. */
+  glossaryFocus?: string;
+  /** THE 14-DAY WINDOW entry point (start/resume/replay from the Field Guide). */
+  story?: { status: string; chapter: number; onStart: () => void; onReplay: () => void };
 }
 
 const FAQS: { q: string; a: string }[] = [
@@ -25,9 +29,16 @@ const FAQS: { q: string; a: string }[] = [
   { q: 'What does educator mode change?', a: 'Only the language. The elevations, watts, and blackouts stay. The captions stop saying MJD and start saying why a mast is standing in the dust.' },
 ];
 
-export function EducatorOverlay({ open, onClose, active, step, onStart, onStep, onApply }: Props) {
+export function EducatorOverlay({ open, onClose, active, step, onStart, onStep, onApply, glossaryFocus, story }: Props) {
   const [faqOpen, setFaqOpen] = useState<number | null>(0);
   const [glossaryQuery, setGlossaryQuery] = useState('');
+  const glossaryRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open || !glossaryFocus) return;
+    setGlossaryQuery(GLOSSARY_BY_ID[glossaryFocus]?.term ?? glossaryFocus);
+    const id = window.setTimeout(() => glossaryRef.current?.scrollIntoView({ block: 'start' }), 60);
+    return () => window.clearTimeout(id);
+  }, [open, glossaryFocus]);
   if (!open) return null;
   const filteredGlossary = GLOSSARY.filter((g) => `${g.term} ${g.plain} ${g.technical}`.toLowerCase().includes(glossaryQuery.toLowerCase()));
   return (
@@ -43,6 +54,25 @@ export function EducatorOverlay({ open, onClose, active, step, onStart, onStep, 
           </div>
           <figcaption className="hint" style={{ marginTop: 8 }}>PLATE 01 · RIM STUDY · GRAZING SUNLIGHT, LOW EARTH</figcaption>
         </figure>
+
+        {story && (
+          <div className="plate" style={{ padding: 14 }} data-tour="story-guide-card">
+            <span className="stamp brass" style={{ transform: 'rotate(-1deg)' }}>INTERACTIVE BRIEFING · 10–15 MIN</span>
+            <h3 className="display" style={{ fontSize: 18, margin: '8px 0 4px' }}>THE 14-DAY WINDOW</h3>
+            <p className="small" style={{ margin: '0 0 8px' }}>
+              Join Mira’s fictional mission team as the new analyst: pick a region, follow the Sun and Earth, budget the power, ride out a two-week launch slip and file the report — with real controls and live numbers.
+              {' '}{story.status === 'paused' ? `Paused at CH 0${story.chapter}.` : story.status === 'active' ? `In progress · CH 0${story.chapter}.` : story.status === 'completed' ? 'Completed — replay any time.' : 'Not started yet.'}
+            </p>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button className="btn sm primary" onClick={() => { onClose(); story.onStart(); }}>
+                {story.status === 'paused' || story.status === 'active' ? 'Resume the briefing' : story.status === 'completed' ? 'Open the debrief' : 'Start the briefing'}
+              </button>
+              {(story.status === 'completed' || story.status === 'paused') && (
+                <button className="btn sm" onClick={() => { onClose(); story.onReplay(); }}>Restart from CH 00</button>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="plate" style={{ padding: 14 }}>
           <span className="stamp coral" style={{ transform: 'rotate(-1deg)' }}>THE 1.54° PROBLEM</span>
@@ -124,7 +154,7 @@ export function EducatorOverlay({ open, onClose, active, step, onStart, onStep, 
           </div>
         </div>
 
-        <div>
+        <div ref={glossaryRef}>
           <div className="panel-title" style={{ marginBottom: 8 }}>Glossary · plain language + technical definition</div>
           <div style={{ position: 'relative', marginBottom: 8 }}>
             <Search size={13} style={{ position: 'absolute', left: 8, top: 8, color: 'var(--dim)' }} />

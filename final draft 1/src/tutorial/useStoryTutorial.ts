@@ -31,6 +31,7 @@ export interface StoryActions {
   /** Restore the pre-story setup (no-op if training was never loaded). */
   restoreMission: () => void;
   ensureView: (view: 'planner' | 'compare') => void;
+  /** Scroll + focus a real control (primary button). */
   focusTarget: (key: string) => void;
   openSettings: () => void;
   openGlossary: (firstTerm: string) => void;
@@ -83,14 +84,10 @@ export function useStoryTutorial(signals: StorySignals, actions: StoryActions) {
     setKeptRegion(false);
   }, [progress?.chapter]);
 
-  // Navigate to the chapter's view, then bring the real target into view.
+  // Navigate to the chapter's view; the spotlight scrolls the real target into view.
   useEffect(() => {
     if (!active || progress?.status !== 'active' || debrief) return;
     if (chapter.view) actions.ensureView(chapter.view);
-    if (!chapter.target) return;
-    const key = chapter.target;
-    const id = window.setTimeout(() => actions.focusTarget(key), 300);
-    return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, progress?.chapter, debrief]);
 
