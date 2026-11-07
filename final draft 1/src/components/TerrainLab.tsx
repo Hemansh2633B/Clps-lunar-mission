@@ -498,7 +498,7 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
         <button className="btn ghost" onClick={() => ctxRef.current?.resetCamera()}><RotateCcw size={13} /> Reset view</button>
       </div>
 
-      {formError && <div role="alert" style={{ padding: '6px 12px', background: '#fdf0d5', borderBottom: '1px solid #d9b877', color: 'var(--solar)', fontSize: 11, display: 'flex', gap: 8 }}><AlertTriangle size={13} /> {formError}</div>}
+      {formError && <div role="alert" style={{ padding: '6px 12px', background: '#fdf0d5', borderBottom: '1px solid #d9b877', color: 'var(--brass)', fontSize: 11, display: 'flex', gap: 8 }}><AlertTriangle size={13} /> {formError}</div>}
       {error && <div role="alert" style={{ padding: '8px 12px', background: '#fbe9e7', borderBottom: '1px solid #e0a99f', color: '#c23b32', fontSize: 12, display: 'flex', gap: 8 }}><AlertTriangle size={14} /> {error}</div>}
       {webglError && <div role="alert" style={{ padding: '8px 12px', background: '#fbe9e7', color: '#c23b32', fontSize: 12 }}>{webglError}</div>}
 

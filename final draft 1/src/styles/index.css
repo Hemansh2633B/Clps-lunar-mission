@@ -29,7 +29,9 @@
   --border-strong: #c4b49a;
   --text: #1c2430;
   --muted: #5c5348;
-  --dim: #8a7358;
+  /* v1.9 a11y: #8a7358 measured 4.32:1 on panel / 3.65:1 on paper (below AA for
+     small text). #76614a measures 5.65:1 / 4.76:1 — same brass family, AA-safe. */
+  --dim: #76614a;
   --solar: #9a6a10;
   --earth: #0e7490;
   --blocked: #c23b32;

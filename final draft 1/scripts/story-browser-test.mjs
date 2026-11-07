@@ -598,12 +598,16 @@ try {
       const panelBg = getComputedStyle(document.querySelector('.story-panel')).backgroundColor;
       const line = document.querySelector('.story-line p');
       const obj = document.querySelector('.story-objective p');
+      const log = document.querySelector('.story-log');
+      const scene = document.querySelector('.story-scene');
       return {
         dialogue: ratio(getComputedStyle(line).color, panelBg),
         objective: ratio(getComputedStyle(obj).color, panelBg),
+        log: ratio(getComputedStyle(log).color, panelBg),
+        scene: ratio(getComputedStyle(scene).color, panelBg),
       };
     });
-    assert(ratios.dialogue >= 4.5 && ratios.objective >= 4.5, `E: text contrast ≥ 4.5 (${ratios.dialogue.toFixed(2)}, ${ratios.objective.toFixed(2)})`);
+    assert(Object.values(ratios).every((r) => r >= 4.5), `E: story text contrast ≥ 4.5 (${Object.entries(ratios).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(', ')})`);
     // Modal focus trap + restore (Settings via the header control).
     await page.locator('[aria-label="Mission parameters"]').click();
     await page.waitForSelector('[role="dialog"]');
