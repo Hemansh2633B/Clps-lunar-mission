@@ -314,3 +314,43 @@ resolution is never presented as vertical accuracy.
   fabricated (PGDA products were unavailable). The JSON report carries an explicit
   `horizonScale = "LOCAL HORIZON"` field, a matching warning, and a disclaimer clause; DEM
   horizons disclose the ray-marched local crop and that distant obstructions are not captured.
+
+## 11. Storytelling layer — narrative vs computation (v1.8)
+
+THE 14-DAY WINDOW briefing is a **presentation layer, not a computation layer**. The
+separation is enforced structurally:
+
+- `src/tutorial/story.ts` holds only static structure: scenes, fictional dialogue,
+  objectives, spotlight targets, knowledge checks, glossary references. It contains
+  **no mission numbers**.
+- `src/tutorial/narrative.ts` is a set of pure functions `(chapter, live world) →
+  dialogue + readouts`. The "live world" is the same `EvaluatedSample`,
+  `MissionSummary`, baseline summary and `AnalysisAssessment` the instruments render.
+  Every figure in the dialogue is formatted from those objects at read time — the
+  story cannot pre-script an outcome, and the slip chapter reports *better or worse*
+  depending on what the solver actually computed (±1 pp threshold on combined
+  visibility, with the longest-gap comparison always shown).
+- Branching is driven by the discriminated `AnalysisAssessment`, never by decorative
+  graphics. A blocked assessment (`demoEligible === false`) replaces all quantitative
+  dialogue with the assessment's own `reason` + `resolution` and shows **no verdict**.
+  The export chapter additionally relies on the real export guard — a refused export
+  never credits the objective.
+- Chapter completion is witnessed from real app-state changes (selection, time,
+  config, slip, pins, guard-passing export counter), not from panel button clicks.
+- The fictional framing (Mira, Dr. Arin, the training scenario) is disclosed in
+  chapter 0 and in the panel's mission-log line; it is never presented as an actual
+  Artemis/CLPS plan.
+
+### Instantaneous visibility gate (defect fix surfaced by the story tests)
+
+Before v1.8, the window analysis was gated at the computation boundary, but the
+*instantaneous* readouts (`evaluateAt` at the scrubbed time) still rendered "Window
+viable", "Sunlit" and "DTE open" chips against a mask whose frame correction was not
+validated at that epoch. Persona D (ME-frame DEM + mission epoch 2040) exposed the
+contradiction: the story correctly said *blocked* while the panorama claimed *DTE
+open*. The fix assesses `assessTerrainEligibility(site, timeMs, timeMs)` in `App` and
+passes `visibilityBlocked` to the telemetry header, panorama chips/markers and site
+brief clearance values. Sky positions (elevation/azimuth — pure ephemeris) remain
+visible; terrain-visibility claims are replaced by explicit "blocked" labels and
+neutral marker styling. The Terrain Lab import gate (unknown frame / incomplete
+coverage) is unchanged and remains the first line of defense.

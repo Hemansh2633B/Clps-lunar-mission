@@ -34,12 +34,13 @@ Production build and checks:
 
 ```bash
 npm run build        # tsc + vite build
-npm test             # 151 Vitest tests (17 files): engine, SPICE-reference ephemeris validation, frame allowlist, transition stress, event-aware energy, analysis status, sampling/battery, catalogue, presets, explanations, UTC, workflow, simulation client, export integrity, DEM-profile, vehicles
+npm test             # 192 Vitest tests (20 files): engine, SPICE-reference ephemeris validation, frame allowlist, transition stress, event-aware energy, analysis status, sampling/battery, catalogue, presets, explanations, UTC, workflow, simulation client, export integrity, DEM-profile, vehicles, story chapters/progress/narrative
 npm run test:python  # 92 passed + 4 skipped: backend/DEM/horizon/downloader/API-error/lunar-frame tests.
                      # The 4 skips are SPICE-kernel-gated (kernels not fetched) — SKIPPED, never counted as passed.
 npm run test:geometry# Three.js geometry / synthetic / horizon checks
 npm run test:parity  # TypeScript ↔ Python horizon ray-marcher parity
 npm run test:browser # Playwright console + Terrain Lab + Space views E2E (incl. mobile)
+npm run test:story   # Playwright THE 14-DAY WINDOW briefing E2E — personas A–E (beginner, student, returning, invalid-data, mobile/reduced-motion)
 npm run test:all     # unit + python + geometry + parity
 npm run typecheck
 ```
@@ -114,6 +115,7 @@ To regenerate the frame constants and validation reference (requires SPICE kerne
 | Compare 2–4 pinned scenarios side-by-side | **Compare** (`C`) |
 | Switch between Planner telemetry and Educator plain-English | Header mode switch (`E`) |
 | Walk guided stories + glossary | **Field guide** (`G`) |
+| Join a fictional mission team for a 10–15 min interactive briefing | **Story briefing** launcher / Field Guide card |
 | Export mission report, timeseries, horizon mask, comparison | **Export** menu |
 | Inspect real/synthetic DEMs in 3D with orbit/pan/zoom | **Terrain Lab** (`T`) |
 | Hover/click surface samples, exaggerate relief, toggle shadows | Terrain Lab inspector |
@@ -126,7 +128,48 @@ To regenerate the frame constants and validation reference (requires SPICE kerne
 
 ### Keyboard shortcuts
 
-`Space` play/pause · `[` / `]` ±1 day · `←` / `→` ±1 hour · `C` compare · `T` Terrain Lab · `O` Space views · `E` educator · `G` field guide · `P` pin scenario · `?` help · `Esc` close overlays.
+`Space` play/pause · `[` / `]` ±1 day · `←` / `→` ±1 hour · `C` compare · `T` Terrain Lab · `O` Space views · `E` educator · `G` field guide · `P` pin scenario · `?` help · `Esc` close overlays (or pause the story briefing when no overlay is open).
+
+---
+
+## THE 14-DAY WINDOW · interactive mission briefing
+
+A storytelling tutorial that teaches the planner by **using** it. You join a fictional
+mission team as the new analyst: **Mira** (operations lead) and **Dr. Arin** (science
+specialist) are invented characters, the scenario is illustrative — **not an actual
+Artemis or CLPS flight plan** — and every number in the dialogue is computed live by
+the same engine the instruments display. The story never scripts a result.
+
+**Nine chapters (~10–15 min):** first shift → pick a region (provenance, region centers
+vs surveyed points) → follow the Sun (elevation/azimuth/occlusion) → find Earth
+(libration, AOS/LOS, *geometric LOS ≠ RF link budget*) → budget the power (presets are
+illustrative assumptions, not NASA vehicle specs) → ride out a +14-day launch slip
+(baseline vs slipped window, narrated from the actual simulation — better *or* worse)
+→ read the battery report (*energy deficit ≠ thermal survival*) → compare like with
+like (confidence tiers, disclosed heuristic) → file the report through the **real,
+guarded export** (blocked analyses cannot be exported — that is the lesson).
+
+**How it behaves**
+
+- Compact docked panel (bottom sheet on mobile) with chapter stamps, mission-log UTC,
+  dialogue cards, live readouts, a knowledge check per chapter, and *Go deeper*
+  formal definitions linked to the canonical glossary.
+- A non-blocking spotlight rings the **real** control for each objective; objectives
+  complete only when the real app state changes (site selected, time scrubbed, config
+  changed, slip moved, two scenarios pinned, a guard-passing export). No fake buttons.
+- First-time users get a dismissible suggestion after onboarding; returning users are
+  never forced. Start/resume/restart any time from the workspace launcher or the
+  Field Guide card. Pause keeps your place; **Exit restores your pre-briefing setup**
+  (the training mission snapshots your site/date/config first and says so).
+- Progress persists under a versioned key (`chandra-story-v1`); corrupt or foreign
+  versions are treated as fresh, never as a crash. Keyboard accessible (focus moves
+  to the chapter heading; `Esc` pauses), `prefers-reduced-motion` respected.
+- Blocked analyses (unverified frame, incomplete coverage, epoch outside the
+  validated frame-model range) produce an **explanation, not a verdict** — in the
+  story and in the instruments.
+
+Run its E2E suite with `npm run test:story` (personas A–E; needs `npm run dev:full`).
+Implementation evidence: `docs/IMPLEMENTATION_REPORT_v1.8.md`.
 
 ---
 
@@ -218,7 +261,8 @@ final draft 1/
 │   ├── types/mission.ts        # Domain interfaces
 │   ├── data/
 │   │   ├── landingSites.ts     # Curated sites + illustrative horizon masks
-│   │   └── guidedScenarios.ts  # Educator stories + glossary
+│   │   ├── guidedScenarios.ts  # Educator scenario cards
+│   │   └── glossary.ts         # Canonical 22-entry glossary (plain + technical)
 │   ├── engine/
 │   │   ├── constants.ts
 │   │   ├── ephemeris.ts        # astronomy-engine + IAU 2015 Moon rotation
@@ -228,6 +272,9 @@ final draft 1/
 │   │   ├── simulation.worker.ts# Off-main-thread simulation
 │   │   └── simulationClient.ts # Cached worker request broker
 │   ├── hooks/useSimulation.ts
+│   ├── tutorial/               # THE 14-DAY WINDOW: story.ts (chapters), narrative.ts
+│   │                           # (live branching), progress.ts (versioned state),
+│   │                           # useStoryTutorial.ts, StoryTutorial.tsx (panel + spotlight)
 │   ├── terrain/                # Three.js mesh, lighting, coordinates,
 │   │                           # synthetic demo, horizon, mission profile, API client
 │   ├── three/                  # vehicles.ts (procedural Starship/HLS/CLPS), geo.ts
