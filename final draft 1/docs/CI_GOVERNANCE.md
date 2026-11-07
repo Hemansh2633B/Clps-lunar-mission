@@ -1,4 +1,4 @@
-# CI Governance — CHANDRA v1.9
+# CI Governance — CHANDRA v1.10
 
 **Date:** 2026-11-07. This document records the exact CI contract, the verified
 action pins, and what the repository owner must configure. Claims here are
@@ -11,11 +11,13 @@ owner should require **all three** by their exact check names:
 
 1. `Typecheck · build · unit · geometry · parity · Python`
 2. `Browser E2E (mission · terrain · space · onboarding)` — includes the story
-   tutorial personas A–E as a mandatory step (a story failure fails the job).
+   tutorial personas A–E **and the v1.10 scientific-export personas A–E** as
+   mandatory steps (any suite failing fails the job).
 3. `Independent SPICE validation (fetched kernels)` — v1.9 runs this on every
    pull request as well as pushes to `main` and manual dispatch.
 
-**Branch-protection status (verified 2026-11-07):**
+**Branch-protection status (verified 2026-11-07; re-checked for v1.10 — still
+`protected: false`, still owner action outstanding):**
 - `GET /repos/Hemansh2633B/Clps-lunar-mission/branches/main` reports
   `protected: false`.
 - The branch-protection API returns **403 "Resource not accessible by

@@ -371,6 +371,10 @@ export default function App() {
     if (boot.boot === 'user') clearSession(appStorage());
     if (boot.sessionRejected) {
       notify('A saved briefing session could not be restored — it failed validation (corrupt, out-of-range settings or inconsistent terrain metadata). Nothing was partially applied; the briefing offers Rebuild / Exit.');
+      // The rejected payload is unusable and was never applied; drop it once so it
+      // cannot re-trigger on every reload. Briefing progress (separate key) is kept,
+      // so resuming still offers the explicit Rebuild / Exit recovery choice.
+      clearSession(appStorage());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

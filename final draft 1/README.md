@@ -34,13 +34,14 @@ Production build and checks:
 
 ```bash
 npm run build        # tsc + vite build
-npm test             # 192 Vitest tests (20 files): engine, SPICE-reference ephemeris validation, frame allowlist, transition stress, event-aware energy, analysis status, sampling/battery, catalogue, presets, explanations, UTC, workflow, simulation client, export integrity, DEM-profile, vehicles, story chapters/progress/narrative
+npm test             # 300 Vitest tests (29 files): engine, SPICE-reference ephemeris validation, frame allowlist, transition stress, event-aware energy, analysis status, sampling/battery, catalogue, presets, explanations, UTC, workflow, simulation client, export integrity + provenance + comparison states + output consistency, session validation, DEM-profile, vehicles, story chapters/progress/narrative
 npm run test:python  # 92 passed + 4 skipped: backend/DEM/horizon/downloader/API-error/lunar-frame tests.
                      # The 4 skips are SPICE-kernel-gated (kernels not fetched) — SKIPPED, never counted as passed.
 npm run test:geometry# Three.js geometry / synthetic / horizon checks
 npm run test:parity  # TypeScript ↔ Python horizon ray-marcher parity
 npm run test:browser # Playwright console + Terrain Lab + Space views E2E (incl. mobile)
 npm run test:story   # Playwright THE 14-DAY WINDOW briefing E2E — personas A–E (beginner, student, returning, invalid-data, mobile/reduced-motion)
+npm run test:exports # Playwright scientific-export E2E — personas A–E (export↔summary reconciliation, blocked comparison rows, persisted-state recovery, confidence provenance, a11y announcements)
 npm run test:all     # unit + python + geometry + parity
 npm run typecheck
 ```
@@ -58,7 +59,8 @@ Continuous integration (`.github/workflows/ci.yml`, repo root): a **quality** jo
 typecheck, build, unit, geometry, parity and pytest on every push/PR (kernel-gated SPICE
 tests are reported as SKIPPED, never passed); an optional **spice-validation** job fetches
 checksummed GitHub-mirror kernels and runs the real independent SPICE frame tests; a
-**browser** job runs the Playwright E2E against a live dev server + terrain API.
+**browser** job runs all three Playwright suites (console, story briefing, scientific
+exports) against a live dev server + terrain API.
 
 > Paths contain a space (`final draft 1`). Always quote them in shell commands.
 
@@ -89,8 +91,17 @@ Highlights:
   illustrative / real-DEM frame-verified / frame-unverified / incomplete coverage).
 - **Catalogue**: the nine Artemis III candidate regions (NASA Oct-2024) as approximate region
   centers with source + uncertainty — never invented precise points; Apollo/Chang'e kept separate.
-- **Reproducible exports**: UTC interval, ephemeris/frame, terrain metadata, sampling,
-  power/battery assumptions, score methodology, and warnings; exports blocked while computing.
+- **Reproducible exports (v1.10)**: every export carries the app version, an independent
+  report-schema version, and a SHA-256 **analysis fingerprint** of the exact simulation identity.
+  The JSON report quotes the **effective sanitized config** (with clamped fields listed), full
+  site/terrain provenance, status-aware frame wording, and the validated epoch range. Every CSV
+  row repeats machine-readable provenance columns (no comment rows). Battery history comes from
+  the integrator's own accepted sub-intervals — never re-interpolated — and visibility events
+  keep their refined millisecond timestamps. Comparison exports label every row
+  valid / computing / blocked / failed / missing-site / stale; blank is never zero. Exports are
+  blocked while computing and guarded against stale results by the same `simulationKey` the
+  engine cache uses. Downloads are announced as **initiated**, never "saved" — see
+  [docs/SCIENTIFIC_METHOD.md §13](docs/SCIENTIFIC_METHOD.md).
 
 To regenerate the frame constants and validation reference (requires SPICE kernels):
 
@@ -116,7 +127,7 @@ To regenerate the frame constants and validation reference (requires SPICE kerne
 | Switch between Planner telemetry and Educator plain-English | Header mode switch (`E`) |
 | Walk guided stories + glossary | **Field guide** (`G`) |
 | Join a fictional mission team for a 10–15 min interactive briefing | **Story briefing** launcher / Field Guide card |
-| Export mission report, timeseries, horizon mask, comparison | **Export** menu |
+| Export mission report, summary, telemetry, energy history, visibility events, horizon mask | **Export** menu |
 | Inspect real/synthetic DEMs in 3D with orbit/pan/zoom | **Terrain Lab** (`T`) |
 | Hover/click surface samples, exaggerate relief, toggle shadows | Terrain Lab inspector |
 | Ray-march a 360° DEM horizon and send it to the mission planner | Terrain Lab → Compute horizon → Use in mission |
@@ -303,7 +314,7 @@ final draft 1/
 │   ├── components/             # Header, catalog, panorama, map, telemetry, timeline,
 │   │                           # comparison, educator, TerrainLab, SpaceView
 │   │                           # (PlanetViewer + FleetViewer), modals
-│   ├── utils/export.ts         # CSV / JSON report generation
+│   ├── utils/export.ts         # fingerprinted CSV / JSON reports, comparison states, CSV provenance
 │   └── styles/index.css        # Paper-folio design tokens + layout
 └── tests/                      # engine, terrainProfile, space (vehicles + geo)
 ```

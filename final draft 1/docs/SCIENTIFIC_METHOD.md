@@ -278,12 +278,13 @@ resolution is never presented as vertical accuracy.
   waste a respawn. **Phase progress** (sampling → transitions → energy → summary) is posted from
   the worker and shown as an accessible progressbar; it reaches the main thread in real time
   because `postMessage` queues to the main thread even while the worker's loop runs.
-- Exports are **blocked while computing or errored**. The JSON report carries a full
-  `reproducibility` block (UTC interval, ephemeris model + frame, terrain source/resolution/
-  coverage/radius/frame, sampling, power/battery assumptions, score methodology, site
-  provenance, and warnings). CSVs include `data_confidence`, `frame_verified`, and effective
-  sampling step. Heuristic scores, illustrative terrain, and frame-unverified DEMs are always
-  disclosed, never exported as measured/scientific.
+- Exports are **blocked while computing or errored**, and a guard compares the result's full
+  `simulationKey` (site + terrain/frame identity + UTC interval + effective config) against the
+  current inputs — a result computed for different parameters can never be exported under the
+  current site's name. The JSON report carries a full `reproducibility` block and every CSV row
+  repeats machine-readable provenance columns (v1.10 — the complete contract is §13). Heuristic
+  scores, illustrative terrain, and frame-unverified DEMs are always disclosed, never exported
+  as measured/scientific.
 
 ---
 
@@ -372,14 +373,17 @@ coverage) is unchanged and remains the first line of defense.
   count. The scenario set at chapter start is recorded as an audit baseline; pins
   created earlier in the same training journey remain valid (refresh-stable).
 - **Mission report (ch8):** `creditsMissionReport` returns true only for a
-  `kind === 'json'` export that passed `missionExportGate` and whose download call
-  completed without throwing. CSV exports (timeseries/summary/horizon) never credit.
-  The gate (`src/utils/exportGuard.ts`) refuses computing, failed, missing, blocked
-  and **stale** results (site/window mismatch), and additionally refuses horizon
-  clearance CSVs at epochs where the frame correction is unvalidated. Browser-level
-  download cancellation is not observable from page script; "download completed"
-  means the guarded download was initiated successfully — the E2E suite verifies
-  actual download events and file contents.
+  `kind === 'json'` export that passed `missionExportGate` and whose download was
+  initiated without throwing (`downloadInitiated`). CSV exports (timeseries /
+  summary / horizon / events / energy) never credit. The gate
+  (`src/utils/exportGuard.ts`) refuses computing, failed, missing, blocked and
+  **stale** results — staleness is a full `simulationKey` identity comparison
+  (site, terrain + frame metadata, UTC window, effective config), not just
+  site/window — and additionally refuses horizon clearance CSVs at epochs where
+  the frame correction is unvalidated. Browser-level download cancellation is not
+  observable from page script, so the UI and witness say **"initiated"**, never
+  "saved"/"completed" — the E2E suites verify actual download events and file
+  contents.
 
 ### 12.2 Isolated, persisted training context
 
@@ -432,3 +436,121 @@ products (CRS, datum, effective resolution, NoData) and the NAIF per-epoch
 possible in this environment, so the **LOCAL HORIZON** model and the **constant
 correction + 2020–2035 gate** remain the only supported behavior. Metadata fields
 are not capability claims.
+
+---
+
+## 13. Scientific exports & reproducibility (v1.10)
+
+The export pipeline was rebuilt so a downloaded file is independently
+understandable: what was calculated, from which data, under which assumptions,
+with which limitations — without the app open.
+
+### 13.1 Identity: app version, schema version, analysis fingerprint
+
+- `applicationVersion` (from `package.json`) and `reportSchemaVersion`
+  (`REPORT_SCHEMA_VERSION = '2.0.0'`) are **independent**. The schema version
+  changes only when the export format changes, never on ordinary app releases.
+- `analysisFingerprint` = SHA-256 (Web Crypto) of the exact `simulationKey()`
+  string — the same identity the worker cache and the export guard use. There is
+  no second, incompatible fingerprint. JSON carries the full 64-hex digest;
+  CSVs carry the 16-hex short form (`analysis_fingerprint`) on **every row**, so
+  any two files can be checked for describing the same analysis even after being
+  separated. `generatedAt` is an ISO-8601 UTC instant (`timeReference: 'UTC'`).
+
+### 13.2 Effective config, never requested config
+
+The report quotes `SimulationResult.config` — the engine-sanitized values the
+calculation actually used. `requestedConfig` is recorded alongside it, and if
+sanitization changed anything, `configWasClamped` is true and `clampedFields`
+names each affected field (requested vs effective values are both in the file) —
+an export can never claim it ran with parameters the engine refused.
+
+### 13.3 Site & terrain provenance, status-aware wording
+
+`reproducibility.siteProvenance` records site id/name, coordinates, catalog
+source + position uncertainty (or custom/DEM origin), terrain kind, source
+file, native frame, applied transform, residual, validated epoch range
+(2020–2035 UTC), coverage percent, horizon radius, effective resolution, and eye
+height. The terrain disclosure is **derived from the analysis status**, not a
+generic warning: verified ME/PA DEMs name the constant correction and its
+residual and stay labeled planning-grade; IAU DEMs state the supported frame;
+unverified-frame / incomplete-coverage / out-of-epoch results state why
+quantitative use is blocked; synthetic and illustrative terrain are labeled
+demo/illustrative. The same disclosure codes appear in the UI provenance panel,
+the JSON warnings, and the CSV `disclosures` column — one vocabulary everywhere
+(`LOCAL_HORIZON`, `SCORE_HEURISTIC`, `LOS_NOT_RF`, `ENERGY_NOT_THERMAL`, plus
+terrain/frame/coverage/epoch/sampling codes as applicable).
+
+### 13.4 CSV provenance columns (standards-compatible)
+
+Every mission CSV (summary, timeseries, energy history, events, horizon) repeats
+these columns on every data row — no comment lines, no metadata rows that break
+CSV parsers: `analysis_fingerprint`, `app_version`, `report_schema`, `site_id`,
+`analysis_status`, `data_confidence`, `terrain_kind`, `frame_transform`,
+`horizon_scale` (always `LOCAL`), `disclosures` (semicolon-joined codes; values
+contain no commas). Timeseries additionally reports the **effective** sampling
+step (post-cap), never the requested one.
+
+### 13.5 Energy history — the integrator's own trajectory
+
+`integrateMissionEnergy` records one `EnergyHistoryRow` per **accepted adaptive
+quadrature sub-interval boundary** — the exact points where battery state is
+stepped, with event-refined transitions, charge/discharge efficiencies, SOC
+saturation at 0/cap, and interpolated depletion instants handled inside the
+integrator. The CSV is a projection of that recorded history: **no coarse
+trapezoid re-integration, no arbitrary interpolation between samples**. Each row
+labels its boundary kind (`start` / `quadrature` / `sun-event` / `end`) and
+interval bounds; `generated_w` is the interval average (blank on the initial
+row — never a fake zero). Rows are sparse where illumination is constant and
+dense around events: timestamps between rows were **not computed**, and the
+companion JSON states this method explicitly (`energyHistoryMethod`: no
+intermediate interpolation). Unit tests reconcile the last row and extrema
+against the summary
+(`selectedEnergyKWh`, `minBatterySocPct`, `finalBatterySocPct`,
+`depletionHours`) — agreement is by construction, not coincidence.
+
+### 13.6 Visibility events at true sub-sample precision
+
+The events CSV exports `SimulationResult.events` at the refined **millisecond**
+timestamps (never rounded to the sample grid), with per-body pre/post visibility
+state, the transition-refinement resolution, and the same provenance columns as
+the samples CSV, so events and samples from one analysis join on
+`analysis_fingerprint`.
+
+### 13.7 Comparison exports: explicit resolution states
+
+Comparison CSV/JSON include **every pinned row** with a `resolution_state`:
+`VALID`, `SYNTHETIC_DEMO`, `ILLUSTRATIVE`, `COMPUTING`, `BLOCKED` (with the
+analysis status), `COMPUTATION_FAILED`, `MISSING_SITE`, or `STALE` (cached key
+no longer matches the scenario). Unresolved rows carry **no numbers** — cells
+are blank, blank is never zero, and status is never implied by a blank. A
+missing site is reported as `MISSING_SITE`, never silently substituted with
+another site. The policy (export permitted with explicit states; ranking still
+confidence-tiered and never mixes tiers) is stated in the UI next to the export
+buttons (`role="note"`).
+
+### 13.8 One guard contract, honest download semantics
+
+All six export kinds (JSON report, summary, timeseries, energy history, events,
+horizon) pass the same guard: current-site identity via `simulationKey`,
+computation-boundary status (blocked/failed refused), and the epoch gate for
+horizon clearances. Success announcements say **"Export initiated — …. Check
+your browser's downloads to confirm the file arrived."** — an anchor click
+initiates a download; page script cannot observe the save dialog, so nothing
+claims "saved". The Playwright suites assert real download events and inspect
+the downloaded bytes.
+
+### 13.9 Persisted-session validation (export inputs are validated inputs)
+
+Training sessions persist at schema **v2** and are fully re-validated on load:
+config bounds come from `MISSION_LIMITS`/`validateConfig` (the same source as
+the settings UI — no duplicated ranges); sites and terrain profiles are
+deep-checked (string fields, coordinate ranges, category/kind allowlists,
+horizon array length vs resolution, finite elevations, feature counts, eye
+height, coverage, frame-metadata consistency). A persisted `frameVerified`
+flag is **re-derived** via `classifyFrame`, never trusted. Duplicate site /
+scenario ids and dangling references reject the payload. v1 sessions migrate
+only through full revalidation; anything invalid is rejected **whole** — never
+partially applied — and the app boots to defaults with an explicit notice while
+the briefing offers Rebuild / Exit. The unusable payload is then cleared once
+(notified, not silent) so it cannot re-trigger on every reload.

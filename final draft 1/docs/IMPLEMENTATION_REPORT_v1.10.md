@@ -1,7 +1,9 @@
 # CHANDRA v1.10 — Scientific Export, Reproducibility & Data Integrity
 
-Status: **IN PROGRESS** — this report is written as work executes. Only executed
-verification is recorded as passed; planned items are labeled planned.
+Status: **IMPLEMENTED & LOCALLY VERIFIED** — all phases executed. Only executed
+verification is recorded as passed. PR CI status lives on the pull request
+itself (three required jobs, names unchanged); this report records the local
+evidence. The PR is **not merged**, per the v1.10 brief.
 
 Branch: `arena/73a0c053-clps-lunar-mission` (session-pinned; the requested name
 `feat/v1.10-scientific-exports` cannot be used in this environment — Arena fixes
@@ -93,4 +95,103 @@ LOCAL HORIZON disclosures; heuristic-score/LOS-not-RF/energy-not-thermal wording
   (safe: same shape, stricter rules); invalid payloads follow the existing
   Rebuild/Exit recovery — never partial application.
 
-(Sections below are appended as phases execute.)
+## Executed phases
+
+### P1–P5 — implementation (commit `18fca82`)
+
+Tests were written FIRST (`export-provenance`, `comparison-export`,
+`session-validation`, `output-consistency`, guard-identity additions) and
+observed RED (31 failed / 16 passed) before implementation. Then:
+
+- `src/version.ts` — `APP_VERSION` (package.json) vs `REPORT_SCHEMA_VERSION`
+  ('2.0.0'), independent by design.
+- `src/utils/analysisId.ts` — SHA-256 over `simulationKey()`; 16-hex short form.
+- `src/engine/integration.ts` — `EnergyHistoryRow` recorded at every accepted
+  quadrature boundary (start / quadrature / sun-event / end), same integral,
+  efficiencies, saturation and depletion handling as the summary; exposed as
+  `SimulationResult.energyHistory` (null when blocked).
+- `src/utils/export.ts` — rewritten: async builders with fingerprint;
+  effective-config + `clampedFields`; full site/terrain provenance with
+  status-aware disclosure; provenance columns on every CSV row; events CSV at
+  refined ms with pre/post state; energy CSV; comparison resolver with 8
+  explicit states (VALID / SYNTHETIC_DEMO / ILLUSTRATIVE / COMPUTING / BLOCKED /
+  COMPUTATION_FAILED / MISSING_SITE / STALE), free-text fields last in CSV;
+  `exportInitiatedMessage` — initiated, never saved.
+- `src/utils/exportGuard.ts` — one contract for all six kinds: full
+  `simulationKey` identity (config/terrain changes ⇒ stale refusal),
+  computation-boundary refusal, epoch gate for horizon clearances.
+- `src/tutorial/session.ts` — schema v2; `MISSION_LIMITS` parity (no duplicated
+  ranges); deep site/terrain validation; `frameVerified` re-derived via
+  `classifyFrame`; duplicate/dangling rejection; size cap; v1 migration only
+  through full revalidation; whole-payload rejection.
+- UI: six-item Export menu; comparison policy note + MissingSiteCard; boot
+  rejection notice; story ch8 wording (fingerprint, initiated semantics);
+  witness `downloadInitiated`.
+
+### Defects surfaced by the new tests (fixed, not papered over)
+
+1. **Custom-site id collision** — `Date.now()`-only ids collided within a
+   millisecond; the new duplicate-id session validator correctly rejected the
+   payload. Fixed with a monotonic suffix (`customSiteSeq`).
+2. **Rejected payload lingered** — found by export persona C: a validation-
+   rejected session stayed in storage and re-notified every reload. Now cleared
+   once after the explicit notice; the progress key is kept so Rebuild/Exit
+   recovery still works.
+3. **Custom-site modal labels** — visual-only `<label>`s; now `htmlFor`/`id`
+   associated (all fields + 8 sector sliders).
+
+Five initial test failures were proven (via throwaway probes, since deleted)
+to be fixture assumptions, not engine defects — e.g. most catalog sites have
+zero visibility transitions in a 5-day Dec-2026 window, so header-only event
+files are CORRECT there. Fixtures moved to de-gerlache-rim-2 / cabeus-b-peak;
+the engine was not touched to make tests pass.
+
+### P6 — cross-output audit
+
+`tests/output-consistency.test.ts` asserts JSON warnings ≡ UI provenance
+vocabulary ≡ CSV disclosure codes, effective config ≡ CSV sampling, summary
+deficit ≡ energy history, LOCAL horizon label in every output. Docs updated:
+README (export summary + commands), SCIENTIFIC_METHOD §9/§12.1/§13 (the full
+export contract), VERIFICATION (v1.10 executed-evidence section),
+ACCESSIBILITY_AUDIT (v1.10 coverage + extended manual checklist),
+CI_GOVERNANCE (export step; protection re-checked via API: still
+`protected: false` — owner action outstanding).
+
+### P7 — screen readers
+
+NVDA/VoiceOver are not available in this environment. The manual checklist
+(ACCESSIBILITY_AUDIT §4) is extended with export-announcement items and remains
+explicitly **NOT YET EXECUTED**. No screen-reader pass is claimed from
+Playwright.
+
+### P8 — no fake progress
+
+Regional horizon, per-epoch frames, RF link budgets and thermal survival remain
+unimplemented and disclosed as such; the ME/PA constant correction stays gated
+to 2020–2035 UTC; LOCAL HORIZON labels unchanged. No validation range widened.
+
+### P9–P10 — executed verification (2026-11-07, this environment)
+
+| Gate | Result |
+|---|---|
+| `npx tsc -b` / `npm run build` | clean |
+| `npm test` | **300 passed / 29 files** |
+| `npm run test:python` | **92 passed, 4 skipped** (kernel-gated, never "passed") |
+| `npm run test:geometry` / `test:parity` | passed |
+| `npm run test:browser` | passed (artifact screenshots best-effort on SwiftShader; all state + canvas pixel assertions hard) |
+| `npm run test:story` | v1.9 personas A–E all passed under v1.10 code |
+| `npm run test:exports` | **new** personas A–E all passed (486 s) |
+| `npm run test:real-dem` | **not run** — fixture TIF absent (never reported as passed) |
+
+CI wiring: `test:exports` added as a mandatory step of the existing browser job
+(`CHANDRA_BROWSER_CI=1`); the three required check names are unchanged. Nothing
+was weakened to go green: the only test-harness change is best-effort ARTIFACT
+screenshots in `browser-test.mjs` (a known headless-SwiftShader compositor
+stall); every functional assertion, including canvas pixel-difference checks,
+remains a hard failure.
+
+### Outstanding owner actions
+
+- Enable branch protection on `main` with the three required checks (API still
+  reports `protected: false`; this environment's token cannot set it).
+- Review and merge the v1.10 PR when satisfied — it is deliberately left open.

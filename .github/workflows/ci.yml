@@ -141,6 +141,11 @@ jobs:
           CHANDRA_BROWSER_CI: '1'
           BASE_URL: http://localhost:5173/
         run: npm run test:story
+      - name: Run scientific-export E2E (v1.10 personas A–E)
+        env:
+          CHANDRA_BROWSER_CI: '1'
+          BASE_URL: http://localhost:5173/
+        run: npm run test:exports
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
