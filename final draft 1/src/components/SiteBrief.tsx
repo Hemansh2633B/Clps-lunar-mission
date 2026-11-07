@@ -1,5 +1,6 @@
 import { Crosshair, Mountain, Pin, Table2 } from 'lucide-react';
-import type { EvaluatedSample, LandingSite } from '../types/mission';
+import type { AnalysisAssessment, EvaluatedSample, LandingSite } from '../types/mission';
+import { demFooterStatus } from '../utils/a11y';
 import { formatCoord } from '../engine/constants';
 
 interface Props {
@@ -8,9 +9,13 @@ interface Props {
   onHorizonTable: () => void;
   onPin: () => void;
   visibilityBlocked?: boolean;
+  /** Mission-window assessment — the footer quotes it verbatim when blocked. */
+  analysis?: AnalysisAssessment | null;
 }
 
-export function SiteBrief({ site, current, onHorizonTable, onPin, visibilityBlocked }: Props) {
+export function SiteBrief({ site, current, onHorizonTable, onPin, visibilityBlocked, analysis }: Props) {
+  const footer = demFooterStatus(site, analysis ?? null, !!visibilityBlocked);
+  const footerColor = footer.tone === 'blocked' ? 'var(--blocked)' : footer.tone === 'ok' ? 'var(--nominal)' : footer.tone === 'warn' ? 'var(--solar)' : 'var(--dim)';
   return (
     <section className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="panel-header">
@@ -62,14 +67,9 @@ export function SiteBrief({ site, current, onHorizonTable, onPin, visibilityBloc
           <button className="btn sm" onClick={onHorizonTable}><Table2 size={12} /> Horizon table</button>
           <button className="btn sm primary" onClick={onPin}><Pin size={12} /> Pin scenario</button>
         </div>
-        <div style={{ fontSize: 9, color: site.terrain.kind === 'dem' || site.terrain.sourceFrame ? 'var(--solar)' : 'var(--dim)', lineHeight: 1.5 }}>
-          {site.terrain.kind === 'dem'
-            ? `${site.terrain.synthetic ? 'Synthetic demo' : 'DEM-derived'} horizon · source frame ${site.terrain.sourceFrame ?? 'unspecified'}. Verify frame alignment with the IAU 2015 ephemeris. Azimuth sampling half-width ±${site.terrain.uncertaintyDeg.toFixed(2)}°; ${site.terrain.accuracyNote ?? 'vertical accuracy unverified.'}`
-            : site.terrain.kind === 'custom'
-              ? `User-edited 8-sector horizon (±${site.terrain.uncertaintyDeg.toFixed(2)}°). ${site.terrain.accuracyNote ?? 'Sector values are exact at the eight edited azimuths; not a measured DEM.'}`
-              : site.terrain.sourceFrame
-                ? `DEM-derived horizon · source frame ${site.terrain.sourceFrame}. Verify frame alignment with the IAU 2015 ephemeris before operational use (±${site.terrain.uncertaintyDeg.toFixed(2)}°).`
-                : `Terrain mask is LOLA-inspired and illustrative (±${site.terrain.uncertaintyDeg.toFixed(2)}°). Coordinates are real; elevations are representative. Not for flight certification.`}
+        <div role="note" aria-label="Terrain data status" style={{ fontSize: 9, color: footerColor, lineHeight: 1.5 }}>
+          {footer.text}
+          {site.terrain.kind === 'dem' && !site.terrain.synthetic ? ` Azimuth sampling half-width ±${site.terrain.uncertaintyDeg.toFixed(2)}°; ${site.terrain.accuracyNote ?? 'vertical accuracy unverified.'}` : ''}
         </div>
       </div>
     </section>

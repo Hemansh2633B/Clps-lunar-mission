@@ -29,7 +29,9 @@
   --border-strong: #c4b49a;
   --text: #1c2430;
   --muted: #5c5348;
-  --dim: #8a7358;
+  /* v1.9 a11y: #8a7358 measured 4.32:1 on panel / 3.65:1 on paper (below AA for
+     small text). #76614a measures 5.65:1 / 4.76:1 — same brass family, AA-safe. */
+  --dim: #76614a;
   --solar: #9a6a10;
   --earth: #0e7490;
   --blocked: #c23b32;
@@ -249,7 +251,13 @@ input[type="range"].earth::-webkit-slider-thumb { background: var(--lagoon); }
 .modeswitch button[aria-checked="true"] { background: var(--ink); color: var(--paper-2); }
 
 /* ---- ticker ---- */
-.ticker { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #fff8ee; overflow: hidden; flex-shrink: 0; }
+/* Decorative marquee: never intercept clicks (it overlaps header dropdowns that
+   extend below the header bar) and never animate under prefers-reduced-motion. */
+.ticker { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #fff8ee; overflow: hidden; flex-shrink: 0; pointer-events: none; }
+/* The header's backdrop-filter creates a stacking context; without an explicit
+   z-index the ticker/workspace paint OVER its Export dropdown. Keep the header
+   above page content but below the story panel (45), modals and toasts. */
+.app-header { position: relative; z-index: 30; }
 .ticker-track { display: flex; width: max-content; gap: 32px; padding: 7px 0; animation: ticker 48s linear infinite; }
 .ticker-track span { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; color: var(--ink-soft); white-space: nowrap; }
 @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }

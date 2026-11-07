@@ -22,15 +22,15 @@ jobs:
     name: Typecheck · build · unit · geometry · parity · Python
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: 'final draft 1/package-lock.json'
       - name: Install Node dependencies
         run: npm ci
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.11'
       - name: Install Python dependencies
@@ -63,16 +63,18 @@ jobs:
               print("SPICE kernels present; kernel-gated tests executed in the pytest step above.")
           PY
 
-  # Real independent SPICE validation. Runs on demand and on pushes to main, not on
-  # every PR, so ordinary CI does not depend on the kernel fetch. Kernels come from
-  # checksummed public GitHub mirrors (not NASA), recorded in data/kernels/PROVENANCE.json.
+  # Real independent SPICE validation. v1.9: also runs on pull requests so every
+  # PR carries a VISIBLE, required SPICE result (never skipped-as-passed). Kernels
+  # come from checksummed public GitHub mirrors (not NASA), recorded in
+  # data/kernels/PROVENANCE.json; the job FAILS if the fetch fails rather than
+  # silently skipping. See docs/CI_GOVERNANCE.md for the required-check list.
   spice-validation:
     name: Independent SPICE validation (fetched kernels)
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.11'
       - name: Install Python dependencies + spiceypy
@@ -100,15 +102,15 @@ jobs:
     name: Browser E2E (mission · terrain · space · onboarding)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: 'final draft 1/package-lock.json'
       - name: Install Node dependencies
         run: npm ci
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.11'
       - name: Install Python dependencies
@@ -141,7 +143,14 @@ jobs:
         run: npm run test:story
       - name: Upload screenshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: browser-screenshots
           path: 'final draft 1/screenshots/'
+      - name: Upload dev-server log (failure diagnostics)
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: devfull-log
+          path: /tmp/devfull.log
+          if-no-files-found: warn

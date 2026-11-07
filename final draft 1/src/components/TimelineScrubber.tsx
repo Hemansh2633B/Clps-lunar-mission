@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { CalendarClock, Pause, Play, SkipBack, SkipForward, RotateCcw, GripVertical } from 'lucide-react';
-import type { EvaluatedSample, MissionSummary, SimulationResult } from '../types/mission';
+import type { AnalysisAssessment, EvaluatedSample, MissionSummary, SimulationResult } from '../types/mission';
+import { timelineDescription } from '../utils/a11y';
 import { DAY_MS, clamp, formatDate, formatUTC } from '../engine/constants';
 import { UtcDateTimeInput } from './UtcDateTimeInput';
 
@@ -23,6 +24,7 @@ interface Props {
   viewDays: number;
   onViewDays: (d: number) => void;
   missionSummary: MissionSummary | null;
+  missionAnalysis?: AnalysisAssessment | null;
   baselineSummary: MissionSummary | null;
 }
 
@@ -41,7 +43,7 @@ const SPEEDS = [1, 60, 3600, 86400, 604800];
 const SPEED_LABEL: Record<number, string> = { 1: '1×', 60: '1 min/s', 3600: '1 h/s', 86400: '1 d/s', 604800: '7 d/s' };
 
 export function TimelineScrubber(props: Props) {
-  const { sim, loading, window: win, timeMs, onTime, baselineMs, onBaseline, slipDays, onSlip, durationDays, onDuration, playing, onPlay, speed, onSpeed, viewDays, onViewDays, missionSummary, baselineSummary } = props;
+  const { sim, loading, window: win, timeMs, onTime, baselineMs, onBaseline, slipDays, onSlip, durationDays, onDuration, playing, onPlay, speed, onSpeed, viewDays, onViewDays, missionSummary, baselineSummary, missionAnalysis } = props;
   const sampling = sim?.sampling ?? null;
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverT, setHoverT] = useState<number | null>(null);
@@ -87,9 +89,7 @@ export function TimelineScrubber(props: Props) {
   const mx1 = xOf(win.missionEnd);
   const combinedDelta = missionSummary && baselineSummary ? missionSummary.combinedPct - baselineSummary.combinedPct : null;
   const energyDelta = missionSummary && baselineSummary ? missionSummary.selectedEnergyKWh - baselineSummary.selectedEnergyKWh : null;
-  const a11ySummary = missionSummary
-    ? `Mission window: ${missionSummary.illuminationPct.toFixed(0)} percent sunlit, ${missionSummary.dtePct.toFixed(0)} percent Earth line-of-sight, ${missionSummary.combinedPct.toFixed(0)} percent both at once. Longest eclipse ${missionSummary.longestEclipseHours.toFixed(1)} hours; longest communications gap ${missionSummary.longestDteGapHours.toFixed(1)} hours. Verdict ${missionSummary.verdict}. Use the time scrubber slider below to move through the window.`
-    : 'Mission timeline with three tracks: sunlight and power, direct-to-Earth communications, and combined mission viability. No computed window yet.';
+  const a11ySummary = timelineDescription(missionSummary, missionAnalysis ?? null);
 
   return (
     <section className="panel" style={{ flexShrink: 0 }}>

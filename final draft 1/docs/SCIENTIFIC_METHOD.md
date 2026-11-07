@@ -354,3 +354,81 @@ brief clearance values. Sky positions (elevation/azimuth — pure ephemeris) rem
 visible; terrain-visibility claims are replaced by explicit "blocked" labels and
 neutral marker styling. The Terrain Lab import gate (unknown frame / incomplete
 coverage) is unchanged and remains the first line of defense.
+
+
+## 12. Tutorial integrity, persisted context and gate-aware descriptions (v1.9)
+
+### 12.1 Objective witnesses are pure, state-derived functions
+
+`src/tutorial/witnesses.ts` is the single home of completion semantics:
+
+- **Comparison (ch7):** credit requires ≥2 **pairwise-distinct** scenarios
+  (fingerprint = site + window start + full config), **created during the training
+  session**, each **resolved** to a demo-eligible analysis, with the comparison view
+  open. The user's pre-briefing pins are excluded twice: the training workspace is
+  isolated (their pins live in the session snapshot), and their IDs are filtered even
+  if isolation were bypassed. Identical repeats dedupe; a pin rejected by the 4-pin
+  cap never enters state and cannot count; computing or blocked scenarios never
+  count. The scenario set at chapter start is recorded as an audit baseline; pins
+  created earlier in the same training journey remain valid (refresh-stable).
+- **Mission report (ch8):** `creditsMissionReport` returns true only for a
+  `kind === 'json'` export that passed `missionExportGate` and whose download call
+  completed without throwing. CSV exports (timeseries/summary/horizon) never credit.
+  The gate (`src/utils/exportGuard.ts`) refuses computing, failed, missing, blocked
+  and **stale** results (site/window mismatch), and additionally refuses horizon
+  clearance CSVs at epochs where the frame correction is unvalidated. Browser-level
+  download cancellation is not observable from page script; "download completed"
+  means the guarded download was initiated successfully — the E2E suite verifies
+  actual download events and file contents.
+
+### 12.2 Isolated, persisted training context
+
+`src/tutorial/session.ts` persists a versioned, strictly validated
+`TrainingSession` (`chandra-story-session-v1`) containing **both** workspaces:
+the user's pre-briefing state (site, baseline, slip, config, view days, mission time,
+mode, view, scenarios, playback, speed, custom sites) and the live training state,
+plus the active chapter's witness baseline. Behavior:
+
+- Training start snapshots the user workspace, loads a clean isolated mission and
+  **pauses playback**; exit *and completion* restore the user workspace exactly.
+- Refresh boots back into the exact training context (debounced writes + a
+  synchronous `pagehide` flush); the panel stays closed and the launcher offers
+  Resume. A stale persisted `active` status is normalized to `paused` on mount.
+- Corrupt/unknown-version payloads parse to `null` — never a throw, never a partial
+  apply. If saved progress points into training chapters with no valid session
+  (including any v1.8 save), the panel shows an explicit **Rebuild / Exit** recovery
+  card instead of resuming against unrelated defaults. Orphaned sessions restore the
+  user workspace. Export credit is deliberately re-earned after a refresh.
+
+### 12.3 Descriptions may not out-claim the gate
+
+`src/utils/a11y.ts` centralizes the gate-aware wording, unit-tested for every blocked
+status: the panorama `role="img"` description reports **sky positions only** when
+terrain visibility is blocked (no visibility states, no clearance values); the DEM
+footer quotes the `AnalysisAssessment` verbatim when blocked and otherwise states
+allowlist verification, the constant-rotation residual, coverage and LOCAL scope;
+the timeline description names a blocked status instead of implying "not computed
+yet"; the polar-map Earth vector becomes azimuth-only (neutral color + disclosure);
+the horizon table withholds clearance columns and disables its CSV at blocked
+epochs. Automated label assertions are **not** a screen-reader pass; the manual
+NVDA/VoiceOver protocol in `docs/ACCESSIBILITY_AUDIT.md` is explicitly unexecuted.
+
+### 12.4 Comparison narrative reads resolved results only
+
+Chapter 7's dialogue is derived from the same cached simulations the comparison
+matrix renders (matrix = source of truth). Branches: fewer than two distinct
+briefing scenarios → guidance; unresolved → explicit computing state; blocked or
+failed → the gate's own reason/resolution with **no deltas**; two valid → the actual
+setting differences (site, start, every changed config knob) and computed
+illumination/DTE/combined/longest-gap/energy/min-SOC deltas. Mixed confidence tiers
+are flagged **not comparable for ranking** — a higher heuristic score on weaker data
+never outranks stronger data. No delta is hardcoded.
+
+### 12.5 Regional terrain & per-epoch frames — researched, not implemented
+
+`docs/FEASIBILITY_TERRAIN_FRAMES_v1.9.md` documents the authoritative PGDA LOLA
+products (CRS, datum, effective resolution, NoData) and the NAIF per-epoch
+`PXFORM` method with acceptance plans. Neither data access nor safe validation was
+possible in this environment, so the **LOCAL HORIZON** model and the **constant
+correction + 2020–2035 gate** remain the only supported behavior. Metadata fields
+are not capability claims.

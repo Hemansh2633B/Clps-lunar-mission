@@ -156,20 +156,42 @@ guarded export** (blocked analyses cannot be exported — that is the lesson).
   formal definitions linked to the canonical glossary.
 - A non-blocking spotlight rings the **real** control for each objective; objectives
   complete only when the real app state changes (site selected, time scrubbed, config
-  changed, slip moved, two scenarios pinned, a guard-passing export). No fake buttons.
+  changed, slip moved, a real comparison, a filed report). No fake buttons.
+- **v1.9 witnesses:** the comparison chapter requires **two different scenarios
+  created during the briefing**, both resolved to valid analyses — pre-existing user
+  pins, identical repeats, cap-rejected pins and computing/blocked rows never count.
+  The report chapter credits **only a guard-passing JSON mission-report download**
+  (CSV exports never count; the file carries provenance + warnings).
+- **v1.9 isolated, refresh-safe training:** starting the briefing snapshots your
+  whole workspace (site, dates, config, view, pins, custom sites, playback), pauses
+  playback and loads a clean training mission. **Exit and completion restore your
+  setup exactly.** The session persists under a versioned, validated key
+  (`chandra-story-session-v1`): a refresh restores the exact chapter context (slip,
+  pins, witness baseline). Corrupt storage or a v1.8 save without a session shows an
+  explicit **Rebuild / Exit** recovery card — never a silent resume on defaults.
 - First-time users get a dismissible suggestion after onboarding; returning users are
   never forced. Start/resume/restart any time from the workspace launcher or the
-  Field Guide card. Pause keeps your place; **Exit restores your pre-briefing setup**
-  (the training mission snapshots your site/date/config first and says so).
-- Progress persists under a versioned key (`chandra-story-v1`); corrupt or foreign
+  Field Guide card. Progress persists under `chandra-story-v1`; corrupt or foreign
   versions are treated as fresh, never as a crash. Keyboard accessible (focus moves
   to the chapter heading; `Esc` pauses), `prefers-reduced-motion` respected.
+- The comparison chapter's dialogue reads the **actual resolved simulations** the
+  matrix shows: real setting differences and illumination/DTE/outage/energy deltas,
+  an explicit computing state while unresolved, gate explanations when blocked, and
+  a never-rankable warning across confidence tiers. The matrix stays the source of truth.
 - Blocked analyses (unverified frame, incomplete coverage, epoch outside the
   validated frame-model range) produce an **explanation, not a verdict** — in the
-  story and in the instruments.
+  story, the instruments, **and the screen-reader descriptions** (v1.9: panorama /
+  timeline / map labels report sky positions only; the DEM footer quotes the
+  assessment; horizon-table clearances are withheld). See `docs/ACCESSIBILITY_AUDIT.md`
+  for measured contrast, automated coverage and the (unexecuted) manual NVDA/VoiceOver
+  checklist — no screen-reader pass is claimed from automated tests.
 
-Run its E2E suite with `npm run test:story` (personas A–E; needs `npm run dev:full`).
-Implementation evidence: `docs/IMPLEMENTATION_REPORT_v1.8.md`.
+Run its E2E suite with `npm run test:story` (v1.9 personas A–E; needs `npm run dev:full`).
+Implementation evidence: `docs/IMPLEMENTATION_REPORT_v1.9.md` (v1.8 history preserved in
+`docs/IMPLEMENTATION_REPORT_v1.8.md`). CI contract and required checks:
+`docs/CI_GOVERNANCE.md`. Regional-terrain / per-epoch-frame feasibility (researched,
+not implemented — LOCAL HORIZON and the 2020–2035 gate remain):
+`docs/FEASIBILITY_TERRAIN_FRAMES_v1.9.md`.
 
 ---
 
