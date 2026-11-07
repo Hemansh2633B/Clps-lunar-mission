@@ -403,6 +403,8 @@ export function customTerrain(preset: CustomTerrainPreset, sectors?: number[]): 
   }
 }
 
+let customSiteSeq = 0;
+
 export function makeCustomSite(input: {
   name: string;
   latitude: number;
@@ -442,7 +444,9 @@ export function makeCustomSite(input: {
     ? 'Synthetic demo horizon from Terrain Lab. Elevations are procedural, NOT real lunar data; use for interface exploration only.'
     : 'Terrain Lab DEM horizon preserved sample-for-sample and rotated into the IAU 2015 ephemeris frame. Frame residual and ray coverage are disclosed; verify before operational use.';
   return {
-    id: `custom-${Date.now().toString(36)}`,
+    // Monotonic suffix: two sites created in the same millisecond must not collide
+    // (the persisted-session validator rejects duplicate IDs).
+    id: `custom-${Date.now().toString(36)}-${(customSiteSeq++).toString(36)}`,
     name: input.name || 'Custom site',
     shortName: input.name || 'Custom site',
     latitude,

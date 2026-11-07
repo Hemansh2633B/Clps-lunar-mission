@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { missionReportJSON, summaryCSV, reportWarnings } from '../src/utils/export';
+import { analysisFingerprint } from '../src/utils/analysisId';
 import { simulateMission, DEFAULT_CONFIG, evaluateAt } from '../src/engine/simulation';
 import { siteById, makeCustomSite } from '../src/data/landingSites';
 import type { HorizonMask } from '../src/terrain/types';
@@ -27,11 +28,11 @@ function unknownFrameMask(): HorizonMask {
 }
 
 describe('JSON report reproducibility', () => {
-  it('carries ephemeris, interval, terrain, sampling, power/battery and score metadata', () => {
+  it('carries ephemeris, interval, terrain, sampling, power/battery and score metadata', async () => {
     const site = siteById('apollo-11')!;
     const sim = simulateMission(site, START, START + 10 * 86400000, cfg);
     const current = evaluateAt(site, START, cfg);
-    const r = JSON.parse(missionReportJSON(site, cfg, sim, current));
+    const r = JSON.parse(await missionReportJSON(site, cfg, sim, current));
     expect(r.reproducibility).toBeDefined();
     expect(r.reproducibility.timeReference).toBe('UTC');
     expect(r.reproducibility.interval.startUtc).toBe(new Date(sim.summary!.startMs).toISOString());
@@ -45,11 +46,11 @@ describe('JSON report reproducibility', () => {
     expect(sum).toBeCloseTo(1, 6);
   });
 
-  it('discloses heuristic, LOS-not-RF, battery-not-survival, and data confidence', () => {
+  it('discloses heuristic, LOS-not-RF, battery-not-survival, and data confidence', async () => {
     const site = siteById('apollo-11')!;
     const sim = simulateMission(site, START, START + 10 * 86400000, cfg);
     const current = evaluateAt(site, START, cfg);
-    const r = JSON.parse(missionReportJSON(site, cfg, sim, current));
+    const r = JSON.parse(await missionReportJSON(site, cfg, sim, current));
     expect(r.disclaimer).toContain('heuristic');
     expect(r.disclaimer).toContain('not an RF link budget');
     const warnings: string[] = r.reproducibility.warnings;
@@ -61,11 +62,11 @@ describe('JSON report reproducibility', () => {
     expect(warnings.some((w) => w.includes('not measured'))).toBe(true);
   });
 
-  it('labels the horizon LOCAL HORIZON in metadata, warnings and disclaimer (no fabricated regional horizon)', () => {
+  it('labels the horizon LOCAL HORIZON in metadata, warnings and disclaimer (no fabricated regional horizon)', async () => {
     const site = siteById('apollo-11')!;
     const sim = simulateMission(site, START, START + 10 * 86400000, cfg);
     const current = evaluateAt(site, START, cfg);
-    const r = JSON.parse(missionReportJSON(site, cfg, sim, current));
+    const r = JSON.parse(await missionReportJSON(site, cfg, sim, current));
     expect(r.reproducibility.terrain.horizonScale).toBe('LOCAL HORIZON');
     expect(r.reproducibility.terrain.horizonScaleNote).toContain('not a measured regional');
     expect(r.disclaimer).toContain('LOCAL (landing-centered)');
@@ -91,10 +92,11 @@ describe('JSON report reproducibility', () => {
 });
 
 describe('CSV exports carry confidence + sampling', () => {
-  it('summary CSV includes data_confidence, frame_verified and effective step', () => {
+  it('summary CSV includes data_confidence, frame_verified and effective step', async () => {
     const site = siteById('shackleton-rim')!;
     const sim = simulateMission(site, START, START + 5 * 86400000, cfg);
-    const csv = summaryCSV(sim);
+    const fp = await analysisFingerprint(site, START, START + 5 * 86400000, cfg);
+    const csv = await summaryCSV(sim, fp);
     const header = csv.split('\n')[0];
     for (const col of ['data_confidence', 'frame_verified', 'effective_step_min', 'sample_count', 'score_is_heuristic', 'sampling_capped']) {
       expect(header).toContain(col);

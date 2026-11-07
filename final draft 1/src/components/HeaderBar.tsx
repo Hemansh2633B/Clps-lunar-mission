@@ -17,7 +17,7 @@ interface Props {
   onHelp: () => void;
   onSettings: () => void;
   onShortcuts: () => void;
-  onExport: (kind: 'json' | 'timeseries' | 'horizon' | 'summary') => void;
+  onExport: (kind: 'json' | 'timeseries' | 'horizon' | 'summary' | 'events' | 'energy') => void;
   playing: boolean;
   subSolar: { lat: number; lon: number };
   subEarth: { lat: number; lon: number };
@@ -73,6 +73,8 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
                   ['json', 'Mission report (.json)'],
                   ['summary', 'Window summary (.csv)'],
                   ['timeseries', 'Telemetry timeseries (.csv)'],
+                  ['energy', 'Energy & battery history (.csv)'],
+                  ['events', 'Visibility events (.csv)'],
                   ['horizon', 'Horizon mask (.csv)'],
                 ] as const).map(([kind, label]) => (
                   <button key={kind} className="btn ghost" style={{ width: '100%', justifyContent: 'flex-start' }} onClick={() => { onExport(kind); setExportOpen(false); }}>{label}</button>

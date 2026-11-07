@@ -4,8 +4,9 @@ import { horizonFromGrid } from '../src/terrain/horizon';
 import { terrainProfileFromHorizon, horizonImportBlocked } from '../src/terrain/missionProfile';
 import { makeCustomSite } from '../src/data/landingSites';
 import { terrainElevationAt } from '../src/engine/horizonPhysics';
-import { evaluateAt, DEFAULT_CONFIG } from '../src/engine/simulation';
+import { evaluateAt, DEFAULT_CONFIG, simulateMission } from '../src/engine/simulation';
 import { missionReportJSON, horizonCSV } from '../src/utils/export';
+import { analysisFingerprint } from '../src/utils/analysisId';
 import type { HorizonMask } from '../src/terrain/types';
 
 // Default to the IAU frame (no rotation) so these tests isolate the "no illustrative
@@ -65,15 +66,21 @@ describe('DEM horizon → mission profile', () => {
     expect(realSite.terrain.elevations).toEqual([1, 2, 3, 4]);
   });
 
-  it('exports DEM provenance and native-resolution horizon rows', () => {
+  it('exports DEM provenance and native-resolution horizon rows', async () => {
     const mask = maskWith(Array.from({ length: 72 }, (_, i) => Math.sin(i / 72 * Math.PI * 2) * 3), {}, 'MOON_ME DE421');
     const site = makeCustomSite({ name: 'DEM site', latitude: -89.5, longitude: 45, elevationM: -100, preset: 'flat', horizon: mask });
-    const current = evaluateAt(site, Date.parse('2026-12-20T08:00:00Z'), DEFAULT_CONFIG);
-    const report = JSON.parse(missionReportJSON(site, DEFAULT_CONFIG, null, current));
-    expect(report.disclaimer).toMatch(/DEM-derived horizon preserved/);
+    const t0 = Date.parse('2026-12-20T08:00:00Z');
+    const current = evaluateAt(site, t0, DEFAULT_CONFIG);
+    const report = JSON.parse(await missionReportJSON(site, DEFAULT_CONFIG, null, current));
+    // v1.10: status-aware disclosure names the recognized frame + constant correction
+    // (replaces the generic 'DEM-derived horizon preserved … verify alignment' wording).
+    expect(report.reproducibility.terrain.disclosure).toMatch(/MOON_ME DE421/);
+    expect(report.reproducibility.terrain.disclosure).toMatch(/constant/i);
     expect(report.disclaimer).toMatch(/MOON_ME DE421/);
     expect(report.horizonProfile.kind).toBe('dem');
-    const csv = horizonCSV(site, current);
+    const sim = simulateMission(site, t0, t0 + 2 * 86400000, { ...DEFAULT_CONFIG, stepMinutes: 120 });
+    const fp = await analysisFingerprint(site, t0, t0 + 2 * 86400000, sim.config);
+    const csv = await horizonCSV(site, current, sim, fp);
     const rows = csv.trim().split('\n');
     expect(rows.length - 1).toBe(72); // 5° bins preserved, not resampled to 5° illustrative table
   });
