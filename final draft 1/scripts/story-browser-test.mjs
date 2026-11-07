@@ -327,24 +327,43 @@ try {
       model: 'ray-marched local horizon', frame_note: 'Test fixture payload.',
     });
     let horizonFrame = 'MOON_ME (JPL DE421)';
+    let horizonCalls = 0;
+    let terrainCalls = 0;
     await page.route('**/api/config', (r) => r.fulfill({ json: {
       dem_ready: true, source, dem_error: null, quality_grids: { low: 65, medium: 129, high: 257 },
       radius_limits_km: [0.5, 20], latitude_convention: 'planetocentric', longitude_convention: '0-360E',
       synthetic_warning: 'demo', render_coordinates: 'IAU', geometry_model: 'sphere',
     } }));
-    await page.route('**/api/terrain', (r) => r.fulfill({ json: terrainPayload }));
-    await page.route('**/api/horizon', (r) => r.fulfill({ json: horizonPayload(horizonFrame) }));
+    await page.route('**/api/terrain', (r) => { terrainCalls += 1; return r.fulfill({ json: terrainPayload }); });
+    await page.route('**/api/horizon', (r) => { horizonCalls += 1; return r.fulfill({ json: horizonPayload(horizonFrame) }); });
+
+    // Explicit Real-lunar-DEM workflow. A freshly mounted Terrain Lab always starts
+    // with an illustrative SYNTHETIC model; relying on the config-triggered auto-real
+    // build is a race (the CI failure: Compute ran against the synthetic grid, so the
+    // mocked /api/horizon was never called and no import alert could appear).
+    const buildRealDem = async () => {
+      await page.waitForSelector('.terrain-lab');
+      // Config arrival marks the backend online (and flips the source select to real).
+      await page.waitForFunction(() => document.querySelector('#terrain-mode')?.value === 'real', null, { timeout: 20000 });
+      await page.locator('#terrain-mode').selectOption('real');
+      await page.locator('.terrain-lab').getByRole('button', { name: 'Build terrain' }).click();
+      // The loaded model must be REAL DEM data before any horizon is computed.
+      await page.waitForFunction(() => window.__CHANDRA_TERRAIN__?.mode === 'real', null, { timeout: 30000 });
+      await page.waitForSelector('text=TEST_FIXTURE_ME.tif', { timeout: 30000 });
+      assert(await page.locator('.terrain-lab').getByText('Real DEM', { exact: false }).count() > 0, 'D: model identified as real DEM');
+    };
 
     await page.goto(BASE, { waitUntil: 'networkidle' });
     await startFromLauncher(page);
     await chooseTraining(page);
     // Import the (stubbed) ME-frame DEM through the REAL Terrain Lab pipeline
     await page.keyboard.press('t');
-    await page.waitForSelector('.terrain-lab');
-    await page.locator('.terrain-lab').getByRole('button', { name: 'Build terrain' }).click();
-    await page.waitForSelector('text=TEST_FIXTURE_ME.tif', { timeout: 30000 });
+    await buildRealDem();
+    const callsBeforeFirst = horizonCalls;
     await page.locator('.terrain-lab').getByRole('button', { name: 'Compute 360° horizon' }).click();
     await page.waitForSelector('button:has-text("Use in mission")');
+    assert(horizonCalls > callsBeforeFirst, 'D: real horizon API actually called (first visit)');
+    assert(terrainCalls > 0, 'D: real terrain API actually called');
     const useBtn = page.locator('.terrain-lab').getByRole('button', { name: 'Use in mission' });
     assert(await useBtn.isEnabled(), 'D: allowlisted ME frame + full coverage imports');
     await useBtn.click();
@@ -384,14 +403,21 @@ try {
     assert(await page.locator('.story-objective.met').count() === 0, 'D: export objective NOT credited');
     assert(await page.locator('.story-nav button', { hasText: 'Finish briefing' }).isDisabled(), 'D: cannot finish via a refused export');
 
-    // Unknown-frame horizon: the import gate itself must refuse (unavailable control)
+    // Unknown-frame horizon: the import gate itself must refuse (unavailable control).
+    // Re-run the FULL explicit real-DEM workflow on the fresh mount — never compute
+    // against the initial synthetic model.
     horizonFrame = 'WEIRD_TEST_FRAME';
     await page.keyboard.press('t');
-    await page.waitForSelector('.terrain-lab');
+    await buildRealDem();
+    const callsBeforeSecond = horizonCalls;
     await page.locator('.terrain-lab').getByRole('button', { name: 'Compute 360° horizon' }).click();
     // Scope to the lab: the telemetry rail also shows a role=alert for the 2040 epoch.
     await page.waitForSelector('.terrain-lab [role="alert"]');
-    assert(await page.locator('.terrain-lab [role="alert"]').innerText().then((t) => /FRAME UNVERIFIED/.test(t)), 'D: unknown frame alert');
+    assert(horizonCalls > callsBeforeSecond, 'D: mocked real horizon endpoint exercised (second visit)');
+    const importAlert = await page.locator('.terrain-lab [role="alert"]').innerText();
+    assert(/FRAME UNVERIFIED/.test(importAlert), 'D: unknown frame identified');
+    assert(/WEIRD_TEST_FRAME/.test(importAlert), 'D: the actual unknown frame is named');
+    assert(/allowlist|confirmed compatible/.test(importAlert), 'D: warning is actionable (how to resolve)');
     assert(await page.locator('.terrain-lab').getByRole('button', { name: 'Use in mission' }).isDisabled(), 'D: unknown-frame import disabled');
     console.log('PERSONA D (invalid data / honest refusal) PASSED');
   }
