@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Compass, Layers, Minus, Plus, RotateCcw, MapPin } from 'lucide-react';
 import type { EvaluatedSample, LandingSite } from '../types/mission';
 import { clamp, formatCoord, wrap360 } from '../engine/constants';
+import { polarMapDescription } from '../utils/a11y';
 
 export interface MapLayers { grid: boolean; lighting: boolean; earthVector: boolean; }
 
@@ -13,6 +14,7 @@ interface Props {
   onPlaceCustom: (lat: number, lon: number) => void;
   layers: MapLayers;
   onLayers: (l: MapLayers) => void;
+  visibilityBlocked?: boolean;
 }
 
 const SIZE = 560;
@@ -35,7 +37,7 @@ function unproject(x: number, y: number, extentDeg: number) {
   return { lat: colat - 90, lon: wrap360(Math.atan2(dx, dy) / DEG) };
 }
 
-export function PolarMap({ sites, selected, current, onSelect, onPlaceCustom, layers, onLayers }: Props) {
+export function PolarMap({ sites, selected, current, onSelect, onPlaceCustom, layers, onLayers, visibilityBlocked }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const lightCache = useRef<Map<string, HTMLCanvasElement>>(new Map());
@@ -142,14 +144,16 @@ export function PolarMap({ sites, selected, current, onSelect, onPlaceCustom, la
         const len = 46;
         const ex = sp.x + Math.sin(az) * len;
         const ey = sp.y + Math.cos(az) * len;
-        ctx.strokeStyle = current.earthVisibility.visible ? '#0e7490' : '#c23b32';
+        // When terrain visibility is gated, the vector conveys sky azimuth ONLY —
+        // neutral brass, never the green/red that would imply a LOS verdict.
+        ctx.strokeStyle = visibilityBlocked ? '#8a7358' : current.earthVisibility.visible ? '#0e7490' : '#c23b32';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([4, 3]);
         ctx.beginPath(); ctx.moveTo(sp.x, sp.y); ctx.lineTo(ex, ey); ctx.stroke();
         ctx.setLineDash([]);
         ctx.beginPath(); ctx.arc(ex, ey, 3, 0, Math.PI * 2); ctx.fillStyle = ctx.strokeStyle; ctx.fill();
         ctx.font = '9px IBM Plex Mono, monospace';
-        ctx.fillText(`DTE ${current.earth.azimuthDeg.toFixed(0)}°`, ex + 6, ey + 3);
+        ctx.fillText(visibilityBlocked ? `Earth az ${current.earth.azimuthDeg.toFixed(0)}° · LOS unverified` : `DTE ${current.earth.azimuthDeg.toFixed(0)}°`, ex + 6, ey + 3);
       }
     }
 
@@ -191,7 +195,7 @@ export function PolarMap({ sites, selected, current, onSelect, onPlaceCustom, la
     ctx.strokeStyle = '#c4b49a';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.arc(C, C, R, 0, Math.PI * 2); ctx.stroke();
-  }, [polarSites, selected, current, layers, extent, imgReady]);
+  }, [polarSites, selected, current, layers, extent, imgReady, visibilityBlocked]);
 
   const toCanvas = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -227,7 +231,7 @@ export function PolarMap({ sites, selected, current, onSelect, onPlaceCustom, la
           width={SIZE}
           height={SIZE}
           role="img"
-          aria-label={`Stereographic map of the lunar south pole. Selected site ${selected.shortName} at ${selected.latitude.toFixed(2)} degrees latitude, ${selected.longitude.toFixed(1)} degrees longitude. Choose a named site from the catalogue, or click the map to drop a custom site.`}
+          aria-label={polarMapDescription(selected.shortName, selected.latitude, selected.longitude, !!visibilityBlocked)}
           style={{ width: '100%', maxWidth: 250, aspectRatio: '1', cursor: 'crosshair', borderRadius: '50%' }}
           onClick={handleClick}
           onMouseMove={(e) => { const { x, y } = toCanvas(e); const ll = unproject(x, y, extent); setHover(ll ? { x: e.clientX, y: e.clientY, ...ll } : null); }}

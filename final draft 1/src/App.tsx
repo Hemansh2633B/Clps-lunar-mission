@@ -1,12 +1,12 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GraduationCap, BookOpen, ListChecks } from 'lucide-react';
-import type { AppMode, GuidedScenario, LandingSite, MissionConfig, Scenario } from './types/mission';
+import type { AppMode, GuidedScenario, LandingSite, MissionConfig, Scenario, SimulationResult } from './types/mission';
 import { LANDING_SITES, makeCustomSite } from './data/landingSites';
 import { DEFAULT_CONFIG, analysisWindow, evaluateAt } from './engine/simulation';
 import { assessTerrainEligibility } from './engine/analysisStatus';
 import { DAY_MS, HOUR_MS, clamp } from './engine/constants';
 import { useSimulation } from './hooks/useSimulation';
-import { cachedSimulation } from './engine/simulationClient';
+import { cachedSimulation, requestSimulation, releaseSimulation } from './engine/simulationClient';
 import { HeaderBar } from './components/HeaderBar';
 import { SiteCatalog } from './components/SiteCatalog';
 import { HorizonPanorama, type PanoramaOptions } from './components/HorizonPanorama';
@@ -24,7 +24,11 @@ import { Onboarding } from './components/Onboarding';
 import { WorkflowGuide } from './components/WorkflowGuide';
 import { StoryTutorial, StorySuggestion } from './tutorial/StoryTutorial';
 import { useStoryTutorial, type StoryActions, type StorySignals } from './tutorial/useStoryTutorial';
-import type { StoryWorld } from './tutorial/narrative';
+import { loadProgress } from './tutorial/progress';
+import { loadSession, saveSession, clearSession, resolveBoot, type TrainingSession, type WorkspaceSnapshot } from './tutorial/session';
+import { scenarioFingerprint, creditsMissionReport, type ScenarioResolution } from './tutorial/witnesses';
+import { missionExportGate } from './utils/exportGuard';
+import type { StoryWorld, ScenarioOutcome } from './tutorial/narrative';
 import { MISSION_PRESETS, CUSTOM_PRESET_ID, matchingPresetId } from './data/missionPresets';
 import { formatUtcStamp } from './utils/utc';
 import type { WorkflowStepId } from './utils/workflow';
@@ -40,6 +44,10 @@ function hasOnboarded(): boolean {
 function markOnboarded() {
   try { window.localStorage.setItem(ONBOARD_KEY, '1'); } catch { /* storage unavailable */ }
 }
+const CATALOG_IDS = new Set(LANDING_SITES.map((s) => s.id));
+function appStorage(): Storage | null {
+  try { return window.localStorage; } catch { return null; }
+}
 const TICKER = [
   '1.54° AXIAL TILT', '709h SYNODIC DAY', '±6.7° LAT LIBRATION', '±7.9° LON LIBRATION',
   '0.0″ AIRLESS REFRACTION', '1361 W/m² SOLAR CONSTANT', 'IAU 2015 MOON ROTATION',
@@ -47,20 +55,31 @@ const TICKER = [
 ];
 
 export default function App() {
-  const [sites, setSites] = useState<LandingSite[]>(LANDING_SITES);
-  const [selectedId, setSelectedId] = useState('shackleton-rim');
-  const [baselineMs, setBaselineMs] = useState(BASELINE);
-  const [slipDays, setSlipDays] = useState(0);
-  const [viewDays, setViewDays] = useState(30);
-  const [config, setConfig] = useState<MissionConfig>(DEFAULT_CONFIG);
-  const [timeMs, setTimeMs] = useState(INITIAL_TIME);
-  const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(3600);
-  const [mode, setMode] = useState<AppMode>('planner');
-  const [compareMode, setCompareMode] = useState(false);
-  const [terrainView, setTerrainView] = useState(false);
-  const [spaceView, setSpaceView] = useState(false);
-  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  // Refresh-safe training context: a valid persisted session + in-training progress
+  // boots straight back into the training workspace; an orphaned session restores
+  // the USER workspace; lost context with in-training progress is surfaced by the
+  // story hook as an explicit Rebuild/Exit recovery choice — never silent defaults.
+  const [boot] = useState(() => {
+    const st = appStorage();
+    const sess = loadSession(st);
+    return { session: sess, ...resolveBoot(sess, loadProgress(st)) };
+  });
+  const bootWs = boot.workspace;
+  const [session, setSession] = useState<TrainingSession | null>(boot.keepSession ? boot.session : null);
+  const [sites, setSites] = useState<LandingSite[]>(() => (bootWs ? [...LANDING_SITES, ...bootWs.customSites] : LANDING_SITES));
+  const [selectedId, setSelectedId] = useState(bootWs?.selectedId ?? 'shackleton-rim');
+  const [baselineMs, setBaselineMs] = useState(bootWs?.baselineMs ?? BASELINE);
+  const [slipDays, setSlipDays] = useState(bootWs?.slipDays ?? 0);
+  const [viewDays, setViewDays] = useState(bootWs?.viewDays ?? 30);
+  const [config, setConfig] = useState<MissionConfig>(bootWs?.config ?? DEFAULT_CONFIG);
+  const [timeMs, setTimeMs] = useState(bootWs?.timeMs ?? INITIAL_TIME);
+  const [playing, setPlaying] = useState(bootWs?.playing ?? false);
+  const [speed, setSpeed] = useState(bootWs?.speed ?? 3600);
+  const [mode, setMode] = useState<AppMode>(bootWs?.mode ?? 'planner');
+  const [compareMode, setCompareMode] = useState(bootWs?.compareMode ?? false);
+  const [terrainView, setTerrainView] = useState(bootWs?.terrainView ?? false);
+  const [spaceView, setSpaceView] = useState(bootWs?.spaceView ?? false);
+  const [scenarios, setScenarios] = useState<Scenario[]>(bootWs?.scenarios ?? []);
   const [panorama, setPanorama] = useState<PanoramaOptions>({ showTracks: true, showTerrain: true, sector: 'full' });
   const [mapLayers, setMapLayers] = useState<MapLayers>({ grid: true, lighting: true, earthVector: true });
   const [customOpen, setCustomOpen] = useState(false);
@@ -74,14 +93,9 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [onboardingOpen, setOnboardingOpen] = useState(() => !hasOnboarded());
   const [workflowOpen, setWorkflowOpen] = useState(false);
-  const [exportCount, setExportCount] = useState(0);
+  const [reportExportCount, setReportExportCount] = useState(0);
   const [glossaryFocus, setGlossaryFocus] = useState<string | undefined>();
-
-  // Pre-story mission snapshot: exiting the briefing restores exactly what the user had.
-  const storySnapshot = useRef<null | {
-    selectedId: string; baselineMs: number; slipDays: number; config: MissionConfig;
-    viewDays: number; timeMs: number; mode: AppMode; compareMode: boolean; terrainView: boolean; spaceView: boolean;
-  }>(null);
+  const [scenarioSims, setScenarioSims] = useState<Record<string, { fp: string; result: SimulationResult | 'error' }>>({});
 
   const site = sites.find((s) => s.id === selectedId) ?? sites[0];
   const win = useMemo(() => analysisWindow(baselineMs, slipDays, config.durationDays, viewDays), [baselineMs, slipDays, config.durationDays, viewDays]);
@@ -219,23 +233,29 @@ export default function App() {
   }, [notify]);
 
   const handleExport = useCallback((kind: 'json' | 'timeseries' | 'horizon' | 'summary') => {
-    // Never export stale or in-flight results: the mission window must match the
-    // current site/date/config (the hook returns null until the active key resolves).
-    if (missionSim.loading) { notify('Mission window is still computing — export blocked to avoid stale results.'); return; }
-    if (missionSim.error) { notify(`Mission window failed (${missionSim.error}) — nothing to export.`); return; }
-    if (missionSim.data?.analysis && !missionSim.data.analysis.demoEligible) {
-      notify(`Export blocked — analysis is ${missionSim.data.analysis.status}. Resolve the flagged issue before exporting.`);
+    // One pure gate for every export: computing / failed / blocked / stale results
+    // never leave the app, and the result must match the CURRENT site and window.
+    const gate = missionExportGate({
+      kind, loading: missionSim.loading, error: missionSim.error, sim: missionSim.data,
+      expectedSiteId: site.id, expectedStartMs: win.missionStart, expectedEndMs: win.missionEnd,
+      horizonInstantBlocked: instantBlocked,
+    });
+    if (!gate.ok) { notify(gate.reason); return; }
+    const sim = missionSim.data!;
+    const stamp = new Date(timeMs).toISOString().slice(0, 10);
+    try {
+      if (kind === 'json') download(`chandra-report-${stamp}.json`, missionReportJSON(site, config, sim, current), 'application/json');
+      else if (kind === 'horizon') download(`chandra-horizon-${site.id}.csv`, horizonCSV(site, current), 'text/csv');
+      else if (kind === 'timeseries') download(`chandra-timeseries-${site.id}.csv`, timeseriesCSV(sim), 'text/csv');
+      else download(`chandra-summary-${site.id}.csv`, summaryCSV(sim), 'text/csv');
+    } catch (err) {
+      notify(`Export failed (${err instanceof Error ? err.message : String(err)}) — nothing was filed.`);
       return;
     }
-    const stamp = new Date(timeMs).toISOString().slice(0, 10);
-    if (kind === 'json') download(`chandra-report-${stamp}.json`, missionReportJSON(site, config, missionSim.data, current), 'application/json');
-    else if (kind === 'horizon') download(`chandra-horizon-${site.id}.csv`, horizonCSV(site, current), 'text/csv');
-    else if (!missionSim.data) { notify('Mission window is still computing.'); return; }
-    else if (kind === 'timeseries') download(`chandra-timeseries-${site.id}.csv`, timeseriesCSV(missionSim.data), 'text/csv');
-    else download(`chandra-summary-${site.id}.csv`, summaryCSV(missionSim.data), 'text/csv');
-    setExportCount((n) => n + 1);
+    // ONLY a successful, guard-passing JSON mission report earns briefing credit.
+    if (creditsMissionReport(kind, gate.ok, true)) setReportExportCount((n) => n + 1);
     notify(`Exported ${kind}`);
-  }, [site, config, missionSim.data, missionSim.loading, missionSim.error, current, timeMs, notify]);
+  }, [site, config, missionSim.data, missionSim.loading, missionSim.error, current, timeMs, win.missionStart, win.missionEnd, instantBlocked, notify]);
 
   const handleComparisonExport = useCallback((kind: 'csv' | 'json', rows: ComparisonRow[]) => {
     const full = rows.map((r) => ({ ...r, sim: cachedSimulation(r.site, r.scenario.startMs, r.scenario.startMs + r.scenario.config.durationDays * DAY_MS, r.scenario.config) ?? null }));
@@ -265,32 +285,90 @@ export default function App() {
 
   // ---- THE 14-DAY WINDOW · interactive briefing -------------------------------
   const configKey = useMemo(() => JSON.stringify(config), [config]);
-  const storySignals: StorySignals = useMemo(() => ({
-    selectedId: site.id, timeMs, slipDays, configKey,
-    scenarioCount: scenarios.length, compareMode, exportCount,
-  }), [site.id, timeMs, slipDays, configKey, scenarios.length, compareMode, exportCount]);
+
+  /** Complete, deep-copied workspace snapshot (custom sites included, catalog excluded). */
+  const takeWorkspace = useCallback((): WorkspaceSnapshot => structuredClone({
+    selectedId, baselineMs, slipDays, config, viewDays, timeMs, mode, compareMode, terrainView, spaceView,
+    scenarios, playing, speed, customSites: sites.filter((s) => !CATALOG_IDS.has(s.id)),
+  }), [selectedId, baselineMs, slipDays, config, viewDays, timeMs, mode, compareMode, terrainView, spaceView, scenarios, playing, speed, sites]);
+
+  const applyWorkspace = useCallback((w: WorkspaceSnapshot) => {
+    setSites([...LANDING_SITES, ...w.customSites]);
+    setSelectedId(w.selectedId); setBaselineMs(w.baselineMs); setSlipDays(w.slipDays);
+    setConfig(w.config); setViewDays(w.viewDays); setTimeMs(w.timeMs); setMode(w.mode);
+    setCompareMode(w.compareMode); setTerrainView(w.terrainView); setSpaceView(w.spaceView);
+    setScenarios(w.scenarios); setPlaying(w.playing); setSpeed(w.speed);
+  }, []);
 
   const loadTrainingMission = useCallback(() => {
-    storySnapshot.current = { selectedId, baselineMs, slipDays, config, viewDays, timeMs, mode, compareMode, terrainView, spaceView };
-    setTerrainView(false); setSpaceView(false); setCompareMode(false); setWorkflowOpen(false);
-    setSelectedId('connecting-ridge');
-    setBaselineMs(Date.parse('2026-09-01T00:00:00Z'));
-    setSlipDays(0);
-    setConfig(DEFAULT_CONFIG);
-    setViewDays(30);
-    setTimeMs(Date.parse('2026-09-01T00:00:00Z') + 2 * DAY_MS);
-    notify('Training mission loaded — illustrative terrain, clearly labeled. Your previous setup is saved and restored when you exit the briefing.');
-  }, [selectedId, baselineMs, slipDays, config, viewDays, timeMs, mode, compareMode, terrainView, spaceView, notify]);
+    const training: WorkspaceSnapshot = {
+      selectedId: 'connecting-ridge', baselineMs: Date.parse('2026-09-01T00:00:00Z'), slipDays: 0,
+      config: structuredClone(DEFAULT_CONFIG), viewDays: 30,
+      timeMs: Date.parse('2026-09-01T00:00:00Z') + 2 * DAY_MS,
+      mode: 'planner', compareMode: false, terrainView: false, spaceView: false,
+      scenarios: [], playing: false, speed, customSites: [],
+    };
+    // Isolated training workspace: the user's pins/sites/playback live in the
+    // session snapshot and are restored EXACTLY on exit — never silently deleted.
+    setSession((prev) => ({ v: 1, user: prev?.user ?? takeWorkspace(), training }));
+    applyWorkspace(training);
+    setWorkflowOpen(false);
+    notify('Training mission loaded — an isolated, clearly-labeled workspace. Your own setup (sites, pins, playback) is preserved and restored when you exit.');
+  }, [takeWorkspace, applyWorkspace, speed, notify]);
 
   const restoreMission = useCallback(() => {
-    const snap = storySnapshot.current;
-    if (!snap) return;
-    storySnapshot.current = null;
-    setSelectedId(snap.selectedId); setBaselineMs(snap.baselineMs); setSlipDays(snap.slipDays);
-    setConfig(snap.config); setViewDays(snap.viewDays); setTimeMs(snap.timeMs); setMode(snap.mode);
-    setCompareMode(snap.compareMode); setTerrainView(snap.terrainView); setSpaceView(snap.spaceView);
-    notify('Briefing closed — your previous mission setup was restored.');
-  }, [notify]);
+    if (!session) return;
+    applyWorkspace(session.user);
+    setSession(null);
+    clearSession(appStorage());
+    notify('Briefing closed — your previous mission setup was restored exactly (sites, pins, settings, playback).');
+  }, [session, applyWorkspace, notify]);
+
+  // Persist the live training workspace (debounced) + flush synchronously on pagehide
+  // so a refresh restores the exact context the user left, pins and slip included.
+  const liveTrainingRef = useRef<WorkspaceSnapshot | null>(null);
+  liveTrainingRef.current = session ? takeWorkspace() : null;
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  useEffect(() => {
+    if (!session) return;
+    const id = window.setTimeout(() => {
+      if (sessionRef.current && liveTrainingRef.current) saveSession({ ...sessionRef.current, training: liveTrainingRef.current }, appStorage());
+    }, 250);
+    return () => window.clearTimeout(id);
+  }, [session, selectedId, baselineMs, slipDays, config, viewDays, timeMs, mode, compareMode, terrainView, spaceView, scenarios, playing, speed, sites]);
+  useEffect(() => {
+    const flush = () => {
+      if (sessionRef.current && liveTrainingRef.current) saveSession({ ...sessionRef.current, training: liveTrainingRef.current }, appStorage());
+    };
+    window.addEventListener('pagehide', flush);
+    return () => window.removeEventListener('pagehide', flush);
+  }, []);
+  useEffect(() => {
+    // Orphaned session at boot (progress gone/completed): the user workspace was
+    // restored above; drop the stale storage payload once.
+    if (boot.boot === 'user') clearSession(appStorage());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const scenarioResolutions = useMemo(() => {
+    const out: Record<string, ScenarioResolution> = {};
+    for (const sc of scenarios) {
+      const e = scenarioSims[sc.id];
+      if (!e || e.fp !== scenarioFingerprint(sc)) { out[sc.id] = { resolved: false, eligible: false }; continue; }
+      out[sc.id] = e.result === 'error'
+        ? { resolved: true, eligible: false }
+        : { resolved: true, eligible: e.result.analysis.demoEligible };
+    }
+    return out;
+  }, [scenarios, scenarioSims]);
+
+  const storySignals: StorySignals = useMemo(() => ({
+    selectedId: site.id, timeMs, slipDays, configKey,
+    scenarios, userScenarioIds: session?.user.scenarios.map((sc) => sc.id) ?? [],
+    trainingActive: session !== null, resolutions: scenarioResolutions,
+    compareMode, reportExportCount,
+  }), [site.id, timeMs, slipDays, configKey, scenarios, session, scenarioResolutions, compareMode, reportExportCount]);
 
   const focusStoryTarget = useCallback((key: string) => {
     const el = document.querySelector<HTMLElement>(`[data-tour="${key}"]`);
@@ -322,12 +400,57 @@ export default function App() {
   const storyRef = useRef(story);
   storyRef.current = story;
 
+  // Chapter 7 needs RESOLVED results for every pinned scenario, even before the
+  // matrix mounts them. Requests are refcounted alongside the matrix's own hooks.
+  const watchComparisons = story.active && !story.debrief && !story.recoveryNeeded && story.chapter.id === 7;
+  useEffect(() => {
+    if (!watchComparisons) return;
+    let alive = true;
+    const requested: { site: LandingSite; startMs: number; endMs: number; config: MissionConfig }[] = [];
+    for (const sc of scenarios) {
+      const sSite = sites.find((x) => x.id === sc.siteId) ?? sites[0];
+      const endMs = sc.startMs + sc.config.durationDays * DAY_MS;
+      const fp = scenarioFingerprint(sc);
+      const cached = cachedSimulation(sSite, sc.startMs, endMs, sc.config);
+      if (cached) { setScenarioSims((m) => ({ ...m, [sc.id]: { fp, result: cached } })); continue; }
+      requested.push({ site: sSite, startMs: sc.startMs, endMs, config: sc.config });
+      requestSimulation(sSite, sc.startMs, endMs, sc.config)
+        .then((r) => { if (alive) setScenarioSims((m) => ({ ...m, [sc.id]: { fp, result: r } })); })
+        .catch((err) => { if (alive && err?.name !== 'SimulationCancelledError') setScenarioSims((m) => ({ ...m, [sc.id]: { fp, result: 'error' as const } })); });
+    }
+    return () => {
+      alive = false;
+      for (const r of requested) releaseSimulation(r.site, r.startMs, r.endMs, r.config);
+    };
+  }, [watchComparisons, scenarios, sites]);
+
+  // Finishing the briefing restores the user's workspace immediately (the debrief
+  // is a summary, not the training mission). Exiting mid-story does the same.
+  useEffect(() => {
+    if (story.progress?.status === 'completed' && session) restoreMission();
+  }, [story.progress?.status, session, restoreMission]);
+
+  // Per-scenario outcomes for the briefing's comparison chapter: the SAME cached
+  // simulations the matrix renders, with honest computing/blocked/error states.
+  const scenarioOutcomes = useMemo<ScenarioOutcome[]>(() => scenarios.map((sc) => {
+    const sSite = sites.find((x) => x.id === sc.siteId) ?? sites[0];
+    const e = scenarioSims[sc.id];
+    if (!e || e.fp !== scenarioFingerprint(sc)) return { scenario: sc, site: sSite, state: 'computing', summary: null, analysis: null };
+    if (e.result === 'error') return { scenario: sc, site: sSite, state: 'error', summary: null, analysis: null };
+    return {
+      scenario: sc, site: sSite,
+      state: e.result.analysis.demoEligible ? 'valid' : 'blocked',
+      summary: e.result.summary, analysis: e.result.analysis,
+    };
+  }), [scenarios, sites, scenarioSims]);
+
   const storyWorld: StoryWorld = useMemo(() => ({
     site, current, config, presetName, slipDays, missionStartMs: win.missionStart,
     summary: missionSim.data?.summary ?? null, baselineSummary: baselineSim.data?.summary ?? null,
     analysis: missionSim.data?.analysis ?? null, loading: missionSim.loading,
     scenarioCount: scenarios.length, compareMode,
-  }), [site, current, config, presetName, slipDays, win.missionStart, missionSim.data, missionSim.loading, baselineSim.data, scenarios.length, compareMode]);
+    scenarioOutcomes, userScenarioIds: session?.user.scenarios.map((sc) => sc.id) ?? [],
+  }), [site, current, config, presetName, slipDays, win.missionStart, missionSim.data, missionSim.loading, baselineSim.data, scenarios.length, compareMode, scenarioOutcomes, session]);
 
   return (
     <div className="app-shell">
@@ -396,8 +519,8 @@ export default function App() {
               )}
               <HorizonPanorama site={site} current={current} sim={activeSim.data} mode={mode} options={panorama} onOptions={setPanorama} visibilityBlocked={instantBlocked} />
               <div className="lower-grid">
-                <PolarMap sites={sites} selected={site} current={current} onSelect={setSelectedId} onPlaceCustom={placeCustom} layers={mapLayers} onLayers={setMapLayers} />
-                <SiteBrief site={site} current={current} onHorizonTable={() => setHorizonOpen(true)} onPin={pinCurrent} visibilityBlocked={instantBlocked} />
+                <PolarMap sites={sites} selected={site} current={current} onSelect={setSelectedId} onPlaceCustom={placeCustom} layers={mapLayers} onLayers={setMapLayers} visibilityBlocked={instantBlocked} />
+                <SiteBrief site={site} current={current} onHorizonTable={() => setHorizonOpen(true)} onPin={pinCurrent} visibilityBlocked={instantBlocked} analysis={missionSim.data?.analysis ?? null} />
               </div>
             </>
           )}
@@ -414,6 +537,7 @@ export default function App() {
           playing={playing} onPlay={() => setPlaying((p) => !p)} speed={speed} onSpeed={setSpeed}
           viewDays={viewDays} onViewDays={setViewDays}
           missionSummary={missionSim.data?.summary ?? null} baselineSummary={baselineSim.data?.summary ?? null}
+          missionAnalysis={missionSim.data?.analysis ?? null}
         />
       )}
       <footer className="status-bar">
@@ -426,7 +550,7 @@ export default function App() {
 
       {customOpen && <CustomSiteModal onClose={() => setCustomOpen(false)} onCreate={createCustom} initial={customInitial} />}
       {settingsOpen && <SettingsModal config={config} onChange={setConfig} onClose={() => setSettingsOpen(false)} />}
-      {horizonOpen && <HorizonTableModal site={site} current={current} onClose={() => setHorizonOpen(false)} onExport={() => handleExport('horizon')} />}
+      {horizonOpen && <HorizonTableModal site={site} current={current} onClose={() => setHorizonOpen(false)} onExport={() => handleExport('horizon')} visibilityBlocked={instantBlocked} />}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} onReopenWelcome={() => { setShortcutsOpen(false); setOnboardingOpen(true); }} />}
       <Onboarding open={onboardingOpen} onClose={dismissOnboarding} onDemo={startDemo} onRealDem={startRealDem} />
       <StoryTutorial controller={story} world={storyWorld} timeMs={timeMs} />

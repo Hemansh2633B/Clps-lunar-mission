@@ -8,10 +8,12 @@
  * pre-scripted outcomes. Blocked analyses produce an explanation, NOT a verdict.
  */
 import type {
-  AnalysisAssessment, EvaluatedSample, LandingSite, MissionConfig, MissionSummary,
+  AnalysisAssessment, EvaluatedSample, LandingSite, MissionConfig, MissionSummary, Scenario,
 } from '../types/mission';
 import type { DialogueLine } from './story';
 import { explainClearance, explainEarthLos, explainIllumination, explainVerdict } from '../utils/explain';
+import { scenarioFingerprint } from './witnesses';
+import { DAY_MS } from '../engine/constants';
 
 export interface StoryWorld {
   site: LandingSite;
@@ -28,6 +30,19 @@ export interface StoryWorld {
   loading: boolean;
   scenarioCount: number;
   compareMode: boolean;
+  /** Resolved per-scenario results for the comparison chapter (matrix = source of truth). */
+  scenarioOutcomes: ScenarioOutcome[];
+  /** The user's pre-briefing pins — never narrated as tutorial work. */
+  userScenarioIds: string[];
+}
+
+/** One pinned scenario with its REAL resolved state (never a guessed summary). */
+export interface ScenarioOutcome {
+  scenario: Scenario;
+  site: LandingSite;
+  state: 'computing' | 'error' | 'blocked' | 'valid';
+  summary: MissionSummary | null;
+  analysis: AnalysisAssessment | null;
 }
 
 export interface LiveReadout {
@@ -160,6 +175,117 @@ function batteryNarrative(w: StoryWorld): ChapterNarrative {
   };
 }
 
+/** Human labels + units for every config knob a comparison can differ in. */
+const CONFIG_DIFF_LABELS: { key: keyof MissionConfig; label: string; unit: string }[] = [
+  { key: 'durationDays', label: 'duration', unit: 'd' },
+  { key: 'arrayMode', label: 'array mode', unit: '' },
+  { key: 'arrayAreaM2', label: 'array area', unit: 'm²' },
+  { key: 'cellEfficiency', label: 'cell efficiency', unit: '' },
+  { key: 'systemDerate', label: 'system derate', unit: '' },
+  { key: 'fixedPanelAzimuthDeg', label: 'fixed panel azimuth', unit: '°' },
+  { key: 'loadW', label: 'load', unit: 'W' },
+  { key: 'batteryCapacityKWh', label: 'battery', unit: 'kWh' },
+  { key: 'initialSocPct', label: 'initial charge', unit: '%' },
+  { key: 'commsMarginDeg', label: 'comms margin', unit: '°' },
+  { key: 'stepMinutes', label: 'sampling step', unit: 'min' },
+];
+
+/** Every setting that actually differs between two resolved scenarios. */
+export function describeSettingDifferences(a: ScenarioOutcome, b: ScenarioOutcome): string[] {
+  const diffs: string[] = [];
+  if (a.scenario.siteId !== b.scenario.siteId) diffs.push(`site ${a.site.shortName} → ${b.site.shortName}`);
+  const dDays = (b.scenario.startMs - a.scenario.startMs) / DAY_MS;
+  if (Math.abs(dDays) > 1e-9) diffs.push(`window start ${dDays > 0 ? '+' : ''}${dDays.toFixed(2)} d`);
+  for (const { key, label, unit } of CONFIG_DIFF_LABELS) {
+    const va = a.scenario.config[key];
+    const vb = b.scenario.config[key];
+    if (va !== vb) diffs.push(`${label} ${String(va)} → ${String(vb)}${unit ? ` ${unit}` : ''}`);
+  }
+  return diffs;
+}
+
+const pp = (n: number) => `${n > 0 ? '+' : ''}${n.toFixed(1)} pp`;
+
+/**
+ * Chapter 7 narrative, derived ONLY from resolved scenario results — the same
+ * simulations the comparison matrix renders (the matrix stays the source of
+ * truth). Branches: missing pins → guidance; computing → wait; blocked/failed →
+ * explanation without numbers; two valid → actual setting differences and deltas.
+ * Cross-confidence comparisons are flagged and never ranked.
+ */
+export function comparisonNarrative(outcomes: ScenarioOutcome[], userScenarioIds: string[] = []): ChapterNarrative {
+  const user = new Set(userScenarioIds);
+  const seen = new Set<string>();
+  const fresh: ScenarioOutcome[] = [];
+  for (const o of outcomes) {
+    if (user.has(o.scenario.id)) continue;
+    const fp = scenarioFingerprint(o.scenario);
+    if (seen.has(fp)) continue;
+    seen.add(fp);
+    fresh.push(o);
+  }
+  const valid = fresh.filter((o) => o.state === 'valid' && o.summary);
+  const pending = fresh.filter((o) => o.state === 'computing');
+  const blockedOrFailed = fresh.filter((o) => o.state === 'blocked' || o.state === 'error');
+
+  if (fresh.length < 2) {
+    return {
+      lines: [{ speaker: 'MIRA', text: `${fresh.length === 0 ? 'Nothing pinned in this briefing yet.' : 'One briefing window pinned.'} Pin the current window, change one assumption — the slip is a good test — and pin again. Two DIFFERENT windows make a comparison; identical repeats and pre-briefing pins do not count.` }],
+      readouts: [{ label: 'Distinct briefing scenarios', value: `${fresh.length} / 2 needed` }],
+    };
+  }
+  if (valid.length < 2) {
+    if (pending.length > 0) {
+      return {
+        lines: [{ speaker: 'ARIN', text: `${valid.length} of ${fresh.length} distinct windows resolved. The solver is still computing the rest — I will read differences only when at least two results are in. No guessed numbers.` }],
+        readouts: [{ label: 'Resolved / pinned', value: `${valid.length} / ${fresh.length}` }],
+        note: 'Waiting for scenario simulations…',
+      };
+    }
+    const first = blockedOrFailed[0];
+    const why = first.state === 'error'
+      ? 'a scenario computation failed — remove and re-pin that window'
+      : `a scenario analysis is blocked (${first.analysis?.status ?? 'unknown'}): ${first.analysis && 'reason' in first.analysis ? first.analysis.reason : ''}`;
+    return {
+      lines: [
+        { speaker: 'ARIN', text: `No fair pair to read yet — ${why}.` },
+        { speaker: 'MIRA', text: `Blocked windows get explanations, not deltas. ${first.analysis && 'resolution' in first.analysis ? first.analysis.resolution : 'Adjust the scenario and pin a valid replacement.'} The matrix shows each row's state.` },
+      ],
+      readouts: [{ label: 'Valid / pinned', value: `${valid.length} / ${fresh.length}` }],
+      note: 'No quantitative comparison across blocked or failed results.',
+    };
+  }
+
+  const [a, b] = valid;
+  const sa = a.summary!;
+  const sb = b.summary!;
+  const diffs = describeSettingDifferences(a, b);
+  const confA = sa.dataConfidence;
+  const confB = sb.dataConfidence;
+  const sameTier = confA === confB;
+  const lines: DialogueLine[] = [
+    { speaker: 'ARIN', text: `Comparing your first two resolved windows. What differs: ${diffs.length > 0 ? diffs.join('; ') : 'nothing recorded — treat any output difference as noise'}. The solver puts simultaneous Sun + Earth at ${pct(sa.combinedPct)} → ${pct(sb.combinedPct)} (${pp(sb.combinedPct - sa.combinedPct)}), and the longest stretch without both at ${hours(sa.longestCombinedGapHours)} → ${hours(sb.longestCombinedGapHours)}.` },
+    { speaker: 'MIRA', text: `Illumination moves ${pp(sb.illuminationPct - sa.illuminationPct)} and geometric Earth line-of-sight ${pp(sb.dtePct - sa.dtePct)} — LOS is still not an RF link budget. Selected-array energy: ${sa.selectedEnergyKWh.toFixed(1)} → ${sb.selectedEnergyKWh.toFixed(1)} kWh, minimum charge ${pct(sa.minBatterySocPct)} → ${pct(sb.minBatterySocPct)}. Energy balance only — not thermal or survival.` },
+    { speaker: 'MIRA', text: sameTier
+      ? `Both windows use ${CONFIDENCE_LABEL[confA] ?? confA} — same confidence tier, so the difference is attributable to the settings above. The matrix remains the source of truth; the score is our heuristic, not a NASA methodology.`
+      : `Confidence mismatch: ${confA} versus ${confB}. These rows are NOT comparable for ranking — a higher heuristic score on weaker data never outranks stronger data. Read the deltas as indicative only.` },
+  ];
+  return {
+    lines,
+    readouts: [
+      { label: 'Windows compared', value: `${a.site.shortName} → ${b.site.shortName}` },
+      { label: 'Sun + Earth', value: `${pct(sa.combinedPct)} → ${pct(sb.combinedPct)} (${pp(sb.combinedPct - sa.combinedPct)})` },
+      { label: 'Longest combined gap', value: `${hours(sa.longestCombinedGapHours)} → ${hours(sb.longestCombinedGapHours)}` },
+      { label: 'Illumination / DTE Δ', value: `${pp(sb.illuminationPct - sa.illuminationPct)} / ${pp(sb.dtePct - sa.dtePct)}` },
+      { label: 'Selected energy', value: `${sa.selectedEnergyKWh.toFixed(1)} → ${sb.selectedEnergyKWh.toFixed(1)} kWh` },
+      { label: 'Confidence tiers', value: sameTier ? `${confA} (matched)` : `${confA} vs ${confB} — not rankable` },
+    ],
+    note: sameTier
+      ? 'The comparison matrix is the source of truth. Heuristic score ≠ NASA methodology.'
+      : 'Mixed confidence tiers — indicative comparison only, never a ranking. The matrix is the source of truth.',
+  };
+}
+
 export function chapterNarrative(chapter: number, w: StoryWorld): ChapterNarrative {
   const blocked = w.analysis ? blockedNarrative(w.analysis) : null;
   switch (chapter) {
@@ -230,24 +356,11 @@ export function chapterNarrative(chapter: number, w: StoryWorld): ChapterNarrati
     case 6:
       return batteryNarrative(w);
     case 7: {
+      // A blocked CURRENT analysis is explained first — pinning this window cannot
+      // earn comparison credit, and the narrative must say so rather than coach
+      // pinning against a gate. Valid pinned rows remain readable in the matrix.
       if (blocked) return blocked;
-      if (w.scenarioCount < 2) {
-        return {
-          lines: [{ speaker: 'MIRA', text: `${w.scenarioCount === 0 ? 'Nothing pinned yet.' : 'One window pinned.'} Pin the current window, change one assumption — the slip is a good test — and pin again. Two rows make a comparison; one row is just a number.` }],
-          readouts: [{ label: 'Pinned scenarios', value: `${w.scenarioCount} / 2 needed` }],
-        };
-      }
-      return {
-        lines: [
-          { speaker: 'ARIN', text: `You have ${w.scenarioCount} windows on the sheet. Read one meaningful difference — combined visibility or the longest gap — and check it is attributable to the single assumption you changed.` },
-          { speaker: 'MIRA', text: `Confidence check: the selected site is ${CONFIDENCE_LABEL[w.site.dataConfidence ?? 'illustrative']}. A higher heuristic score on weaker data never outranks measured terrain.` },
-        ],
-        readouts: [
-          { label: 'Pinned scenarios', value: String(w.scenarioCount) },
-          { label: 'Selected-site confidence', value: w.site.dataConfidence ?? 'illustrative' },
-        ],
-        note: 'The feasibility score is an application-defined heuristic — not a NASA methodology.',
-      };
+      return comparisonNarrative(w.scenarioOutcomes, w.userScenarioIds);
     }
     case 8: {
       if (blocked) {

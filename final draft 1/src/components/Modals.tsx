@@ -145,15 +145,23 @@ export function SettingsModal({ config, onChange, onClose }: { config: MissionCo
   );
 }
 
-export function HorizonTableModal({ site, current, onClose, onExport }: { site: LandingSite; current: EvaluatedSample; onClose: () => void; onExport: () => void }) {
+export function HorizonTableModal({ site, current, onClose, onExport, visibilityBlocked }: { site: LandingSite; current: EvaluatedSample; onClose: () => void; onExport: () => void; visibilityBlocked?: boolean }) {
   const step = site.terrain.kind === 'dem' ? site.terrain.resolutionDeg : 5;
   const rows = horizonTable(site, current, step);
   return (
     <Modal title={`Horizon elevation table · ${site.shortName}`} onClose={onClose} wide>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <span style={{ fontSize: 11, color: 'var(--muted)' }}>{site.terrain.label} · {step}° bins · Sun az {current.sun.azimuthDeg.toFixed(1)}°, Earth az {current.earth.azimuthDeg.toFixed(1)}°</span>
-        <button className="btn sm" onClick={onExport}><Download size={12} /> CSV</button>
+        <button className="btn sm" onClick={onExport} disabled={visibilityBlocked}
+          title={visibilityBlocked ? 'Clearance export blocked at this epoch — the frame correction is not validated here' : undefined}>
+          <Download size={12} /> CSV
+        </button>
       </div>
+      {visibilityBlocked && (
+        <p role="note" style={{ fontSize: 11, color: 'var(--blocked)', border: '1px solid var(--blocked)', background: '#fbeae5', padding: '8px 10px', margin: '0 0 10px' }}>
+          Terrain visibility is blocked at this epoch — clearance columns are withheld (they would be measured against an unvalidated mask). Terrain elevations and sky azimuths remain shown; CSV export is disabled.
+        </p>
+      )}
       <div style={{ maxHeight: 420, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 5 }}>
         <table className="table">
           <thead><tr><th>Az (°)</th><th>Terrain (°)</th><th>Sun clearance (°)</th><th>Earth clearance (°)</th></tr></thead>
@@ -162,8 +170,8 @@ export function HorizonTableModal({ site, current, onClose, onExport }: { site: 
               <tr key={r.azimuthDeg}>
                 <td>{r.azimuthDeg}</td>
                 <td>{r.terrainElevationDeg.toFixed(2)}</td>
-                <td style={{ color: r.sunClearanceDeg == null ? 'var(--dim)' : r.sunClearanceDeg >= 0 ? 'var(--nominal)' : 'var(--blocked)' }}>{r.sunClearanceDeg == null ? '—' : r.sunClearanceDeg.toFixed(2)}</td>
-                <td style={{ color: r.earthClearanceDeg == null ? 'var(--dim)' : r.earthClearanceDeg >= 0 ? 'var(--nominal)' : 'var(--blocked)' }}>{r.earthClearanceDeg == null ? '—' : r.earthClearanceDeg.toFixed(2)}</td>
+                <td style={{ color: visibilityBlocked ? 'var(--dim)' : r.sunClearanceDeg == null ? 'var(--dim)' : r.sunClearanceDeg >= 0 ? 'var(--nominal)' : 'var(--blocked)' }}>{visibilityBlocked ? 'blocked' : r.sunClearanceDeg == null ? '—' : r.sunClearanceDeg.toFixed(2)}</td>
+                <td style={{ color: visibilityBlocked ? 'var(--dim)' : r.earthClearanceDeg == null ? 'var(--dim)' : r.earthClearanceDeg >= 0 ? 'var(--nominal)' : 'var(--blocked)' }}>{visibilityBlocked ? 'blocked' : r.earthClearanceDeg == null ? '—' : r.earthClearanceDeg.toFixed(2)}</td>
               </tr>
             ))}
           </tbody>

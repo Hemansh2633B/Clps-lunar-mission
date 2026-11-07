@@ -15,7 +15,7 @@ function world(overrides: Partial<StoryWorld> = {}): StoryWorld {
   return {
     site, current, config, presetName: 'Custom', slipDays: 0, missionStartMs: START,
     summary: sim.summary, baselineSummary: sim.summary, analysis: sim.analysis,
-    loading: false, scenarioCount: 0, compareMode: false, ...overrides,
+    loading: false, scenarioCount: 0, compareMode: false, scenarioOutcomes: [], userScenarioIds: [], ...overrides,
   };
 }
 
@@ -134,12 +134,14 @@ describe('blocked analyses explain, never fabricate', () => {
 });
 
 describe('comparison and provenance branches', () => {
-  it('ch7 guides pinning until two scenarios exist', () => {
+  it('ch7 guides pinning until two DISTINCT briefing scenarios exist', () => {
     expect(chapterNarrative(7, world({ scenarioCount: 0 })).lines[0].text).toMatch(/Nothing pinned/);
-    expect(chapterNarrative(7, world({ scenarioCount: 1 })).lines[0].text).toMatch(/One window pinned/);
-    const two = chapterNarrative(7, world({ scenarioCount: 2, compareMode: true }));
-    expect(two.note).toMatch(/not a NASA methodology/);
-    expect(two.readouts[0].value).toBe('2');
+    const scA = { id: 'a', siteId: site.id, startMs: START, config };
+    const outA = { scenario: scA, site, state: 'valid' as const, summary: sim.summary, analysis: sim.analysis };
+    expect(chapterNarrative(7, world({ scenarioCount: 1, scenarioOutcomes: [outA] })).lines[0].text).toMatch(/One briefing window pinned/);
+    // An identical repeat does not create a comparison.
+    const dup = { ...outA, scenario: { ...scA, id: 'dup' } };
+    expect(chapterNarrative(7, world({ scenarioCount: 2, scenarioOutcomes: [outA, dup], compareMode: true })).lines[0].text).toMatch(/Two DIFFERENT windows|One briefing window pinned/);
   });
 
   it('provenance language matches the confidence tier', () => {

@@ -268,7 +268,7 @@ export const STORY_CHAPTERS: StoryChapter[] = [
       { speaker: 'MIRA', text: 'Pin this window, then change one thing — slip back to zero is a good test — and pin again. The comparison matrix lines the windows up under the same assumptions so the difference means something.' },
       { speaker: 'ARIN', text: 'Two rules. Keep every assumption except the one you are testing identical. And watch the confidence tiers: an illustrative mask never outranks measured data just because it scores higher. The feasibility score is our own heuristic, not a NASA methodology.' },
     ],
-    objective: 'Pin at least two scenarios (change the slip between pins) and inspect one meaningful difference in the comparison matrix.',
+    objective: 'Create at least two different scenarios in this briefing (change one assumption — e.g. the slip — between pins), let both resolve, and inspect a meaningful difference in the comparison matrix.',
     target: 'compare',
     view: 'compare',
     completion: 'compared',

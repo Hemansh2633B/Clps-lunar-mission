@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Mountain, Sun, Earth, Eye, EyeOff, Maximize2 } from 'lucide-react';
 import type { AppMode, EvaluatedSample, LandingSite, SimulationResult } from '../types/mission';
+import { panoramaDescription } from '../utils/a11y';
 import { terrainElevationAt } from '../engine/horizonPhysics';
 import { clamp, wrap360 } from '../engine/constants';
 
@@ -137,7 +138,7 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions, 
       </div>
       <div style={{ position: 'relative', background: 'radial-gradient(ellipse at 50% 120%, #f6ead2 0%, #f7f1e6 70%)' }}>
         <svg viewBox={`0 0 ${W} ${H}`} role="img"
-          aria-label={`Local horizon panorama.${visibilityBlocked ? ' Terrain visibility is blocked by the frame gate at this epoch; only sky positions are shown.' : ''} Sun at ${current.sun.azimuthDeg.toFixed(0)} degrees azimuth and ${current.sun.elevationDeg.toFixed(1)} degrees elevation, ${current.sunVisibility.visible ? 'visible' : 'below the horizon or terrain-occulted'}. Earth at ${current.earth.azimuthDeg.toFixed(0)} degrees azimuth and ${current.earth.elevationDeg.toFixed(1)} degrees elevation, ${current.earthVisibility.visible ? 'visible, direct-to-Earth open' : 'not visible'}. A numeric horizon table is available from the site brief.`}
+          aria-label={panoramaDescription(current, !!visibilityBlocked)}
           style={{ width: '100%', display: 'block', cursor: 'crosshair' }} onMouseMove={handleMove} onMouseLeave={() => setHover(null)} onClick={() => { if (hover) setLocked(locked ? null : { az: hover.az, el: hover.el }); }}>
           <defs>
             <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">

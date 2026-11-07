@@ -110,10 +110,12 @@ export function StoryTutorial({ controller, world, timeMs }: PanelProps) {
 
   return (
     <>
-      <StorySpotlight targetKey={debrief || collapsed ? null : chapter.target} />
+      <StorySpotlight targetKey={debrief || collapsed || controller.recoveryNeeded ? null : chapter.target} />
       <section className={`story-panel ${collapsed ? 'collapsed' : ''}`} role="region" aria-label="The 14-day window — interactive mission briefing">
         <div aria-live="polite" className="sr-only">
-          {debrief ? 'Briefing complete. Debrief available.' : `Chapter ${chapter.id} of 8: ${chapter.title}. Objective: ${chapter.objective}`}
+          {debrief ? 'Briefing complete. Debrief available.'
+            : controller.recoveryNeeded ? 'Training context unavailable. Rebuild the training mission or exit the briefing.'
+            : `Chapter ${chapter.id} of 8: ${chapter.title}. Objective: ${chapter.objective}`}
         </div>
         <header className="story-head">
           <span className="stamp brass story-stamp">{debrief ? 'DEBRIEF' : `${chapter.stamp} / 08`}</span>
@@ -130,7 +132,22 @@ export function StoryTutorial({ controller, world, timeMs }: PanelProps) {
 
         {!collapsed && (
           <div className="story-body">
-            {debrief ? (
+            {controller.recoveryNeeded && !debrief ? (
+              <div className="story-objective" role="alert">
+                <span className="mono story-objective-label">TRAINING CONTEXT UNAVAILABLE</span>
+                <p>
+                  Your saved place is chapter {chapter.id}, but the isolated training workspace could not be
+                  restored — storage was cleared or corrupted, or this save predates v1.9 session snapshots.
+                  Resuming on the current planner state would misreport your progress, so the briefing will
+                  not pretend. Rebuild a fresh training mission (your current setup is preserved and restored
+                  on exit), or leave the briefing.
+                </p>
+                <div className="story-controls">
+                  <button className="btn sm primary" onClick={controller.rebuildTraining}>Rebuild the training mission</button>
+                  <button className="btn sm" onClick={controller.exit}>Exit the briefing</button>
+                </div>
+              </div>
+            ) : debrief ? (
               <>
                 <p className="story-scene">The shift log closes. {progress.completed.length} of {STORY_CHAPTERS.length} chapters completed{progress.completed.length < STORY_CHAPTERS.length ? ' (some skipped — they stay available on replay)' : ''}.</p>
                 {DEBRIEF.lines.map((l, i) => <Dialogue key={i} line={l} />)}

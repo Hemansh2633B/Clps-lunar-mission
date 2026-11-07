@@ -5,7 +5,9 @@
  * the instruments render (selection, time, config, slip, pins, guarded exports).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Scenario } from '../types/mission';
 import { LAST_CHAPTER, STORY_CHAPTERS } from './story';
+import { comparisonWitness, type ScenarioResolution } from './witnesses';
 import {
   advance, back, dismissSuggestion, exitStory, freshProgress, jumpTo, loadProgress,
   pause as pauseProgress, restart as restartProgress, resume as resumeProgress,
@@ -19,10 +21,17 @@ export interface StorySignals {
   slipDays: number;
   /** JSON.stringify(config) — any settings change is a witness. */
   configKey: string;
-  scenarioCount: number;
+  /** Live scenarios in the (isolated) training workspace. */
+  scenarios: Scenario[];
+  /** The user's own pre-briefing pins (session snapshot) — can never earn credit. */
+  userScenarioIds: string[];
+  /** A training session (isolated workspace + persisted snapshot) is loaded. */
+  trainingActive: boolean;
+  /** Resolved simulation state per scenario id — computing/blocked never count. */
+  resolutions: Record<string, ScenarioResolution>;
   compareMode: boolean;
-  /** Increments only on a real, guard-passing export. */
-  exportCount: number;
+  /** Increments ONLY on a guard-passing JSON mission-report download. */
+  reportExportCount: number;
 }
 
 export interface StoryActions {
@@ -47,7 +56,9 @@ interface WitnessBaseline {
   timeMs: number;
   slipDays: number;
   configKey: string;
-  exportCount: number;
+  reportExportCount: number;
+  /** Scenario IDs present when the chapter became active (audit baseline). */
+  scenarioIds: string[];
 }
 
 function storage(): Storage | null {
@@ -66,12 +77,22 @@ export function useStoryTutorial(signals: StorySignals, actions: StoryActions) {
   const chapter = progress ? STORY_CHAPTERS[progress.chapter] : STORY_CHAPTERS[0];
   const debrief = active && progress?.status === 'completed';
 
+  // v1.8 progress can point at chapter 5/7 with no persisted training workspace
+  // (feature predates sessions, or storage was cleared/corrupted). Never resume
+  // against unrelated defaults: the panel offers Rebuild / Exit instead.
+  const recoveryNeeded = active && progress?.status === 'active' && progress.chapter >= 1 && !signals.trainingActive;
+
   // Capture the witness baseline synchronously when the active chapter changes,
-  // so no render ever compares against the previous chapter's baseline.
-  if (active && progress?.status === 'active' && baseline.current?.chapter !== progress.chapter) {
+  // so no render ever compares against the previous chapter's baseline. While
+  // context is lost, no baseline is captured (defaults are not the user's work).
+  if (active && progress?.status === 'active' && !recoveryNeeded && baseline.current?.chapter !== progress.chapter) {
     baseline.current = {
       chapter: progress.chapter,
-      values: { selectedId: signals.selectedId, timeMs: signals.timeMs, slipDays: signals.slipDays, configKey: signals.configKey, exportCount: signals.exportCount },
+      values: {
+        selectedId: signals.selectedId, timeMs: signals.timeMs, slipDays: signals.slipDays,
+        configKey: signals.configKey, reportExportCount: signals.reportExportCount,
+        scenarioIds: signals.scenarios.map((sc) => sc.id),
+      },
     };
   }
 
@@ -86,13 +107,22 @@ export function useStoryTutorial(signals: StorySignals, actions: StoryActions) {
 
   // Navigate to the chapter's view; the spotlight scrolls the real target into view.
   useEffect(() => {
-    if (!active || progress?.status !== 'active' || debrief) return;
+    if (!active || progress?.status !== 'active' || debrief || recoveryNeeded) return;
     if (chapter.view) actions.ensureView(chapter.view);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, progress?.chapter, debrief]);
+  }, [active, progress?.chapter, debrief, recoveryNeeded]);
+
+  const comparison = useMemo(() => comparisonWitness({
+    userScenarioIds: signals.userScenarioIds,
+    chapterBaselineIds: baseline.current?.chapter === 7 ? baseline.current.values.scenarioIds : [],
+    scenarios: signals.scenarios,
+    resolutions: signals.resolutions,
+    compareMode: signals.compareMode,
+    trainingActive: signals.trainingActive,
+  }), [signals]);
 
   const objectiveMet = useMemo(() => {
-    if (!progress || progress.status !== 'active') return false;
+    if (!progress || progress.status !== 'active' || recoveryNeeded) return false;
     // Revisited chapters stay satisfied — the work was already done.
     if (progress.completed.includes(chapter.id) && chapter.completion !== 'choice') return true;
     const b = baseline.current?.chapter === chapter.id ? baseline.current.values : null;
@@ -104,11 +134,11 @@ export function useStoryTutorial(signals: StorySignals, actions: StoryActions) {
       case 'config-changed': return b !== null && signals.configKey !== b.configKey;
       case 'slip-changed': return b !== null && signals.slipDays !== b.slipDays;
       case 'read-telemetry': return progress.answers[chapter.id] !== undefined;
-      case 'compared': return signals.scenarioCount >= 2 && signals.compareMode;
-      case 'exported': return b !== null && signals.exportCount > b.exportCount;
+      case 'compared': return comparison.met;
+      case 'exported': return b !== null && signals.reportExportCount > b.reportExportCount;
       default: return false;
     }
-  }, [progress, chapter, signals, keptRegion]);
+  }, [progress, chapter, signals, keptRegion, recoveryNeeded, comparison]);
 
   const answered = progress?.answers[chapter.id] !== undefined;
   const canContinue = objectiveMet && (!chapter.check || answered);
@@ -195,9 +225,17 @@ export function useStoryTutorial(signals: StorySignals, actions: StoryActions) {
     actions.openGlossary(first ?? '');
   }, [chapter, actions]);
 
+  const rebuildTraining = useCallback(() => {
+    // Recovery: load a fresh isolated training mission (snapshotting whatever the
+    // user currently has) and continue from the saved chapter with a fresh baseline.
+    baseline.current = null;
+    actions.loadTrainingMission();
+  }, [actions]);
+
   return {
     progress, chapter, active, debrief, panelOpen, suggestOpen,
     objectiveMet, answered, canContinue, furthest, lastChapter: LAST_CHAPTER,
+    recoveryNeeded, rebuildTraining, comparison,
     start, replay, suggestAfterOnboarding, dismissSuggestion: dismissSuggestionUi,
     chooseTraining, chooseExplore, answer, next, back: goBack, skip, jump,
     pause, exit, closeDebrief, runPrimary, openDeeper,
