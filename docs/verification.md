@@ -23,6 +23,37 @@ limits, and `docs/known-issues.md` for open engineering findings.
 
 Python warnings are Rasterio `Affine` `*` vs `@` PendingDeprecationWarnings from the installed wheel; they do not indicate a CHANDRA failure.
 
+## Repository restructure & rebrand — executed evidence (2026-11-08)
+
+Executed on branch `arena/6ac61b25-clps-lunar-mission` after moving the
+application from `final draft 1/` to the repository root and renaming the
+product to CHANDRA (npm package `chandra`). No scientific code, numerical
+constant, threshold or test expectation changed; the version stays 1.10.0
+and the report schema stays 2.0.0. Source changes were limited to branding
+strings (wordmark, onboarding title, document title, header version label
+now derived from `APP_VERSION`) and one added browser assertion (document
+title). All gates below ran from the repository root.
+
+| Gate | Result |
+|---|---|
+| `npm ci` | clean install; lockfile matches package.json (name `chandra`) |
+| `npm run typecheck` / `npm run build` | clean |
+| `npm test` | **300 passed, 29 files** (re-run after the header-label change: same) |
+| `npm run test:geometry` / `npm run test:parity` | passed |
+| `npm run test:python` (no kernels) | **92 passed, 4 skipped** — the 4 SPICE-kernel-gated frame tests skip, reported as skips |
+| Independent SPICE validation | `scripts/fetch-spice-kernels.py` fetched all 5 kernels (checksums recorded in `data/kernels/PROVENANCE.json`); `tests/python/test_lunar_frame.py` then ran for real: **26 passed**; full pytest with kernels present: **96 passed** |
+| `npm run test:browser` | passed — includes the new `page.title() === 'CHANDRA — Lunar Mission Planning'` assertion |
+| `npm run test:story` | passed — personas A–E |
+| `npm run test:exports` | passed — personas A–E, 413 s. **First attempt failed** in Persona D at the 20 s wait for the Terrain Lab mode selector to become `real` (SwiftShader software-GL load flake; the identical mock sequence had passed in Persona B minutes earlier). Re-run passed with **no source or test change** between attempts. No timeout was lengthened and no assertion was removed. |
+| Dev stack from root | `npm run dev:full` starts Flask :8000 + Vite :5173; `/api/health` and the Vite `/api` proxy respond; title and bundled assets verified over HTTP |
+| Real-DEM browser test | **NOT RUN** — `data/verification/` fixture absent in this environment, as in the v1.9/v1.10 runs |
+| Manual screen-reader protocol | **NOT EXECUTED** — unchanged from the accessibility audit |
+| Docs integrity | every relative Markdown link resolves; every documented `npm run` script exists; no `final draft 1/` or old-package references outside explicitly historical documents |
+
+CI on the restructured layout: the three job names are unchanged; results
+are recorded on the pull request (see `docs/ci-governance.md` for the
+required-check contract and the pending GitHub-side rename).
+
 ## v1.10 scientific export & data integrity — executed evidence
 
 Executed 2026-11-07 on branch `arena/73a0c053-clps-lunar-mission` (base `main` @
