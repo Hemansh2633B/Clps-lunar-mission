@@ -63,7 +63,7 @@ jobs:
   # PR carries a VISIBLE, required SPICE result (never skipped-as-passed). Kernels
   # come from checksummed public GitHub mirrors (not NASA), recorded in
   # data/kernels/PROVENANCE.json; the job FAILS if the fetch fails rather than
-  # silently skipping. See docs/CI_GOVERNANCE.md for the required-check list.
+  # silently skipping. See docs/ci-governance.md for the required-check list.
   spice-validation:
     name: Independent SPICE validation (fetched kernels)
     runs-on: ubuntu-latest
