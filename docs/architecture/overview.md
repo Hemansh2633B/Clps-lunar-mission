@@ -12,9 +12,9 @@ flowchart LR
     subgraph Browser
         UI[React UI · src/components]
         App[App state · src/App.tsx]
-        Hook[useSimulation · LRU cache]
+        Hook[useSimulation → simulationClient]
         Worker[simulation.worker.ts]
-        Engine[engine/ · ephemeris, horizon, power, integration]
+        Engine[engine: ephemeris · horizon · power · energy]
         Export[utils/export.ts + exportGuard.ts]
         Terrain[terrain/ + TerrainLab.tsx]
         UI --> App

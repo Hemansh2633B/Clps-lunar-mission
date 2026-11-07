@@ -126,7 +126,7 @@ and independent SPICE validation. See [ci-governance.md](docs/ci-governance.md).
 ```mermaid
 flowchart LR
     UI[React UI] --> App[App state]
-    App --> Hook[useSimulation · LRU cache]
+    App --> Hook[useSimulation → simulationClient]
     Hook -->|Web Worker| Engine[engine: ephemeris · horizon · power · energy]
     App --> Export[export guard + builders]
     UI --> Terrain[Terrain Lab]
@@ -134,8 +134,9 @@ flowchart LR
 ```
 
 Window simulations run in a dedicated Web Worker with a 36-entry LRU cache;
-results are keyed to the exact input identity, and the export guard re-checks
-that identity before any download. The backend is optional and only serves
+results are keyed to an input-identity fingerprint, and the export guard
+re-checks that identity before any download (the key currently rounds some
+inputs — see [known-issues.md](docs/known-issues.md)). The backend is optional and only serves
 DEM extraction and horizon computation — all mission science runs client-side.
 
 Component responsibilities and data flow: [docs/architecture/overview.md](docs/architecture/overview.md).
