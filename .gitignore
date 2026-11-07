@@ -12,6 +12,7 @@ data/*.tiff
 data/*config.json
 !data/README.md
 __pycache__/
+*.pyc
 .pytest_cache/
 artifacts/
 
@@ -20,3 +21,6 @@ data/verification/
 
 # SPICE kernels (large binaries; reproducible via scripts/fetch-spice-kernels.py)
 data/kernels/
+
+# Local DEM configuration (copy of dem_config.example.json with verified values)
+dem_config.json
