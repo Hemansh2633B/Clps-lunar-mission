@@ -198,7 +198,7 @@ Open engineering findings (analysis-identity rounding, session size cap,
 coarse-resolution disclosure) are tracked in [docs/known-issues.md](docs/known-issues.md).
 
 Release history and implementation reports:
-[docs/implementation-history/](docs/implementation-history/).
+[docs/implementation-history/](docs/implementation-history/README.md).
 
 ## Contributing
 
