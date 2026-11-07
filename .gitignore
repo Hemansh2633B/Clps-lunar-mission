@@ -1,0 +1,26 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+test-results/
+playwright-report/
+.vite/
+
+.venv/
+data/*.tif
+data/*.tiff
+data/*config.json
+!data/README.md
+__pycache__/
+*.pyc
+.pytest_cache/
+artifacts/
+
+# Local verification DEM fixtures (large raster data)
+data/verification/
+
+# SPICE kernels (large binaries; reproducible via scripts/fetch-spice-kernels.py)
+data/kernels/
+
+# Local DEM configuration (copy of dem_config.example.json with verified values)
+dem_config.json

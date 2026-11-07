@@ -1,0 +1,50 @@
+{
+  "name": "chandra",
+  "version": "1.10.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "vitest run",
+    "test:browser": "node scripts/browser-test.mjs",
+    "typecheck": "tsc -b",
+    "dev:api": "node scripts/dev-api.mjs",
+    "dev:full": "node scripts/dev-full.mjs",
+    "test:python": "node scripts/python-test.mjs",
+    "test:geometry": "tsx scripts/geometry-check.ts",
+    "test:all": "npm test && npm run test:python && npm run test:geometry && npm run test:parity",
+    "test:parity": "tsx scripts/horizon-parity.ts",
+    "test:real-dem": "node scripts/real-dem-browser-test.mjs",
+    "test:story": "node scripts/story-browser-test.mjs",
+    "test:exports": "node scripts/export-browser-test.mjs"
+  },
+  "dependencies": {
+    "@fontsource/fraunces": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/outfit": "^5.3.0",
+    "@types/three": "^0.187.0",
+    "astronomy-engine": "^2.1.19",
+    "lucide-react": "^0.468.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@sparticuz/chromium": "^153.0.0",
+    "@tailwindcss/vite": "^4.1.0",
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "tailwindcss": "^4.1.0",
+    "tsx": "^4.23.15",
+    "typescript": "~5.8.3",
+    "vite": "^7.3.7",
+    "vitest": "^5.1.0"
+  }
+}
