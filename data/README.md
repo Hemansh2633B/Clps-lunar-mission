@@ -18,11 +18,14 @@ Copy `dem_config.example.json` to `dem_config.json` in the project root. Set:
 - `lunar_reference_frame`: documented body-fixed frame and realization, such as MOON_ME / DE421 for the selected NASA PGDA product.
 - Optional `scale` and `offset`: overrides only when the product requires them and GDAL's band metadata does not retain them. Defaults come from the raster metadata, not an inferred NASA naming convention.
 
-From the project root, start both backend and frontend with:
+From the repository root, start the backend and frontend together with:
 
 ```bash
-python -m backend.server --dem-config dem_config.json
+npm run dev:full -- --dem-config dem_config.json
 ```
+
+Or run the backend alone with `python -m backend.server --dem-config dem_config.json`
+and the frontend separately with `npm run dev`.
 
 For a small, actual NASA LOLA example without a full polar download:
 
@@ -46,4 +49,4 @@ npm run build
 npm run test:real-dem
 ```
 
-See the root README and `docs/verification.md` for Windows instructions, scientific conventions, coordinate handling, tests, limitations, and frame caveats.
+See the root README for setup and tests, `docs/scientific-method.md` for conventions and frame handling, and `docs/verification.md` for executed evidence and fixture caveats.

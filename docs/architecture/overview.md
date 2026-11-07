@@ -41,11 +41,11 @@ flowchart LR
 - `components/` — the planner panels (horizon panorama, polar map, timeline,
   telemetry), comparison matrix, settings/custom-site modals, onboarding,
   workflow guide, Terrain Lab and Space viewers.
-- `hooks/useSimulation.ts` — the only path to window simulation results.
+- `hooks/useSimulation.ts` — the React binding for window simulation results.
   Returns cached-or-null for the active `simulationKey`, never a stale result.
-  Worker requests are reference-counted, deduplicated, and cancelled (worker
-  terminate/respawn, debounced 40 ms) when no consumer wants them. The cache
-  holds 36 results, LRU-evicted.
+  The underlying `engine/simulationClient.ts` owns the 36-entry LRU cache,
+  in-flight deduplication, reference counting and cancellation (worker
+  terminate/respawn, debounced 40 ms) when no consumer wants a result.
 - `engine/` — the scientific core, shared by the worker and the main thread:
   - `ephemeris.ts`: Sun/Earth topocentric directions from astronomy-engine with
     the IAU 2015 Moon body-fixed rotation, light-time and aberration corrections.

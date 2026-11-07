@@ -127,10 +127,10 @@ and independent SPICE validation. See [ci-governance.md](docs/ci-governance.md).
 flowchart LR
     UI[React UI] --> App[App state]
     App --> Hook[useSimulation · LRU cache]
-    Hook -->|Web Worker| Engine[engine/ · ephemeris, horizon,\npower, energy integration]
+    Hook -->|Web Worker| Engine[engine: ephemeris · horizon · power · energy]
     App --> Export[export guard + builders]
     UI --> Terrain[Terrain Lab]
-    Terrain -->|/api| Backend[Flask · DEM load, crop,\nhorizon ray-march]
+    Terrain -->|/api| Backend[Flask: DEM load · crop · ray-march]
 ```
 
 Window simulations run in a dedicated Web Worker with a 36-entry LRU cache;
