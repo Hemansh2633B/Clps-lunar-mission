@@ -7,6 +7,10 @@ import { join } from 'node:path';
 
 const BASE = process.env.BASE_URL || 'http://localhost:5173/';
 const OUT = 'screenshots';
+// Screenshots are artifacts, not assertions: on headless SwiftShader the
+// compositor can stall a capture even while the app is healthy. Best-effort
+// with a bounded timeout keeps the run honest (state assertions still hard-fail).
+const shot = (page, name) => page.screenshot({ animations: 'disabled', timeout: 25000, path: `${OUT}/${name}.png` }).catch(() => {});
 mkdirSync(OUT, { recursive: true });
 
 // CI mode uses Playwright's own bundled Chromium (portable across Linux distros).
@@ -84,12 +88,12 @@ try {
   if (await page.locator('text=Welcome to CHANDRA').count()) {
     assert(await page.locator('text=Explore demo mode').count() > 0, 'onboarding offers demo mode');
     assert(await page.locator('text=Analyze real DEM data').count() > 0, 'onboarding offers real DEM mode');
-    await page.screenshot({ animations: 'disabled', path: `${OUT}/00-onboarding.png` });
+    await shot(page, '00-onboarding');
     await page.locator('button', { hasText: 'Skip for now' }).click();
     await page.waitForTimeout(400);
   }
   await page.waitForTimeout(1200);
-  await page.screenshot({ animations: 'disabled', path: `${OUT}/01-workspace.png` });
+  await shot(page, '01-workspace');
   assert(await page.locator('.site-item').count() >= 10, 'catalog has 10+ sites');
 
   // Scenario A (student): the guided six-step workflow opens, shows all six steps, and
@@ -102,7 +106,7 @@ try {
   await guide.getByRole('button', { name: 'Browse regions' }).click();
   await page.waitForTimeout(300);
   assert(await guide.locator('h3', { hasText: 'Set the UTC start date' }).count() > 0, 'workflow advances to the UTC-date step');
-  await page.screenshot({ animations: 'disabled', path: `${OUT}/01b-guided-workflow.png` });
+  await shot(page, '01b-guided-workflow');
   await guide.getByRole('button', { name: 'Close guided workflow' }).click();
   await page.waitForTimeout(300);
   assert(await page.locator('[aria-label="Guided mission workflow"]').count() === 0, 'guided workflow dismisses');
@@ -117,12 +121,12 @@ try {
   await page.locator('.site-item', { hasText: 'Apollo 11' }).click();
   await page.waitForTimeout(900);
   assert(await page.locator('text=Tranquility Base').count() > 0, 'Apollo 11 selected');
-  await page.screenshot({ animations: 'disabled', path: `${OUT}/02-apollo11.png` });
+  await shot(page, '02-apollo11');
 
   await page.locator('.site-item', { hasText: "Chang'e 4" }).click();
   await page.waitForSelector('text=NEVER', { timeout: 20000 }); // wait for the mission summary, not a fixed delay
   assert(await page.locator('text=NEVER').count() > 0, 'far side reports NEVER');
-  await page.screenshot({ animations: 'disabled', path: `${OUT}/03-farside.png` });
+  await shot(page, '03-farside');
 
   await page.keyboard.press('c');
   await page.getByRole('button', { name: /Pin current/ }).click();
@@ -130,7 +134,7 @@ try {
   await page.locator('.site-rail').getByRole('button', { name: 'Pin', exact: true }).click();
   await page.waitForTimeout(1500);
   assert(await page.locator('text=Scenario comparison').count() > 0, 'comparison open');
-  await page.screenshot({ animations: 'disabled', path: `${OUT}/04-comparison.png` });
+  await shot(page, '04-comparison');
   await page.keyboard.press('c');
 
   await page.keyboard.press('e');
@@ -138,7 +142,7 @@ try {
   await page.keyboard.press('g');
   await page.locator('text=Why is the South Pole so different').click();
   await page.waitForTimeout(900);
-  await page.screenshot({ animations: 'disabled', path: `${OUT}/05-educator.png` });
+  await shot(page, '05-educator');
   await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: /Custom/ }).first().click();
@@ -183,7 +187,7 @@ try {
   assert(JSON.stringify(initialTerrain.landingPosition) === JSON.stringify([0, 0, 0]), 'landing vertex is exact origin');
   assert(initialTerrain.triangles > 100000 && initialTerrain.triangles < 135000, 'medium grid triangle budget');
   assert(await page.locator('.terrain-synthetic-banner').isVisible(), 'synthetic warning visible');
-  await page.screenshot({ animations: 'disabled', path: `${OUT}/06-terrain-lab.png` });
+  await shot(page, '06-terrain-lab');
 
   const canvas = page.locator('.terrain-viewport canvas');
   const box = await canvas.boundingBox();
@@ -277,7 +281,7 @@ try {
   await page.waitForTimeout(700);
   assert(await page.locator('.site-item', { hasText: 'Demo -89.50° 45.0°' }).count() > 0, 'DEM/demo horizon creates mission site');
   assert(await page.locator('text=Synthetic demo samples').count() > 0, 'imported synthetic horizon stays labeled');
-  await page.screenshot({ animations: 'disabled', path: `${OUT}/07-dem-horizon-site.png` });
+  await shot(page, '07-dem-horizon-site');
 
   // Real mode never silently falls back when no DEM is configured.
   await page.keyboard.press('t');
@@ -314,7 +318,7 @@ try {
   assert(await page.locator('.planet-viewport canvas').isVisible(), 'planet viewport renders');
   assert((await planetState()).sites >= 10, 'planet shows the site catalog markers');
   assert(await page.locator('.planet-label.site').count() > 0, 'selected-site label present');
-  await page.screenshot({ animations: 'disabled', path: `${OUT}/09-planet.png` });
+  await shot(page, '09-planet');
 
   // Time-lapse advances the real ephemeris (sub-solar point sweeps).
   const beforeLapse = await planetState();
@@ -341,7 +345,7 @@ try {
   assert(await page.locator('.fleet-viewport canvas').isVisible(), 'fleet viewport renders');
   assert(await page.locator('.fleet-part').count() >= 2, 'fleet part callouts listed');
   assert(await page.locator('.fleet-disclaimer').isVisible(), 'stylized-model disclaimer visible');
-  await page.screenshot({ animations: 'disabled', path: `${OUT}/10-fleet-stack.png` });
+  await shot(page, '10-fleet-stack');
 
   // Stage separation slider moves the upper stage.
   await setRange(page.locator('.fleet-controls input[type="range"]'), 0.8);
@@ -357,7 +361,7 @@ try {
   await page.waitForFunction(() => window.__CHANDRA_FLEET__?.vehicle === 'starship-hls', null, { timeout: 10000 });
   await page.waitForTimeout(600);
   assert((await fleetState()).vehicle === 'starship-hls', 'HLS lander loads');
-  await page.screenshot({ animations: 'disabled', path: `${OUT}/11-fleet-hls.png` });
+  await shot(page, '11-fleet-hls');
   await page.getByRole('button', { name: 'CLPS LANDER', exact: true }).click();
   await page.waitForFunction(() => window.__CHANDRA_FLEET__?.vehicle === 'clps-lander', null, { timeout: 10000 });
   assert((await fleetState()).vehicle === 'clps-lander', 'CLPS lander loads');
@@ -391,7 +395,7 @@ try {
     assert(await page.locator('.site-item', { hasText: region }).count() > 0, `Artemis region present: ${region}`);
   }
   assert(await page.locator('.site-item', { hasText: 'region approx.' }).count() > 0, 'Artemis regions labeled region-approximate, not surveyed');
-  await page.screenshot({ animations: 'disabled', path: `${OUT}/12-artemis-catalogue.png` });
+  await shot(page, '12-artemis-catalogue');
   await page.getByRole('button', { name: 'all', exact: true }).click();
   await page.waitForTimeout(200);
 
@@ -437,7 +441,7 @@ try {
   assert(await page.locator('text=Simultaneous Sun + Earth visibility').count() > 0, 'score components shown');
   assert(await page.locator('text=Application-defined heuristic').count() > 0, 'score disclosed as heuristic');
   assert(await page.locator('text=not an RF link budget').count() > 0, 'geometric LOS != RF disclosed');
-  await page.screenshot({ animations: 'disabled', path: `${OUT}/13-provenance-score.png` });
+  await shot(page, '13-provenance-score');
 
   // ---- Scenario C (technical) + D (invalid data): presets + numeric validation ----
   await page.getByRole('button', { name: 'Mission parameters' }).click();

@@ -73,6 +73,29 @@ against the live panel background at runtime and fails below 4.5:1.
   `AnalysisAssessment` status; verified-DEM wording unit-tested (residual,
   coverage, LOCAL scope).
 
+### v1.10 additions (executed in `npm run test:exports`, persona E)
+
+- **Export announcements:** the six-item Export menu is keyboard-reachable;
+  initiating an export announces "Export initiated — …. Check your browser's
+  downloads to confirm the file arrived." via the `role="status"` toast — honest
+  initiated semantics, never "saved". A guard refusal (blocked/stale analysis)
+  announces the refusal reason instead; persona E asserts both paths.
+- **Blocked-analysis notice:** `role="alert"` with the explicit status wording;
+  no color-only state.
+- **Comparison export policy:** `role="note"` labeled "Comparison export policy"
+  beside the export buttons states that every row exports with an explicit
+  resolution state and blanks are never zeros.
+- **Custom-site modal labels fixed:** all fields (name, latitude, longitude,
+  elevation, preset, and the 8 sector sliders) now have `htmlFor`/`id`
+  association — previously the labels were visual-only and screen readers could
+  not name the inputs. Found while writing the export personas; unit-visible via
+  `getByLabel` in the E2E suite.
+- **Session-recovery notice:** a rejected persisted session produces one explicit
+  boot toast (never silent, never partial application); the briefing's
+  Rebuild/Exit recovery panel is unchanged from v1.9 and still keyboard-first.
+- **Mobile/reduced motion:** export menu + toasts verified at 390 px and with
+  `prefers-reduced-motion` (no new animation introduced).
+
 ## 3. Known limitations (not fixed, disclosed)
 
 - Canvas polar map and SVG charts are described, not navigable element-by-
@@ -103,7 +126,8 @@ no screen-reader pass is claimed.
 4. **Recovery card:** corrupt `chandra-story-session-v1` in devtools, reload,
    resume; confirm the alert is announced and Rebuild/Exit are reachable.
 5. **Modals:** open Settings; confirm dialog role + label, trap, Escape, and
-   focus return; repeat for horizon table (blocked epoch: "blocked" cells).
+   focus return; repeat for horizon table (blocked epoch: "blocked" cells) and
+   the custom-site modal (v1.10: every field now announces its label).
 6. **Sliders:** announce label, value and UTC value-text while arrowing the
    scrubber and slip; confirm no double-announcement from the live region.
 7. **Tables:** read the horizon table and comparison matrix by row/column;
@@ -111,7 +135,10 @@ no screen-reader pass is claimed.
 8. **Zoom & reflow:** 200% browser zoom at 1280px and 400% at 320px equivalent;
    no loss of content or function; bottom sheet remains reachable.
 9. **Toasts/alerts:** export refusal and pin-cap messages are announced once,
-   not spammed.
+   not spammed. With v1.10: initiate each of the six export kinds by keyboard
+   and confirm the "Export initiated" announcement names the file kind; trigger
+   a blocked export and confirm the refusal reason is announced; reload with a
+   corrupt session and confirm the rejection notice is announced exactly once.
 10. **Reduced motion:** with OS reduce-motion on, confirm no marquee/spotlight
     movement and instant scrolling.
 

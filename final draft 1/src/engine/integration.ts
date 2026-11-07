@@ -29,6 +29,40 @@ export interface IntegrationDiagnostics {
   relativeEnergyError: number;
   toleranceKWhPerInterval: number;
   resolutionStatus: 'converged' | 'adequate' | 'coarse';
+  /** Number of exported energy-history rows (initial state + accepted sub-intervals). */
+  historyPoints: number;
+}
+
+/**
+ * One point of the ENGINE's own energy/battery trajectory (v1.10).
+ *
+ * Rows are recorded at the exact boundaries of the ACCEPTED adaptive-Simpson
+ * sub-intervals — the same points where the battery is stepped with the same
+ * generation integral, charge/discharge efficiencies, SOC saturation and
+ * depletion interpolation used for the mission summary. Nothing here is
+ * re-simulated, coarse-trapezoided or arbitrarily interpolated: the trajectory
+ * reconciles with the summary by construction. `generatedW` is the interval
+ * AVERAGE (accepted integral ÷ duration), not an instantaneous sample.
+ */
+export interface EnergyHistoryRow {
+  /** Interval end (exact quadrature/partition boundary); the first row is mission start. */
+  timeMs: number;
+  intervalStartMs: number;
+  /** Constant Sun-visibility state over the interval (refined transitions partition it). */
+  sunLit: boolean;
+  boundary: 'start' | 'quadrature' | 'sun-event' | 'end';
+  /** Average selected-array generation over the interval (W); null on the initial row. */
+  generatedW: number | null;
+  loadW: number;
+  /** (avg generation − load) × duration, BEFORE efficiency (kWh); null on the initial row. */
+  netKWh: number | null;
+  cumulativeGeneratedKWh: number;
+  cumulativeConsumedKWh: number;
+  batteryKWh: number;
+  socPct: number;
+  state: 'initial' | 'charging' | 'discharging' | 'idle' | 'full' | 'depleted';
+  /** Portion of this interval spent at 0% SOC (same zero-crossing fraction as the summary). */
+  deficitHours: number;
 }
 
 export interface EnergyIntegrationResult {
@@ -38,6 +72,7 @@ export interface EnergyIntegrationResult {
   selectedEnergyKWh: number;
   battery: BatteryResult;
   diagnostics: IntegrationDiagnostics;
+  history: EnergyHistoryRow[];
 }
 
 type Vec3 = [number, number, number]; // [horizontal, vertical-tracking, vertical-fixed] watts
@@ -72,24 +107,37 @@ export function integrateMissionEnergy(
   let depletionHours = 0;
   let firstDepletionMs: number | null = soc <= 0 ? startMs : null;
 
+  // v1.10: the engine's OWN trajectory, recorded where the battery is actually
+  // stepped. Initial row = mission start at the configured initial SOC.
+  const history: EnergyHistoryRow[] = [{
+    timeMs: startMs, intervalStartMs: startMs, sunLit: false, boundary: 'start',
+    generatedW: null, loadW: config.loadW, netKWh: null,
+    cumulativeGeneratedKWh: 0, cumulativeConsumedKWh: 0,
+    batteryKWh: soc, socPct: (soc / cap) * 100, state: 'initial', deficitHours: 0,
+  }];
+
   const energy: Vec3 = [0, 0, 0]; // kWh
   let evals = 0;
   let maxIntervalH = 0;
   let errorEstimateKWh = 0;
 
-  const stepBattery = (t0H: number, t1H: number, avgSelectedW: number) => {
+  const stepBattery = (t0H: number, t1H: number, avgSelectedW: number): { state: EnergyHistoryRow['state']; deficitH: number } => {
     const dtH = t1H - t0H;
-    if (dtH <= 0) return;
+    if (dtH <= 0) return { state: 'idle', deficitH: 0 };
     const netKWh = ((avgSelectedW - config.loadW) * dtH) / 1000;
     const before = soc;
     const raw = before + (netKWh >= 0 ? netKWh * BATTERY_CHARGE_EFF : netKWh / BATTERY_DISCHARGE_EFF);
+    let deficitH = 0;
     if (raw <= 0) {
       const frac = before > 0 ? clamp(before / Math.max(1e-9, before - raw), 0, 1) : 0;
       if (firstDepletionMs === null) firstDepletionMs = startMs + (t0H + frac * dtH) * HOUR_MS;
-      depletionHours += dtH * (1 - frac);
+      deficitH = dtH * (1 - frac);
+      depletionHours += deficitH;
     }
     soc = clamp(raw, 0, cap);
     minSoc = Math.min(minSoc, soc);
+    const state: EnergyHistoryRow['state'] = raw <= 0 ? 'depleted' : raw >= cap ? 'full' : netKWh > 0 ? 'charging' : netKWh < 0 ? 'discharging' : 'idle';
+    return { state, deficitH };
   };
 
   // Power integrand (watts). `lit` is the interval's constant Sun-visibility state, so
@@ -111,6 +159,7 @@ export function integrateMissionEnergy(
   const boundaries = [startMs, ...sunTimes, endMs];
   const startEph = computeEphemeris(site, startMs);
   let lit = visibilityFor('sun', startEph.sun.elevationDeg, startEph.sun.azimuthDeg, site.terrain).visible;
+  history[0].sunLit = lit;
   const sunEventByTime = new Map(events.filter((e) => e.body === 'sun').map((e) => [e.timeMs, e.visible]));
 
   let toleranceUsed = 0;
@@ -136,7 +185,22 @@ export function integrateMissionEnergy(
       energy[0] += kwh[0]; energy[1] += kwh[1]; energy[2] += kwh[2];
       const dtH = t1H - t0H;
       const avgSelectedW = dtH > 0 ? integralWh[selectedIndex] / dtH : 0;
-      stepBattery(t0H, t1H, avgSelectedW);
+      const { state, deficitH } = stepBattery(t0H, t1H, avgSelectedW);
+      // Record the trajectory at the ACCEPTED boundary itself. Leaf endpoints that
+      // coincide with a partition boundary snap to its exact millisecond value, so
+      // refined Sun-event timestamps survive without floating-point drift and rows
+      // chain exactly (intervalStartMs === previous row's timeMs).
+      const t1Ms = t1H === bH ? boundaries[i] : startMs + t1H * HOUR_MS;
+      const prev = history[history.length - 1];
+      history.push({
+        timeMs: t1Ms, intervalStartMs: prev.timeMs, sunLit: intervalLit,
+        boundary: t1H === bH ? (i === boundaries.length - 1 ? 'end' : 'sun-event') : 'quadrature',
+        generatedW: avgSelectedW, loadW: config.loadW,
+        netKWh: ((avgSelectedW - config.loadW) * dtH) / 1000,
+        cumulativeGeneratedKWh: energy[selectedIndex],
+        cumulativeConsumedKWh: (config.loadW * (t1Ms - startMs)) / HOUR_MS / 1000,
+        batteryKWh: soc, socPct: (soc / cap) * 100, state, deficitHours: deficitH,
+      });
     };
 
     const recurse = (a: number, faV: Vec3, m: number, fmV: Vec3, b: number, fbV: Vec3, wholeV: Vec3, tol: number, depth: number): { int: Vec3; err: number } => {
@@ -171,6 +235,7 @@ export function integrateMissionEnergy(
     relativeEnergyError,
     toleranceKWhPerInterval: toleranceUsed,
     resolutionStatus: relativeEnergyError < 1e-4 ? 'converged' : relativeEnergyError < 1e-2 ? 'adequate' : 'coarse',
+    historyPoints: history.length,
   };
 
   return {
@@ -185,5 +250,6 @@ export function integrateMissionEnergy(
       firstDepletionMs,
     },
     diagnostics,
+    history,
   };
 }

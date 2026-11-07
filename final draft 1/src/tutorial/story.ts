@@ -304,7 +304,7 @@ export const STORY_CHAPTERS: StoryChapter[] = [
     primary: { label: 'Export mission report (.json)', action: 'export' },
     deeper: {
       glossaryIds: ['sampling', 'frame-residual'],
-      text: 'The JSON report includes the effective sampling step and sample count (with the 20,000-sample cap disclosed), the frame verification state and residual, the data-confidence tier, and the full config — enough for someone else to reproduce your window exactly.',
+      text: 'The JSON report includes the effective sampling step and sample count (with the 20,000-sample cap disclosed), the frame verification state and residual, the data-confidence tier, the effective config and an analysis fingerprint — enough for someone else to reproduce your window exactly. Every CSV repeats that fingerprint. The export is INITIATED by the app; your browser handles the actual file save.',
     },
   },
 ];

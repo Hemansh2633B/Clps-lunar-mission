@@ -1,0 +1,197 @@
+# CHANDRA v1.10 — Scientific Export, Reproducibility & Data Integrity
+
+Status: **IMPLEMENTED & LOCALLY VERIFIED** — all phases executed. Only executed
+verification is recorded as passed. PR CI status lives on the pull request
+itself (three required jobs, names unchanged); this report records the local
+evidence. The PR is **not merged**, per the v1.10 brief.
+
+Branch: `arena/73a0c053-clps-lunar-mission` (session-pinned; the requested name
+`feat/v1.10-scientific-exports` cannot be used in this environment — Arena fixes
+the branch name). Base: `main` @ `e5d6114` (v1.9.0, post-merge CI run 42392775720 green).
+
+## Phase 0 — baseline audit (executed 2026-11-07)
+
+Read: `export.ts`, `exportGuard.ts`, `integration.ts`, `powerComms.ts`,
+`simulation.ts`, `configLimits.ts`, `session.ts`, `witnesses.ts`, `narrative.ts`,
+`App.tsx`, `ComparisonMatrix.tsx`, `SiteBrief.tsx`, `useSimulation.ts`,
+`simulationClient.ts`, `simulation.worker.ts`, `analysisStatus.ts`, `a11y.ts`,
+`missionProfile.ts`, `lunarFrame.ts`, `progress.ts`, mission types, v1.7–v1.9
+reports, SCIENTIFIC_METHOD, VERIFICATION, CI workflow.
+
+Confirmed gaps (the v1.10 work list):
+
+1. **JSON report** — `schemaVersion: '1.7.0-product'` conflates app/report
+   versions; no app version, no analysis fingerprint; top-level `config` and
+   `powerAssumptions`/`batteryAssumptions` quote the REQUESTED config, not the
+   engine-sanitized `SimulationResult.config`; generic "Verify frame alignment"
+   wording even for verified+rotated DEMs; provenance lacks site identity,
+   coordinates, validated epoch range, applied-transform disclosure.
+2. **Timeseries CSV** — instantaneous geometry/power only. The event-aware
+   integrator (`integrateMissionEnergy`) computes battery SOC on every accepted
+   adaptive-Simpson sub-interval but DISCARDS the trajectory; only min/final SOC,
+   depletion hours survive. No events export at all (refined sub-sample
+   timestamps exist in `SimulationResult.events` but never leave the app).
+   No CSV carries provenance.
+3. **Comparison export** — unresolved rows emit blank status/score cells;
+   JSON rows carry only `{scenario, site, summary:null}`; no resolution state,
+   no failure reason, no warnings, no provenance; a missing site silently
+   substitutes `sites[0]`; export reads the cache directly (a cached BLOCKED
+   result would emit its name with blank numbers and empty status).
+4. **Export guard** — checks site id + window, but not the effective config or
+   terrain identity; a result computed for different parameters could pass if
+   site/window matched. `simulationKey()` already encodes full identity and is
+   the hook/cache source of truth — the guard should reuse it.
+5. **Session validation** — `validConfig` allows duration ≤366 d / step ≤1440 min
+   vs `MISSION_LIMITS` 90 d / 240 min; other numerics only finite-checked.
+   `validSite` does not check terrain label, array length vs resolution,
+   elevation bounds, feature count, frame-metadata consistency, optional-field
+   types; no duplicate-ID checks; `frameVerified:true` is trusted even with
+   inconsistent metadata. No migration path (unknown version → null → recovery).
+6. **Download semantics** — `download()` dispatches an anchor click; page script
+   cannot observe the browser's save dialog. Docs/code call this "download
+   completed" in places; must say "download initiated / dispatch succeeded".
+
+Verified strengths to PRESERVE (not rebuild): event-partitioned adaptive Simpson
+integration with battery on the accepted sub-intervals; refined transition
+events with diagnostics; computation-boundary analysis gate; confidence-tiered
+ranking; guard-gated exports; isolated training session with exact restore;
+LOCAL HORIZON disclosures; heuristic-score/LOS-not-RF/energy-not-thermal wording.
+
+## Design decisions
+
+- **Report schema version** `REPORT_SCHEMA_VERSION = '2.0.0'` independent of app
+  version (`APP_VERSION` from package.json). Schema bumped because the format
+  changes (new metadata block, effective-config placement, energy history);
+  future app releases do NOT bump it unless the format changes.
+- **Analysis fingerprint** = SHA-256 (Web Crypto, async) over the existing
+  `simulationKey()` string — one source of truth, no second incompatible
+  fingerprint. The guard compares `simulationKey` strings directly (sync);
+  exports await the digest. Truncated 16-hex display form in CSV columns;
+  full digest in JSON.
+- **Energy history**: the integrator records one row per accepted quadrature
+  sub-interval boundary (the exact points where battery state is stepped) —
+  no interpolation, no re-simulation. Rows carry UTC, interval bounds, lit
+  state, avg generated W (interval integral / duration), load W, net kWh,
+  cumulative generated/consumed kWh, battery kWh + SOC, charge/discharge/
+  saturated/depleted state, and event-boundary flags. Reconciles by
+  construction with `summary.selectedEnergyKWh`, `minBatterySocPct`,
+  `finalBatterySocPct`, `depletionHours` (unit-tested).
+- **Events CSV**: refined `SimulationResult.events` at full millisecond
+  precision + per-body pre/post state + transition-refinement resolution +
+  analysis status. Never rounded to the sample grid.
+- **CSV provenance**: compact repeated columns on every data row
+  (`analysis_fingerprint`, `app_version`, `report_schema`, `site_id`,
+  `analysis_status`, `data_confidence`, `terrain_kind`, `frame_transform`,
+  `horizon_scale`) — standards-compatible (no comment rows), survives a CSV
+  being separated from its JSON. Documented in SCIENTIFIC_METHOD.
+- **Comparison exports**: permitted with explicit per-row
+  `resolution_state` (VALID / SYNTHETIC_DEMO / ILLUSTRATIVE / COMPUTING /
+  BLOCKED:<status> / COMPUTATION_FAILED / MISSING_SITE) — never blank status,
+  never zero-filled numbers. UI states the choice next to the export buttons.
+- **Session validation**: reuse `MISSION_LIMITS` + `validateConfig()`; deep
+  `TerrainProfile` validation incl. frame-metadata consistency via
+  `classifyFrame` (a persisted `frameVerified` flag is re-derived, never
+  trusted); duplicate/dangling checks; v1 → v2 migration revalidates payloads
+  (safe: same shape, stricter rules); invalid payloads follow the existing
+  Rebuild/Exit recovery — never partial application.
+
+## Executed phases
+
+### P1–P5 — implementation (commit `18fca82`)
+
+Tests were written FIRST (`export-provenance`, `comparison-export`,
+`session-validation`, `output-consistency`, guard-identity additions) and
+observed RED (31 failed / 16 passed) before implementation. Then:
+
+- `src/version.ts` — `APP_VERSION` (package.json) vs `REPORT_SCHEMA_VERSION`
+  ('2.0.0'), independent by design.
+- `src/utils/analysisId.ts` — SHA-256 over `simulationKey()`; 16-hex short form.
+- `src/engine/integration.ts` — `EnergyHistoryRow` recorded at every accepted
+  quadrature boundary (start / quadrature / sun-event / end), same integral,
+  efficiencies, saturation and depletion handling as the summary; exposed as
+  `SimulationResult.energyHistory` (null when blocked).
+- `src/utils/export.ts` — rewritten: async builders with fingerprint;
+  effective-config + `clampedFields`; full site/terrain provenance with
+  status-aware disclosure; provenance columns on every CSV row; events CSV at
+  refined ms with pre/post state; energy CSV; comparison resolver with 8
+  explicit states (VALID / SYNTHETIC_DEMO / ILLUSTRATIVE / COMPUTING / BLOCKED /
+  COMPUTATION_FAILED / MISSING_SITE / STALE), free-text fields last in CSV;
+  `exportInitiatedMessage` — initiated, never saved.
+- `src/utils/exportGuard.ts` — one contract for all six kinds: full
+  `simulationKey` identity (config/terrain changes ⇒ stale refusal),
+  computation-boundary refusal, epoch gate for horizon clearances.
+- `src/tutorial/session.ts` — schema v2; `MISSION_LIMITS` parity (no duplicated
+  ranges); deep site/terrain validation; `frameVerified` re-derived via
+  `classifyFrame`; duplicate/dangling rejection; size cap; v1 migration only
+  through full revalidation; whole-payload rejection.
+- UI: six-item Export menu; comparison policy note + MissingSiteCard; boot
+  rejection notice; story ch8 wording (fingerprint, initiated semantics);
+  witness `downloadInitiated`.
+
+### Defects surfaced by the new tests (fixed, not papered over)
+
+1. **Custom-site id collision** — `Date.now()`-only ids collided within a
+   millisecond; the new duplicate-id session validator correctly rejected the
+   payload. Fixed with a monotonic suffix (`customSiteSeq`).
+2. **Rejected payload lingered** — found by export persona C: a validation-
+   rejected session stayed in storage and re-notified every reload. Now cleared
+   once after the explicit notice; the progress key is kept so Rebuild/Exit
+   recovery still works.
+3. **Custom-site modal labels** — visual-only `<label>`s; now `htmlFor`/`id`
+   associated (all fields + 8 sector sliders).
+
+Five initial test failures were proven (via throwaway probes, since deleted)
+to be fixture assumptions, not engine defects — e.g. most catalog sites have
+zero visibility transitions in a 5-day Dec-2026 window, so header-only event
+files are CORRECT there. Fixtures moved to de-gerlache-rim-2 / cabeus-b-peak;
+the engine was not touched to make tests pass.
+
+### P6 — cross-output audit
+
+`tests/output-consistency.test.ts` asserts JSON warnings ≡ UI provenance
+vocabulary ≡ CSV disclosure codes, effective config ≡ CSV sampling, summary
+deficit ≡ energy history, LOCAL horizon label in every output. Docs updated:
+README (export summary + commands), SCIENTIFIC_METHOD §9/§12.1/§13 (the full
+export contract), VERIFICATION (v1.10 executed-evidence section),
+ACCESSIBILITY_AUDIT (v1.10 coverage + extended manual checklist),
+CI_GOVERNANCE (export step; protection re-checked via API: still
+`protected: false` — owner action outstanding).
+
+### P7 — screen readers
+
+NVDA/VoiceOver are not available in this environment. The manual checklist
+(ACCESSIBILITY_AUDIT §4) is extended with export-announcement items and remains
+explicitly **NOT YET EXECUTED**. No screen-reader pass is claimed from
+Playwright.
+
+### P8 — no fake progress
+
+Regional horizon, per-epoch frames, RF link budgets and thermal survival remain
+unimplemented and disclosed as such; the ME/PA constant correction stays gated
+to 2020–2035 UTC; LOCAL HORIZON labels unchanged. No validation range widened.
+
+### P9–P10 — executed verification (2026-11-07, this environment)
+
+| Gate | Result |
+|---|---|
+| `npx tsc -b` / `npm run build` | clean |
+| `npm test` | **300 passed / 29 files** |
+| `npm run test:python` | **92 passed, 4 skipped** (kernel-gated, never "passed") |
+| `npm run test:geometry` / `test:parity` | passed |
+| `npm run test:browser` | passed (artifact screenshots best-effort on SwiftShader; all state + canvas pixel assertions hard) |
+| `npm run test:story` | v1.9 personas A–E all passed under v1.10 code |
+| `npm run test:exports` | **new** personas A–E all passed (486 s) |
+| `npm run test:real-dem` | **not run** — fixture TIF absent (never reported as passed) |
+
+CI wiring: `test:exports` added as a mandatory step of the existing browser job
+(`CHANDRA_BROWSER_CI=1`); the three required check names are unchanged. Nothing
+was weakened to go green: the only test-harness change is best-effort ARTIFACT
+screenshots in `browser-test.mjs` (a known headless-SwiftShader compositor
+stall); every functional assertion, including canvas pixel-difference checks,
+remains a hard failure.
+
+### Outstanding owner actions
+
+- Enable branch protection on `main` with the three required checks (API still
+  reports `protected: false`; this environment's token cannot set it).
+- Review and merge the v1.10 PR when satisfied — it is deliberately left open.

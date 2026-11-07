@@ -3,7 +3,7 @@ import { DEFAULT_CONFIG } from '../src/engine/simulation';
 import { makeCustomSite } from '../src/data/landingSites';
 import {
   clearSession, loadSession, parseSession, resolveBoot, saveSession, sessionContextLost,
-  SESSION_STORAGE_KEY, type TrainingSession, type WorkspaceSnapshot,
+  SESSION_STORAGE_KEY, SESSION_VERSION, type TrainingSession, type WorkspaceSnapshot,
 } from '../src/tutorial/session';
 
 function ws(over: Partial<WorkspaceSnapshot> = {}): WorkspaceSnapshot {
@@ -15,7 +15,7 @@ function ws(over: Partial<WorkspaceSnapshot> = {}): WorkspaceSnapshot {
     playing: true, speed: 7200, customSites: [], ...over,
   };
 }
-const session = (): TrainingSession => ({ v: 1, user: ws(), training: ws({ selectedId: 'connecting-ridge', scenarios: [], playing: false, slipDays: 14 }) });
+const session = (): TrainingSession => ({ v: SESSION_VERSION, user: ws(), training: ws({ selectedId: 'connecting-ridge', scenarios: [], playing: false, slipDays: 14 }) });
 
 function memStorage(seed?: string) {
   const map = new Map<string, string>();
@@ -48,7 +48,7 @@ describe('training session persistence', () => {
   it('corrupt JSON, wrong version and malformed shapes parse to null — never throw', () => {
     expect(parseSession('{oops')).toBeNull();
     expect(parseSession(null)).toBeNull();
-    expect(parseSession(JSON.stringify({ ...session(), v: 2 }))).toBeNull();
+    expect(parseSession(JSON.stringify({ ...session(), v: SESSION_VERSION + 1 }))).toBeNull(); // genuinely unknown version
     expect(parseSession(JSON.stringify({ v: 1, user: ws() }))).toBeNull();
     const badCfg = session(); (badCfg.user.config as unknown as Record<string, unknown>).loadW = 'lots';
     expect(parseSession(JSON.stringify(badCfg))).toBeNull();

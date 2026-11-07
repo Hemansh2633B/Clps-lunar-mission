@@ -15,15 +15,79 @@ explicit UTC, worker performance, accessibility, report horizon labeling, and CI
 |---|---|---|
 | TypeScript typecheck | `npm run typecheck` | clean |
 | Production build | `npm run build` | clean; React / Three / ephemeris split into separate chunks |
-| Engine + SPICE-reference validation + frame allowlist + transition stress + event-aware energy + analysis status + sampling/battery + catalogue + presets + explanations + UTC + workflow + simulation client + export + DEM-profile + vehicle/geo + story chapter/progress/narrative unit tests | `npm test` | **244 passed** (Vitest, 25 files — v1.9 adds witness, session, export-guard, a11y-description and comparison-narrative suites) |
+| Engine + SPICE-reference validation + frame allowlist + transition stress + event-aware energy + analysis status + sampling/battery + catalogue + presets + explanations + UTC + workflow + simulation client + export + DEM-profile + vehicle/geo + story chapter/progress/narrative unit tests | `npm test` | **300 passed** (Vitest, 29 files — v1.10 adds export-provenance, comparison-export, session-validation and output-consistency suites on top of the v1.9 witness/session/export-guard/a11y suites) |
 | Backend / DEM / horizon / downloader / API errors / lunar-frame module | `npm run test:python` | **92 passed, 4 skipped** (pytest). The 4 skips are the SPICE-kernel-gated frame tests (kernels not fetched in the ordinary run) — **skipped, not passed**; the optional CI `spice-validation` job fetches kernels and runs them for real. |
 | Geometry checks | `npm run test:geometry` | passed: curvature, pole coordinates, Sun directions, exact landing origin, shadow casting, NoData topology, synthetic demo, horizon ray-marching |
 | Horizon parity | `npm run test:parity` | passed: TypeScript and Python ray-marchers agree on elevations, coverage, edge inset, obstacle ranges |
 | Mission + Terrain Lab + Space views browser E2E | `npm run test:browser` | passed: catalog, Apollo/far-side, comparison, educator, custom site, modal keyboard guard/focus, export (blocked while computing), playback; Terrain Lab orbit drag, keyboard orbit, top/oblique presets, inspection pin, exaggeration, shadow pixel brightening, Sun extremes, all grid qualities, radius, horizon CSV/import, real-mode no-DEM safeguard, 390 px mobile layout; **Space views**: planet markers/labels, time-lapse clock + sub-solar sweep, south-pole preset, fleet stack/HLS/CLPS switching, stage separation, engine plume, hover part callout, view close; **v1.7 features**: first-run onboarding offers demo / real-DEM choice and dismisses cleanly; guided six-step workflow opens, shows six steps and advances; chart text alternatives (panorama/timeline/polar-map `role="img"`) and a labelled keyboard time scrubber; **2024 Regions** tab shows exactly nine region-approximate regions; explicit **UTC date + time** mission-start fields drive recompute; persistent provenance indicator; heuristic score breakdown + "not an RF link budget" disclosure |
 | Real-DEM browser smoke | `npm run test:real-dem` | passed historically against the verification fixture below; **not executed in the v1.9 run** (fixture TIF absent from this environment — reported as not run, never as passed) |
-| THE 14-DAY WINDOW story E2E (v1.9 personas A–E) | `npm run test:story` | passed — see the v1.9 section below |
+| THE 14-DAY WINDOW story E2E (v1.9 personas A–E) | `npm run test:story` | passed — see the v1.9 section below; **re-run green under v1.10** (all five personas, ~17 min) |
+| Scientific-export E2E (v1.10 personas A–E) | `npm run test:exports` | passed — see the v1.10 section below (486 s) |
 
 Python warnings are Rasterio `Affine` `*` vs `@` PendingDeprecationWarnings from the installed wheel; they do not indicate a CHANDRA failure.
+
+## v1.10 scientific export & data integrity — executed evidence
+
+Executed 2026-11-07 on branch `arena/73a0c053-clps-lunar-mission` (base `main` @
+`e5d6114`, v1.9.0). All claims below are from runs in this environment; nothing
+is extrapolated.
+
+| Gate | Result |
+|---|---|
+| `npm run typecheck` / `npm run build` | clean (tsc strict; vite production build) |
+| `npm test` | **300 passed, 29 files** — includes the new tests-first suites: export provenance (schema/app version independence, SHA-256 fingerprint = simulationKey digest, effective-vs-requested config + clampedFields, status-aware terrain disclosure, CSV provenance on every row), energy-history reconciliation (last row/extrema ≡ summary by construction), events CSV (ms precision, pre/post state, refinement resolution), comparison states (valid/synthetic/illustrative/computing/blocked/failed/missing-site/stale; blanks never zeros; no cross-tier ranking), guard identity (changed config or terrain ⇒ stale refusal for all six kinds), session validation (MISSION_LIMITS parity, deep site/terrain checks, frameVerified re-derivation, duplicate/dangling rejection, v1→v2 revalidating migration, whole-payload rejection), cross-output consistency (JSON warnings ≡ UI provenance ≡ CSV disclosures) |
+| `npm run test:python` | **92 passed, 4 skipped** (kernel-gated SPICE tests skipped — never counted as passed) |
+| `npm run test:geometry` / `npm run test:parity` | passed |
+| `npm run test:browser` | passed (console + Terrain Lab + Space views + mobile). Artifact screenshots are best-effort with a bounded timeout on headless SwiftShader; every state assertion and the canvas pixel-difference assertions remain hard failures |
+| `npm run test:story` | **v1.9 personas A–E all passed unchanged** under the v1.10 session/export code (~17 min) |
+| `npm run test:exports` | **personas A–E all passed (486 s)** — details below |
+| `npm run test:real-dem` | **not run** — the verification fixture TIF is absent from this environment (reported as not run, never as passed) |
+
+### Export personas (scripts/export-browser-test.mjs, runs in the CI browser job)
+
+- **A — scientist reconciles the export:** downloads the JSON report, telemetry
+  timeseries, energy history and events CSVs from a real resolved analysis;
+  asserts row counts vs `reproducibility.sampling`, the 64-hex fingerprint and
+  its 16-hex CSV form on every row, and reconciles the energy CSV's final
+  SOC/cumulative generation/deficit hours against the JSON summary (±0.002 pct /
+  ±0.005 kWh); events carry exact ms timestamps and boundary rows exist at
+  start/end and the refined Sun transition (de Gerlache Rim 2 fixture — most
+  catalog sites have zero transitions in the test window and correctly produce
+  header-only event files).
+- **B — comparison with a blocked row:** pins a valid scenario + an
+  epoch-2040 ME-DEM scenario (blocked); exports matrix CSV/JSON; asserts the
+  blocked row has an explicit `BLOCKED` state with the analysis status and
+  **empty numeric cells** (never zeros), the valid row carries its confidence
+  tier, and the export-policy note is present.
+- **C — persisted state:** a user workspace with custom sites survives reload;
+  a v1 session migrates to v2 through revalidation (training slip preserved);
+  an injected out-of-range config (durationDays 200 > MISSION_LIMITS 90) is
+  rejected **whole** — never applied, explicit boot notice, unusable payload
+  cleared once, briefing offers Rebuild/Exit.
+- **D — confidence provenance:** illustrative, synthetic-DEM and mocked
+  measured-DEM analyses each export with the correct `data_confidence` /
+  `terrain_kind` / disclosure codes; confidence is never derived from
+  performance.
+- **E — accessibility:** keyboard-only export initiation announces "Export
+  initiated" via `role="status"`; a refused (blocked) export announces the
+  refusal; blocked-analysis notices are `role="alert"`; 390 px mobile and
+  reduced-motion behavior verified. **No screen-reader pass is claimed** —
+  NVDA/VoiceOver remain an unexecuted manual checklist (ACCESSIBILITY_AUDIT §4).
+
+Network mocking is confined to the DEM API boundary (same helpers as the story
+suite); all technology under test — engine, guard, exporters, session
+validation, UI — is the real application code.
+
+### Defects found by the new tests and fixed in this release
+
+1. `makeCustomSite` ids were `Date.now()`-only — two sites created in the same
+   millisecond collided and the new duplicate-id validator (correctly) rejected
+   the session. Ids now carry a monotonic suffix.
+2. A rejected persisted payload used to linger in storage and re-notify on every
+   reload; it is now cleared once after the explicit notice (progress key kept).
+3. Custom-site modal labels were not programmatically associated with their
+   inputs (screen readers could not name the fields); `htmlFor`/`id` pairs added
+   for all fields including the 8 sector sliders.
 
 ## v1.9 reliability release — executed evidence
 

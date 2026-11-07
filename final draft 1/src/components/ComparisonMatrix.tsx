@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Columns2, Download, Pin, Plus, Trash2, X } from 'lucide-react';
 import type { AppMode, LandingSite, Scenario } from '../types/mission';
 import { useSimulation } from '../hooks/useSimulation';
 import { cachedSimulation } from '../engine/simulationClient';
 import { DAY_MS, formatCoord } from '../engine/constants';
 import type { ComparisonRow } from '../utils/export';
+import { COMPARISON_EXPORT_POLICY } from '../utils/export';
 import { ProvenanceIndicator, provenanceOf } from './ProvenanceIndicator';
 import { AnalysisStatusNotice, AnalysisStatusBadge } from './AnalysisStatusNotice';
 import { UtcDateTimeInput } from './UtcDateTimeInput';
@@ -23,9 +24,38 @@ interface Props {
   mode: AppMode;
 }
 
-function ScenarioCard({ scenario, sites, onUpdate, onRemove, best, indicative }: { scenario: Scenario; sites: LandingSite[]; onUpdate: Props['onUpdate']; onRemove: (id: string) => void; best: boolean; indicative?: boolean }) {
-  const site = sites.find((s) => s.id === scenario.siteId) ?? sites[0];
-  const { data: sim, loading } = useSimulation(site, scenario.startMs, scenario.startMs + scenario.config.durationDays * DAY_MS, scenario.config);
+interface CardState { fp: string; loading: boolean; error: string | null }
+const scenarioFp = (sc: Scenario) => `${sc.siteId}|${sc.startMs}|${JSON.stringify(sc.config)}`;
+
+/** A scenario whose site no longer exists is shown explicitly — never computed
+ *  against a silently-substituted site, and exported as MISSING_SITE. */
+function MissingSiteCard({ scenario, sites, onUpdate, onRemove }: { scenario: Scenario; sites: LandingSite[]; onUpdate: Props['onUpdate']; onRemove: (id: string) => void }) {
+  return (
+    <div className="panel fade-in" style={{ display: 'flex', flexDirection: 'column', borderColor: 'var(--blocked)', minWidth: 0 }}>
+      <div className="panel-header">
+        <span className="panel-title" style={{ color: 'var(--blocked)' }}>Missing site</span>
+        <button className="btn sm ghost icon" onClick={() => onRemove(scenario.id)} title="Remove scenario"><Trash2 size={12} /></button>
+      </div>
+      <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div role="alert" style={{ fontSize: 11, color: 'var(--blocked)', lineHeight: 1.5 }}>
+          This scenario references site "{scenario.siteId}", which no longer exists in this workspace. No result is computed or exported for it. Reassign a site or remove the scenario.
+        </div>
+        <select className="input" value="" onChange={(e) => onUpdate(scenario.id, { siteId: e.target.value })} aria-label="Reassign scenario site">
+          <option value="" disabled>Reassign to a site…</option>
+          {sites.map((s) => <option key={s.id} value={s.id}>{s.shortName}</option>)}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+function ScenarioCard({ scenario, site, sites, onUpdate, onRemove, best, indicative, onState }: { scenario: Scenario; site: LandingSite; sites: LandingSite[]; onUpdate: Props['onUpdate']; onRemove: (id: string) => void; best: boolean; indicative?: boolean; onState: (id: string, state: CardState) => void }) {
+  const { data: sim, loading, error } = useSimulation(site, scenario.startMs, scenario.startMs + scenario.config.durationDays * DAY_MS, scenario.config);
+  // Report resolution state up so exports can distinguish COMPUTING / FAILED /
+  // resolved rows explicitly (the cache alone cannot express failure).
+  useEffect(() => {
+    onState(scenario.id, { fp: scenarioFp(scenario), loading, error });
+  }, [scenario, loading, error, onState]);
   const s = sim?.summary;
   const verdictColor = s?.verdict === 'NOMINAL' ? 'var(--nominal)' : s?.verdict === 'CONDITIONAL' ? 'var(--solar)' : 'var(--blocked)';
   const spark = useMemo(() => {
@@ -69,7 +99,9 @@ function ScenarioCard({ scenario, sites, onUpdate, onRemove, best, indicative }:
           {s && <span className="chip neutral" style={{ fontSize: 8.5 }} title="Data confidence is separate from performance. Illustrative terrain is not ranked as measured.">{CONF_LABEL[s.dataConfidence] ?? s.dataConfidence}</span>}
         </div>
 
-        {sim?.analysis && !sim.analysis.demoEligible ? (
+        {error ? (
+          <div role="alert" style={{ fontSize: 11, color: 'var(--blocked)', lineHeight: 1.5 }}>COMPUTATION FAILED: {error}. No numbers are shown or exported for this scenario.</div>
+        ) : sim?.analysis && !sim.analysis.demoEligible ? (
           <AnalysisStatusNotice analysis={sim.analysis} compact />
         ) : loading || !s ? (
           <div style={{ height: 180, display: 'grid', placeItems: 'center', color: 'var(--dim)', fontSize: 11 }} className="pulse">Computing…</div>
@@ -112,9 +144,21 @@ function ScenarioCard({ scenario, sites, onUpdate, onRemove, best, indicative }:
 }
 
 export function ComparisonMatrix({ scenarios, sites, onUpdate, onRemove, onPin, onClose, onExport, mode }: Props) {
+  const [cardStates, setCardStates] = useState<Record<string, CardState>>({});
+  const onCardState = useMemo(() => (id: string, state: CardState) => {
+    setCardStates((prev) => (prev[id]?.fp === state.fp && prev[id]?.loading === state.loading && prev[id]?.error === state.error ? prev : { ...prev, [id]: state }));
+  }, []);
   const rows: ComparisonRow[] = scenarios.map((sc) => {
-    const site = sites.find((s) => s.id === sc.siteId) ?? sites[0];
-    return { scenario: sc, site, sim: cachedSimulation(site, sc.startMs, sc.startMs + sc.config.durationDays * DAY_MS, sc.config) ?? null };
+    // Missing sites are NEVER silently substituted with sites[0].
+    const site = sites.find((s) => s.id === sc.siteId) ?? null;
+    const st = cardStates[sc.id];
+    const fresh = st && st.fp === scenarioFp(sc) ? st : null;
+    return {
+      scenario: sc, site,
+      sim: site ? cachedSimulation(site, sc.startMs, sc.startMs + sc.config.durationDays * DAY_MS, sc.config) ?? null : null,
+      loading: fresh?.loading ?? false,
+      error: fresh?.error ?? null,
+    };
   });
   // Rank only within the highest data-confidence tier present, so illustrative or
   // synthetic terrain is never crowned "best" over a measured DEM. When the top tier
@@ -140,8 +184,8 @@ export function ComparisonMatrix({ scenarios, sites, onUpdate, onRemove, onPin, 
         <span className="panel-title"><Columns2 size={13} /> Scenario comparison · {scenarios.length}/4 pinned</span>
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="btn sm primary" onClick={onPin} disabled={scenarios.length >= 4}><Pin size={12} /> Pin current</button>
-          <button className="btn sm" onClick={() => onExport('csv', rows)} disabled={!scenarios.length}><Download size={12} /> CSV</button>
-          <button className="btn sm" onClick={() => onExport('json', rows)} disabled={!scenarios.length}><Download size={12} /> JSON</button>
+          <button className="btn sm" onClick={() => onExport('csv', rows)} disabled={!scenarios.length} title={COMPARISON_EXPORT_POLICY}><Download size={12} /> CSV</button>
+          <button className="btn sm" onClick={() => onExport('json', rows)} disabled={!scenarios.length} title={COMPARISON_EXPORT_POLICY}><Download size={12} /> JSON</button>
           <button className="btn sm ghost icon" onClick={onClose}><X size={13} /></button>
         </div>
       </div>
@@ -166,8 +210,16 @@ export function ComparisonMatrix({ scenarios, sites, onUpdate, onRemove, onPin, 
                 Scores are application-defined heuristics. "Best" is ranked only within the highest data-confidence tier present{bestIndicative ? ' (indicative — no measured DEM in this comparison)' : ''}; illustrative terrain is not ranked as measured. Earth LOS is geometric, not an RF link budget.
               </div>
             )}
+            <div role="note" aria-label="Comparison export policy" style={{ fontSize: 9.5, color: 'var(--dim)', marginBottom: 8, lineHeight: 1.5 }}>
+              Exports include every pinned row with an explicit resolution state (valid / computing / blocked / failed / missing site / stale). Unresolved rows carry no numbers — blank cells are never zeros and never an implicit status.
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(scenarios.length, 4)}, minmax(220px, 1fr))`, gap: 10 }}>
-              {scenarios.map((sc) => <ScenarioCard key={sc.id} scenario={sc} sites={sites} onUpdate={onUpdate} onRemove={onRemove} best={sc.id === bestId && scenarios.length > 1} indicative={bestIndicative} />)}
+              {scenarios.map((sc) => {
+                const site = sites.find((x) => x.id === sc.siteId);
+                return site
+                  ? <ScenarioCard key={sc.id} scenario={sc} site={site} sites={sites} onUpdate={onUpdate} onRemove={onRemove} best={sc.id === bestId && scenarios.length > 1} indicative={bestIndicative} onState={onCardState} />
+                  : <MissingSiteCard key={sc.id} scenario={sc} sites={sites} onUpdate={onUpdate} onRemove={onRemove} />;
+              })}
             </div>
           </>
         )}

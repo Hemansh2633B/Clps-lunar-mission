@@ -16,6 +16,7 @@ function input(over: Partial<ExportGateInput> = {}): ExportGateInput {
   return {
     kind: 'json', loading: false, error: null, sim,
     expectedSiteId: site.id, expectedStartMs: START, expectedEndMs: START + 3 * DAY_MS,
+    expectedSite: site, expectedConfig: config,
     ...over,
   };
 }
@@ -52,12 +53,38 @@ describe('mission export gate', () => {
     expect(missionExportGate(input({ kind: 'horizon', horizonInstantBlocked: true }))).toMatchObject({ ok: false, code: 'blocked' });
     expect(missionExportGate(input({ kind: 'json', horizonInstantBlocked: true })).ok).toBe(true);
   });
+  it('v1.10: every export kind (incl. events + energy history) passes the same gate', () => {
+    for (const kind of ['json', 'timeseries', 'horizon', 'summary', 'events', 'energy'] as const) {
+      expect(missionExportGate(input({ kind })).ok).toBe(true);
+    }
+  });
+  it('v1.10: a result computed for a DIFFERENT effective configuration is stale — full simulationKey identity', () => {
+    expect(missionExportGate(input({ expectedConfig: { ...config, loadW: config.loadW + 10 } })))
+      .toMatchObject({ ok: false, code: 'stale' });
+    expect(missionExportGate(input({ expectedConfig: { ...config, arrayMode: 'horizontal' } })))
+      .toMatchObject({ ok: false, code: 'stale' });
+    // A requested config that sanitizes to the SAME effective values is not stale.
+    expect(missionExportGate(input({ expectedConfig: { ...config } })).ok).toBe(true);
+  });
+  it('v1.10: a result whose terrain identity changed (same site id, edited elevations/frame) is stale', () => {
+    const editedTerrain = { ...site, terrain: { ...site.terrain, elevations: site.terrain.elevations.map((v, i) => (i === 0 ? v + 1 : v)) } };
+    expect(missionExportGate(input({ expectedSite: editedTerrain }))).toMatchObject({ ok: false, code: 'stale' });
+    const editedFrame = { ...site, terrain: { ...site.terrain, frameVerified: !site.terrain.frameVerified } };
+    expect(missionExportGate(input({ expectedSite: editedFrame }))).toMatchObject({ ok: false, code: 'stale' });
+  });
+  it('v1.10: a numerical-resolution failure never exports as a complete report (defense in depth)', () => {
+    const degraded = {
+      ...sim,
+      transitionDiagnostics: { ...sim.transitionDiagnostics, resolutionStatus: 'degraded' as const },
+    };
+    expect(missionExportGate(input({ sim: degraded }))).toMatchObject({ ok: false, code: 'blocked' });
+  });
 });
 
 describe('mission report content', () => {
-  it('carries provenance, warnings and the analysis status alongside the numbers', () => {
+  it('carries provenance, warnings and the analysis status alongside the numbers', async () => {
     const current = evaluateAt(site, START + DAY_MS, config);
-    const report = JSON.parse(missionReportJSON(site, config, sim, current)) as Record<string, unknown>;
+    const report = JSON.parse(await missionReportJSON(site, config, sim, current)) as Record<string, unknown>;
     const json = JSON.stringify(report);
     expect(json).toContain('siteProvenance');
     expect(json).toContain('analysisStatus');

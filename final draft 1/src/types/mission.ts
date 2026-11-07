@@ -1,4 +1,4 @@
-import type { IntegrationDiagnostics } from '../engine/integration';
+import type { EnergyHistoryRow, IntegrationDiagnostics } from '../engine/integration';
 
 export type SiteCategory = 'polar' | 'reference';
 export type ArrayMode = 'horizontal' | 'vertical-tracking' | 'vertical-fixed';
@@ -261,6 +261,12 @@ export interface SimulationResult {
   transitionDiagnostics: TransitionDiagnostics;
   /** Computation-boundary scientific status (discriminated). */
   analysis: AnalysisAssessment;
+  /**
+   * The event-aware integrator's OWN energy/battery trajectory (v1.10): one row
+   * per accepted adaptive-Simpson sub-interval boundary, reconciling with the
+   * summary by construction. Null for blocked analyses (no quantitative history).
+   */
+  energyHistory?: EnergyHistoryRow[] | null;
 }
 
 export interface Scenario {

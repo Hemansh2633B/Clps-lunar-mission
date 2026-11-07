@@ -25,7 +25,7 @@ import { WorkflowGuide } from './components/WorkflowGuide';
 import { StoryTutorial, StorySuggestion } from './tutorial/StoryTutorial';
 import { useStoryTutorial, type StoryActions, type StorySignals } from './tutorial/useStoryTutorial';
 import { loadProgress } from './tutorial/progress';
-import { loadSession, saveSession, clearSession, resolveBoot, type TrainingSession, type WorkspaceSnapshot } from './tutorial/session';
+import { loadSession, saveSession, clearSession, resolveBoot, SESSION_VERSION, type TrainingSession, type WorkspaceSnapshot } from './tutorial/session';
 import { scenarioFingerprint, creditsMissionReport, type ScenarioResolution } from './tutorial/witnesses';
 import { missionExportGate } from './utils/exportGuard';
 import type { StoryWorld, ScenarioOutcome } from './tutorial/narrative';
@@ -33,7 +33,8 @@ import { MISSION_PRESETS, CUSTOM_PRESET_ID, matchingPresetId } from './data/miss
 import { formatUtcStamp } from './utils/utc';
 import type { WorkflowStepId } from './utils/workflow';
 import { CustomSiteModal, SettingsModal, HorizonTableModal, ShortcutsModal, type CustomSiteInput } from './components/Modals';
-import { download, missionReportJSON, timeseriesCSV, horizonCSV, summaryCSV, comparisonCSV, type ComparisonRow } from './utils/export';
+import { download, missionReportJSON, timeseriesCSV, horizonCSV, summaryCSV, eventsCSV, energyHistoryCSV, comparisonCSV, comparisonJSON, exportInitiatedMessage, type ComparisonRow, type ExportKind } from './utils/export';
+import { analysisFingerprint } from './utils/analysisId';
 
 const BASELINE = Date.parse('2026-12-18T00:00:00Z');
 const INITIAL_TIME = Date.parse('2026-12-20T08:00:00Z');
@@ -62,7 +63,11 @@ export default function App() {
   const [boot] = useState(() => {
     const st = appStorage();
     const sess = loadSession(st);
-    return { session: sess, ...resolveBoot(sess, loadProgress(st)) };
+    // A stored payload that FAILED validation is reported, never silently dropped:
+    // the user learns what could not be restored (the briefing offers Rebuild/Exit).
+    let storedRaw: string | null = null;
+    try { storedRaw = st?.getItem('chandra-story-session-v1') ?? null; } catch { /* unavailable */ }
+    return { session: sess, sessionRejected: storedRaw !== null && sess === null, ...resolveBoot(sess, loadProgress(st)) };
   });
   const bootWs = boot.workspace;
   const [session, setSession] = useState<TrainingSession | null>(boot.keepSession ? boot.session : null);
@@ -232,36 +237,56 @@ export default function App() {
     notify(`Loaded scenario: ${s.title}`);
   }, [notify]);
 
-  const handleExport = useCallback((kind: 'json' | 'timeseries' | 'horizon' | 'summary') => {
+  const handleExport = useCallback(async (kind: ExportKind) => {
     // One pure gate for every export: computing / failed / blocked / stale results
-    // never leave the app, and the result must match the CURRENT site and window.
+    // never leave the app, and the result must match the CURRENT site, window,
+    // terrain identity and effective configuration (full simulationKey check).
     const gate = missionExportGate({
       kind, loading: missionSim.loading, error: missionSim.error, sim: missionSim.data,
       expectedSiteId: site.id, expectedStartMs: win.missionStart, expectedEndMs: win.missionEnd,
+      expectedSite: site, expectedConfig: config,
       horizonInstantBlocked: instantBlocked,
     });
     if (!gate.ok) { notify(gate.reason); return; }
     const sim = missionSim.data!;
     const stamp = new Date(timeMs).toISOString().slice(0, 10);
     try {
-      if (kind === 'json') download(`chandra-report-${stamp}.json`, missionReportJSON(site, config, sim, current), 'application/json');
-      else if (kind === 'horizon') download(`chandra-horizon-${site.id}.csv`, horizonCSV(site, current), 'text/csv');
-      else if (kind === 'timeseries') download(`chandra-timeseries-${site.id}.csv`, timeseriesCSV(sim), 'text/csv');
-      else download(`chandra-summary-${site.id}.csv`, summaryCSV(sim), 'text/csv');
+      // Fingerprint over the EFFECTIVE inputs the engine actually used — the same
+      // identity the guard verified, linking every CSV to the JSON report.
+      const fp = await analysisFingerprint(sim.site, sim.summary!.startMs, sim.summary!.endMs, sim.config);
+      if (kind === 'json') download(`chandra-report-${stamp}.json`, await missionReportJSON(site, config, sim, current), 'application/json');
+      else if (kind === 'horizon') download(`chandra-horizon-${site.id}.csv`, await horizonCSV(site, current, sim, fp), 'text/csv');
+      else if (kind === 'timeseries') download(`chandra-timeseries-${site.id}.csv`, await timeseriesCSV(sim, fp), 'text/csv');
+      else if (kind === 'events') download(`chandra-events-${site.id}.csv`, await eventsCSV(sim, fp), 'text/csv');
+      else if (kind === 'energy') download(`chandra-energy-${site.id}.csv`, await energyHistoryCSV(sim, fp), 'text/csv');
+      else download(`chandra-summary-${site.id}.csv`, await summaryCSV(sim, fp), 'text/csv');
     } catch (err) {
       notify(`Export failed (${err instanceof Error ? err.message : String(err)}) — nothing was filed.`);
       return;
     }
-    // ONLY a successful, guard-passing JSON mission report earns briefing credit.
+    // ONLY a guard-passing JSON mission report whose download dispatch succeeded
+    // earns briefing credit. "Initiated" is deliberate: the browser's save dialog
+    // is not observable from page script (E2E asserts real download events).
     if (creditsMissionReport(kind, gate.ok, true)) setReportExportCount((n) => n + 1);
-    notify(`Exported ${kind}`);
+    notify(exportInitiatedMessage(kind));
   }, [site, config, missionSim.data, missionSim.loading, missionSim.error, current, timeMs, win.missionStart, win.missionEnd, instantBlocked, notify]);
 
-  const handleComparisonExport = useCallback((kind: 'csv' | 'json', rows: ComparisonRow[]) => {
-    const full = rows.map((r) => ({ ...r, sim: cachedSimulation(r.site, r.scenario.startMs, r.scenario.startMs + r.scenario.config.durationDays * DAY_MS, r.scenario.config) ?? null }));
-    if (kind === 'csv') download('chandra-comparison.csv', comparisonCSV(full), 'text/csv');
-    else download('chandra-comparison.json', JSON.stringify(full.map((r) => ({ scenario: r.scenario, site: r.site, summary: r.sim?.summary ?? null })), null, 2), 'application/json');
-    notify('Comparison exported');
+  const handleComparisonExport = useCallback(async (kind: 'csv' | 'json', rows: ComparisonRow[]) => {
+    // Rows carry per-card loading/error state; refresh the cached result at click
+    // time so the export reflects the freshest resolved data. Missing sites are
+    // NEVER silently substituted — they export as MISSING_SITE rows.
+    const full = rows.map((r) => ({
+      ...r,
+      sim: r.site ? cachedSimulation(r.site, r.scenario.startMs, r.scenario.startMs + r.scenario.config.durationDays * DAY_MS, r.scenario.config) ?? null : null,
+    }));
+    try {
+      if (kind === 'csv') download('chandra-comparison.csv', await comparisonCSV(full), 'text/csv');
+      else download('chandra-comparison.json', await comparisonJSON(full), 'application/json');
+    } catch (err) {
+      notify(`Comparison export failed (${err instanceof Error ? err.message : String(err)}) — nothing was filed.`);
+      return;
+    }
+    notify('Comparison export initiated — every row carries an explicit resolution state; unresolved rows contain no numbers.');
   }, [notify]);
 
   // Each guided-workflow step drives the real app, then the guide advances.
@@ -310,7 +335,7 @@ export default function App() {
     };
     // Isolated training workspace: the user's pins/sites/playback live in the
     // session snapshot and are restored EXACTLY on exit — never silently deleted.
-    setSession((prev) => ({ v: 1, user: prev?.user ?? takeWorkspace(), training }));
+    setSession((prev) => ({ v: SESSION_VERSION, user: prev?.user ?? takeWorkspace(), training }));
     applyWorkspace(training);
     setWorkflowOpen(false);
     notify('Training mission loaded — an isolated, clearly-labeled workspace. Your own setup (sites, pins, playback) is preserved and restored when you exit.');
@@ -344,6 +369,13 @@ export default function App() {
     // Orphaned session at boot (progress gone/completed): the user workspace was
     // restored above; drop the stale storage payload once.
     if (boot.boot === 'user') clearSession(appStorage());
+    if (boot.sessionRejected) {
+      notify('A saved briefing session could not be restored — it failed validation (corrupt, out-of-range settings or inconsistent terrain metadata). Nothing was partially applied; the briefing offers Rebuild / Exit.');
+      // The rejected payload is unusable and was never applied; drop it once so it
+      // cannot re-trigger on every reload. Briefing progress (separate key) is kept,
+      // so resuming still offers the explicit Rebuild / Exit recovery choice.
+      clearSession(appStorage());
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

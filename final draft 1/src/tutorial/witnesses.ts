@@ -91,17 +91,20 @@ export function comparisonWitness(i: ComparisonWitnessInput): ComparisonWitnessR
 }
 
 /**
- * Chapter 8 credit: ONLY a guard-passing JSON mission report whose download
- * actually completed. CSV exports (timeseries/horizon/summary) never count.
- * `gateOk` comes from missionExportGate; `downloadCompleted` is false if the
- * download threw. Blocked/stale/computing exports never reach the download.
+ * Chapter 8 credit: ONLY a guard-passing JSON mission report whose download was
+ * successfully INITIATED (the anchor dispatch returned without throwing).
+ * Page script cannot observe the browser's final save dialog, so this never
+ * claims the user physically saved the file — browser automation separately
+ * asserts real Playwright download events. CSV exports (timeseries/horizon/
+ * summary/events/energy) never count. `gateOk` comes from missionExportGate;
+ * blocked/stale/computing exports never reach the download.
  */
 export function creditsMissionReport(
-  kind: 'json' | 'timeseries' | 'horizon' | 'summary',
+  kind: 'json' | 'timeseries' | 'horizon' | 'summary' | 'events' | 'energy',
   gateOk: boolean,
-  downloadCompleted: boolean,
+  downloadInitiated: boolean,
 ): boolean {
-  return kind === 'json' && gateOk && downloadCompleted;
+  return kind === 'json' && gateOk && downloadInitiated;
 }
 
 /** Deep-equal mission configs via the same stable serialization as fingerprints. */

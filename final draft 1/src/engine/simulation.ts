@@ -68,7 +68,7 @@ const EMPTY_SAMPLING: SamplingInfo = {
 
 /** A blocked result carries NO samples/events/summary — terrain stays viewable via site.terrain. */
 function blockedResult(site: LandingSite, config: MissionConfig, analysis: AnalysisAssessment, t0: number): SimulationResult {
-  return { site, config, samples: [], events: [], summary: null, computeMs: performance.now() - t0, sampling: EMPTY_SAMPLING, transitionDiagnostics: EMPTY_TRANSITION_DIAG, analysis };
+  return { site, config, samples: [], events: [], summary: null, computeMs: performance.now() - t0, sampling: EMPTY_SAMPLING, transitionDiagnostics: EMPTY_TRANSITION_DIAG, analysis, energyHistory: null };
 }
 
 export function simulateMission(site: LandingSite, startMs: number, endMs: number, config: MissionConfig, onProgress?: ProgressCallback): SimulationResult {
@@ -121,7 +121,7 @@ export function simulateMission(site: LandingSite, startMs: number, endMs: numbe
     const integration = integrateMissionEnergy(site, cfg, events, startMs, endMs);
     onProgress?.({ phase: 'summary', fraction: 0.95 });
     const summary = summarizeMission(samples, events, cfg, startMs, endMs, sampling, site, integration);
-    return { site, config: cfg, samples, events, summary, computeMs: performance.now() - t0, sampling, transitionDiagnostics, analysis };
+    return { site, config: cfg, samples, events, summary, computeMs: performance.now() - t0, sampling, transitionDiagnostics, analysis, energyHistory: integration.history };
   } catch (err) {
     return blockedResult(site, cfg, computationFailed(err instanceof Error ? err.message : String(err)), t0);
   }

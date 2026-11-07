@@ -65,12 +65,12 @@ export function CustomSiteModal({ onClose, onCreate, initial }: { onClose: () =>
   return (
     <Modal title="Synthesize custom site" onClose={onClose}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <div className="field" style={{ gridColumn: '1 / -1' }}><label>Site name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} /></div>
-        <div className="field"><label>Latitude (°)</label><input className="input mono" type="number" step={0.001} min={-90} max={90} value={lat} onChange={(e) => setLat(Number(e.target.value))} /></div>
-        <div className="field"><label>Longitude (°E)</label><input className="input mono" type="number" step={0.001} min={-180} max={360} value={lon} onChange={(e) => setLon(Number(e.target.value))} /></div>
-        <div className="field"><label>Elevation (m)</label><input className="input mono" type="number" step={10} value={elev} onChange={(e) => setElev(Number(e.target.value))} /></div>
-        <div className="field"><label>Terrain preset</label>
-          <select className="input" value={preset} onChange={(e) => setPreset(e.target.value as CustomTerrainPreset)}>
+        <div className="field" style={{ gridColumn: '1 / -1' }}><label htmlFor="custom-site-name">Site name</label><input id="custom-site-name" className="input" value={name} onChange={(e) => setName(e.target.value)} /></div>
+        <div className="field"><label htmlFor="custom-site-lat">Latitude (°)</label><input id="custom-site-lat" className="input mono" type="number" step={0.001} min={-90} max={90} value={lat} onChange={(e) => setLat(Number(e.target.value))} /></div>
+        <div className="field"><label htmlFor="custom-site-lon">Longitude (°E)</label><input id="custom-site-lon" className="input mono" type="number" step={0.001} min={-180} max={360} value={lon} onChange={(e) => setLon(Number(e.target.value))} /></div>
+        <div className="field"><label htmlFor="custom-site-elev">Elevation (m)</label><input id="custom-site-elev" className="input mono" type="number" step={10} value={elev} onChange={(e) => setElev(Number(e.target.value))} /></div>
+        <div className="field"><label htmlFor="custom-site-preset">Terrain preset</label>
+          <select id="custom-site-preset" className="input" value={preset} onChange={(e) => setPreset(e.target.value as CustomTerrainPreset)}>
             <option value="flat">Flat / spherical</option>
             <option value="ridge">Ridge</option>
             <option value="crater-rim">Crater rim</option>
@@ -83,8 +83,8 @@ export function CustomSiteModal({ onClose, onCreate, initial }: { onClose: () =>
         <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
           {sectors.map((v, i) => (
             <div className="field" key={i}>
-              <label>{i * 45}° · {v.toFixed(1)}°</label>
-              <input type="range" min={-1} max={8} step={0.1} value={v} onChange={(e) => setSectors((s) => s.map((x, j) => j === i ? Number(e.target.value) : x))} />
+              <label htmlFor={`custom-sector-${i}`}>{i * 45}° · {v.toFixed(1)}°</label>
+              <input id={`custom-sector-${i}`} type="range" min={-1} max={8} step={0.1} value={v} onChange={(e) => setSectors((s) => s.map((x, j) => j === i ? Number(e.target.value) : x))} />
             </div>
           ))}
         </div>
