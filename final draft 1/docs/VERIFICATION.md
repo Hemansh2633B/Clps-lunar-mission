@@ -15,17 +15,67 @@ explicit UTC, worker performance, accessibility, report horizon labeling, and CI
 |---|---|---|
 | TypeScript typecheck | `npm run typecheck` | clean |
 | Production build | `npm run build` | clean; React / Three / ephemeris split into separate chunks |
-| Engine + SPICE-reference validation + frame allowlist + transition stress + event-aware energy + analysis status + sampling/battery + catalogue + presets + explanations + UTC + workflow + simulation client + export + DEM-profile + vehicle/geo + story chapter/progress/narrative unit tests | `npm test` | **192 passed** (Vitest, 20 files) |
+| Engine + SPICE-reference validation + frame allowlist + transition stress + event-aware energy + analysis status + sampling/battery + catalogue + presets + explanations + UTC + workflow + simulation client + export + DEM-profile + vehicle/geo + story chapter/progress/narrative unit tests | `npm test` | **244 passed** (Vitest, 25 files — v1.9 adds witness, session, export-guard, a11y-description and comparison-narrative suites) |
 | Backend / DEM / horizon / downloader / API errors / lunar-frame module | `npm run test:python` | **92 passed, 4 skipped** (pytest). The 4 skips are the SPICE-kernel-gated frame tests (kernels not fetched in the ordinary run) — **skipped, not passed**; the optional CI `spice-validation` job fetches kernels and runs them for real. |
 | Geometry checks | `npm run test:geometry` | passed: curvature, pole coordinates, Sun directions, exact landing origin, shadow casting, NoData topology, synthetic demo, horizon ray-marching |
 | Horizon parity | `npm run test:parity` | passed: TypeScript and Python ray-marchers agree on elevations, coverage, edge inset, obstacle ranges |
 | Mission + Terrain Lab + Space views browser E2E | `npm run test:browser` | passed: catalog, Apollo/far-side, comparison, educator, custom site, modal keyboard guard/focus, export (blocked while computing), playback; Terrain Lab orbit drag, keyboard orbit, top/oblique presets, inspection pin, exaggeration, shadow pixel brightening, Sun extremes, all grid qualities, radius, horizon CSV/import, real-mode no-DEM safeguard, 390 px mobile layout; **Space views**: planet markers/labels, time-lapse clock + sub-solar sweep, south-pole preset, fleet stack/HLS/CLPS switching, stage separation, engine plume, hover part callout, view close; **v1.7 features**: first-run onboarding offers demo / real-DEM choice and dismisses cleanly; guided six-step workflow opens, shows six steps and advances; chart text alternatives (panorama/timeline/polar-map `role="img"`) and a labelled keyboard time scrubber; **2024 Regions** tab shows exactly nine region-approximate regions; explicit **UTC date + time** mission-start fields drive recompute; persistent provenance indicator; heuristic score breakdown + "not an RF link budget" disclosure |
-| Real-DEM browser smoke | `npm run test:real-dem` | passed against the verification fixture below |
-| THE 14-DAY WINDOW story E2E (personas A–E) | `npm run test:story` | passed — see the v1.8 section below |
+| Real-DEM browser smoke | `npm run test:real-dem` | passed historically against the verification fixture below; **not executed in the v1.9 run** (fixture TIF absent from this environment — reported as not run, never as passed) |
+| THE 14-DAY WINDOW story E2E (v1.9 personas A–E) | `npm run test:story` | passed — see the v1.9 section below |
 
 Python warnings are Rasterio `Affine` `*` vs `@` PendingDeprecationWarnings from the installed wheel; they do not indicate a CHANDRA failure.
 
+## v1.9 reliability release — executed evidence
+
+Executed 2026-11-07 in the Arena sandbox on branch `arena/860e2f06-clps-lunar-mission`
+(from merged v1.8 `main` @ `03c3522`), Node 22 / Python 3.11, Sparticuz Chromium
+(single-process) locally; GitHub Actions ubuntu-latest with Playwright Chromium for CI.
+
+| Check | Result |
+|---|---|
+| Typecheck (`npm run typecheck`) | clean |
+| Production build (`npm run build`) | clean |
+| Unit tests (`npm test`) | **244 passed, 0 failed** (25 files; 52 new v1.9 tests: comparison/export witnesses incl. existing/identical/capacity/blocked/computing cases, session round-trip + corrupt/dangling/oversized rejection + boot resolution + lost-context detection, export gate incl. stale/blocked/epoch-gated horizon CSV, blocked a11y descriptions for every gated surface, verified-DEM wording, comparison-narrative branches incl. mixed-confidence never-rankable) |
+| Python (`npm run test:python` / `pytest -q -rs`) | **92 passed, 4 skipped** — the 4 skips are SPICE-kernel-gated (kernels not fetched locally); reported as SKIPPED, never passed. The CI `spice-validation` job fetches checksummed kernels and ran the 26 frame tests for real (see CI evidence). |
+| Geometry (`npm run test:geometry`) | passed |
+| Parity (`npm run test:parity`) | passed |
+| Browser E2E (`npm run test:browser`) | passed — no regressions from the session/a11y/stacking changes |
+| Story E2E (`npm run test:story`) | **v1.9 personas A–E passed** (~600 s): A existing user (3 real pre-pins + preset + playback → isolated empty training workspace, user pins invisible, ch7 refuses pre-existing/identical pins, credits a NEW distinct resolved pair, completion restores site/slip/config/pins/playback exactly, session cleared); B export correctness (real ME-DEM import; two CSV downloads never credit; epoch-2040 blocked analysis never downloads; guard-passing JSON credits only after provenance + warnings verified in the downloaded file); C refresh/resume (ch5 slip + baseline + answer survive reload; ch7 pins + witness re-resolve; corrupt session injected pre-app-load → explicit Rebuild/Exit recovery; v1.8 progress without session → same path; never force-opened); D invalid data (three explicit Real-DEM visits with API-call counters: ME import / WEIRD_TEST_FRAME / 92 % coverage; epoch 2040 gated across narrative, telemetry, chips AND aria-labels, DEM footer, timeline/map descriptions, withheld horizon clearances + disabled CSV; refused export, no credit); E mobile a11y (keyboard-only activation, heading focus, modal trap + focus restore, Escape pause/resume, glossary deep-link, reduced motion, runtime contrast ≥ 4.5 for dialogue/objective/log/scene, 390 px + 320 px no overflow) |
+| Real-DEM smoke (`test:real-dem`) | **not executed** — verification fixture TIF absent in this environment |
+| Manual screen reader | **not executed** — NVDA/VoiceOver protocol recorded in `docs/ACCESSIBILITY_AUDIT.md`; no screen-reader pass claimed |
+| Screenshots | `screenshots/15…22-story-*.png` (best-effort under SwiftShader; assertions are the verification) |
+
+**GitHub Actions evidence (queried via API on 2026-11-07):**
+
+| Run | Commit | Result |
+|---|---|---|
+| 42379651272 (post-merge v1.8, push to main) | `03c3522` | quality ✓ · spice-validation ✓ · **browser ✗** at "Run story tutorial E2E" (Persona D timeout; A–C passed, E never ran) — the failure v1.9 fixes |
+| 42383009327 (Phase-1 fix only) | `23c4117` | **all green**, incl. step 10 "Run story tutorial E2E (personas A–E)" — root-cause fix verified on the real runner before further changes |
+| 42389036663 (Phases 2–4 + new personas) | `ccfd8cf` | **all green** (quality + browser with the rewritten personas; SPICE job not yet PR-triggered at this commit) |
+
+Raw CI log download is blocked in this sandbox (`results-receiver.actions.githubusercontent.com`
+outside the egress allowlist); job/step metadata was read via `api.github.com` and the
+failure was additionally reproduced experimentally in the sandbox (delayed-API probe:
+mode `synthetic` at compute-click, 0 mocked horizon calls, 0 alerts; fast-API: mode
+`real`, 1 call, alert present). See `docs/CI_GOVERNANCE.md` §4.
+
+**Defects fixed en route (found by the new tests, not assumed):** ticker marquee
+intercepting Export-dropdown clicks (stacking + pointer-events); stale `active` story
+status after refresh; `--dim` small text below AA (4.32/3.65 → 5.65/4.76); Terrain Lab
+alert text 4.19 → 5.23; panorama/timeline/map aria-labels and the horizon table
+out-claiming the visibility gate. Details: `docs/ACCESSIBILITY_AUDIT.md`,
+`docs/IMPLEMENTATION_REPORT_v1.9.md`.
+
 ## v1.8 interactive briefing — executed evidence
+
+> **Correction (2026-11-07, v1.9):** the local results below were accurate when
+> recorded, but the **post-merge GitHub Actions run 42379651272 FAILED** at the story
+> step: Persona D relied on the config-triggered auto-real Terrain Lab build winning
+> a race before "Compute 360° horizon" was clicked; on the CI runner it lost, the
+> mocked `/api/horizon` was never called, and the expected import alert never appeared
+> (personas A–C passed; E never ran). The v1.8 claims of a fully green story pipeline
+> therefore did **not** hold on CI. Fixed in v1.9 by the explicit Real-DEM workflow
+> (verified green on run 42383009327); the original text is preserved below as history.
 
 Executed in the Arena sandbox on branch `arena/c8be366b-clps-lunar-mission` (from merged
 v1.7 `main` @ `182a4fc`), Node 22 / Python 3.11, Sparticuz Chromium (single-process).
