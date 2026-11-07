@@ -47,7 +47,7 @@ export function Onboarding({ open, onClose, onDemo, onRealDem }: Props) {
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="onboarding-title" className="modal fade-in wide" style={{ outline: 'none', maxWidth: 720 }}>
         <div className="modal-header">
-          <span id="onboarding-title" style={{ fontSize: 14, fontWeight: 600 }}>Welcome to CHANDRA // OPS</span>
+          <span id="onboarding-title" style={{ fontSize: 14, fontWeight: 600 }}>Welcome to CHANDRA</span>
           <button className="btn sm ghost icon" onClick={onClose} aria-label="Close welcome"><X size={14} /></button>
         </div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

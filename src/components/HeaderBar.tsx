@@ -42,7 +42,7 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
         <div style={{ display: 'flex', alignItems: 'center', gap: 11, flex: '0 0 auto' }}>
           <img src="/assets/patch.png" alt="CHANDRA mission patch" width={42} height={42} style={{ width: 42, height: 42, borderRadius: '50%', border: '1px solid var(--line)', objectFit: 'cover', flex: '0 0 auto' }} />
           <div title="CHANDRA — Sanskrit lunar deity, “the shining one”">
-            <div className="display" style={{ fontSize: 19, lineHeight: 1, fontWeight: 600, whiteSpace: 'nowrap' }}>CHANDRA <span style={{ color: 'var(--coral)' }}>//</span> OPS</div>
+            <div className="display" style={{ fontSize: 19, lineHeight: 1, fontWeight: 600, whiteSpace: 'nowrap' }}>CHANDRA</div>
             <div className="mono" style={{ fontSize: 9, letterSpacing: '.18em', color: 'var(--ink-soft)', marginTop: 3 }}>LUNAR SOUTH POLE DESK · v1.8</div>
           </div>
         </div>
