@@ -83,6 +83,7 @@ try {
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await page.waitForSelector('.app-header .display');
   assert(await page.locator('.app-header .display').innerText().then((t) => t.includes('CHANDRA')), 'header brand renders');
+  assert((await page.title()) === 'CHANDRA — Lunar Mission Planning', 'document title is the canonical product title');
   // First-run onboarding: verify it offers the demo / real-DEM choice, capture it, then
   // dismiss (Skip keeps the default workspace state for the rest of the flow).
   if (await page.locator('text=Welcome to CHANDRA').count()) {
