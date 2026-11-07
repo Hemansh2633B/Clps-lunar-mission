@@ -43,7 +43,7 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
           <img src="/assets/patch.png" alt="CHANDRA mission patch" width={42} height={42} style={{ width: 42, height: 42, borderRadius: '50%', border: '1px solid var(--line)', objectFit: 'cover', flex: '0 0 auto' }} />
           <div title="CHANDRA — Sanskrit lunar deity, “the shining one”">
             <div className="display" style={{ fontSize: 19, lineHeight: 1, fontWeight: 600, whiteSpace: 'nowrap' }}>CHANDRA <span style={{ color: 'var(--coral)' }}>//</span> OPS</div>
-            <div className="mono" style={{ fontSize: 9, letterSpacing: '.18em', color: 'var(--ink-soft)', marginTop: 3 }}>LUNAR SOUTH POLE DESK · v1.7</div>
+            <div className="mono" style={{ fontSize: 9, letterSpacing: '.18em', color: 'var(--ink-soft)', marginTop: 3 }}>LUNAR SOUTH POLE DESK · v1.8</div>
           </div>
         </div>
 
@@ -63,9 +63,9 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
           </div>
           <button className={`btn ${spaceActive ? 'active' : ''}`} onClick={onSpace} title="Space views — planet time-lapse and fleet hangar" aria-label="Space views"><Orbit size={14} /> Space <span className="kbd">O</span></button>
           <button className={`btn ${terrainActive ? 'active' : ''}`} onClick={onTerrain} title="Terrain analysis — 3D lab and real DEM workflow" aria-label="Terrain analysis"><Box size={14} /> Terrain <span className="kbd">T</span></button>
-          <button className={`btn ${compareMode && !terrainActive && !spaceActive ? 'active' : ''}`} onClick={onCompare} title="Comparison — pinned scenarios, confidence-tiered ranking" aria-label="Comparison"><Columns2 size={14} /> Compare <span className="kbd">C</span></button>
+          <button className={`btn ${compareMode && !terrainActive && !spaceActive ? 'active' : ''}`} onClick={onCompare} data-tour="compare" title="Comparison — pinned scenarios, confidence-tiered ranking" aria-label="Comparison"><Columns2 size={14} /> Compare <span className="kbd">C</span></button>
           <button className="btn" onClick={onGuide} title="Field Guide — guided stories and searchable glossary" aria-label="Field Guide"><BookOpen size={14} /> Guide <span className="kbd">G</span></button>
-          <div ref={ref} style={{ position: 'relative' }}>
+          <div ref={ref} data-tour="export" style={{ position: 'relative' }}>
             <button className="btn primary" onClick={() => setExportOpen((v) => !v)}><Download size={14} /> Export</button>
             {exportOpen && (
               <div className="fade-in" style={{ position: 'absolute', right: 0, top: 36, width: 230, background: 'var(--paper-2)', border: '1px solid var(--ink)', borderRadius: 0, padding: 4, zIndex: 40, boxShadow: '5px 5px 0 rgba(28,36,48,.18)' }}>
@@ -81,7 +81,7 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
             )}
           </div>
           <button className="btn icon" title="Welcome guide — what CHANDRA does and how to start" aria-label="Open welcome guide" onClick={onHelp}><HelpCircle size={15} /></button>
-          <button className="btn icon" title="Mission parameters" onClick={onSettings}><Settings2 size={15} /></button>
+          <button className="btn icon" title="Mission parameters" aria-label="Mission parameters" data-tour="settings" onClick={onSettings}><Settings2 size={15} /></button>
           <button className="btn icon" title="Keyboard shortcuts (?)" onClick={onShortcuts}><Keyboard size={15} /></button>
         </div>
       </header>

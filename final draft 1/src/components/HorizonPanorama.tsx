@@ -17,6 +17,8 @@ interface Props {
   mode: AppMode;
   options: PanoramaOptions;
   onOptions: (o: PanoramaOptions) => void;
+  /** When true, terrain-visibility claims are gated (frame/epoch); positions stay valid. */
+  visibilityBlocked?: boolean;
 }
 
 const W = 1000;
@@ -30,7 +32,7 @@ const PH = H - MT - MB;
 
 const COMPASS: [number, string][] = [[0, 'N'], [45, 'NE'], [90, 'E'], [135, 'SE'], [180, 'S'], [225, 'SW'], [270, 'W'], [315, 'NW'], [360, 'N']];
 
-export function HorizonPanorama({ site, current, sim, mode, options, onOptions }: Props) {
+export function HorizonPanorama({ site, current, sim, mode, options, onOptions, visibilityBlocked }: Props) {
   const [hover, setHover] = useState<{ x: number; y: number; az: number; el: number } | null>(null);
   const [locked, setLocked] = useState<{ az: number; el: number } | null>(null);
 
@@ -121,8 +123,8 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions }
       <div className="panel-header">
         <span className="panel-title"><Mountain size={13} /> Local horizon · 360° panorama</span>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span className={`chip ${current.sunVisibility.visible ? 'solar' : 'blocked'}`}><Sun size={11} /> {current.sunVisibility.visible ? 'Sunlit' : current.sunVisibility.reason === 'terrain' ? 'Terrain shadow' : 'Night'}</span>
-          <span className={`chip ${current.earthVisibility.visible ? 'earth' : 'blocked'}`}><Earth size={11} /> {current.earthVisibility.visible ? 'DTE open' : 'LOS'}</span>
+          <span className={`chip ${visibilityBlocked ? 'blocked' : current.sunVisibility.visible ? 'solar' : 'blocked'}`}><Sun size={11} /> {visibilityBlocked ? 'Sun visibility blocked' : current.sunVisibility.visible ? 'Sunlit' : current.sunVisibility.reason === 'terrain' ? 'Terrain shadow' : 'Night'}</span>
+          <span className={`chip ${visibilityBlocked ? 'blocked' : current.earthVisibility.visible ? 'earth' : 'blocked'}`}><Earth size={11} /> {visibilityBlocked ? 'Earth visibility blocked' : current.earthVisibility.visible ? 'DTE open' : 'Earth blocked'}</span>
           <select className="input" style={{ width: 130, height: 24, fontSize: 11 }} value={options.sector} onChange={(e) => onOptions({ ...options, sector: e.target.value as PanoramaOptions['sector'] })}>
             <option value="full">Full 360°</option>
             <option value="sun">Sun sector ±60°</option>
@@ -135,7 +137,7 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions }
       </div>
       <div style={{ position: 'relative', background: 'radial-gradient(ellipse at 50% 120%, #f6ead2 0%, #f7f1e6 70%)' }}>
         <svg viewBox={`0 0 ${W} ${H}`} role="img"
-          aria-label={`Local horizon panorama. Sun at ${current.sun.azimuthDeg.toFixed(0)} degrees azimuth and ${current.sun.elevationDeg.toFixed(1)} degrees elevation, ${current.sunVisibility.visible ? 'visible' : 'below the horizon or terrain-occulted'}. Earth at ${current.earth.azimuthDeg.toFixed(0)} degrees azimuth and ${current.earth.elevationDeg.toFixed(1)} degrees elevation, ${current.earthVisibility.visible ? 'visible, direct-to-Earth open' : 'not visible'}. A numeric horizon table is available from the site brief.`}
+          aria-label={`Local horizon panorama.${visibilityBlocked ? ' Terrain visibility is blocked by the frame gate at this epoch; only sky positions are shown.' : ''} Sun at ${current.sun.azimuthDeg.toFixed(0)} degrees azimuth and ${current.sun.elevationDeg.toFixed(1)} degrees elevation, ${current.sunVisibility.visible ? 'visible' : 'below the horizon or terrain-occulted'}. Earth at ${current.earth.azimuthDeg.toFixed(0)} degrees azimuth and ${current.earth.elevationDeg.toFixed(1)} degrees elevation, ${current.earthVisibility.visible ? 'visible, direct-to-Earth open' : 'not visible'}. A numeric horizon table is available from the site brief.`}
           style={{ width: '100%', display: 'block', cursor: 'crosshair' }} onMouseMove={handleMove} onMouseLeave={() => setHover(null)} onClick={() => { if (hover) setLocked(locked ? null : { az: hover.az, el: hover.el }); }}>
           <defs>
             <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
@@ -179,16 +181,16 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions }
           {earthX != null && (
             <g>
               <circle cx={earthX} cy={earthY} r={18} fill="url(#earthGlow)" />
-              <circle cx={earthX} cy={earthY} r={6} fill={current.earthVisibility.visible ? '#0e7490' : '#e7f0f4'} stroke={current.earthVisibility.visible ? '#0e7490' : '#c23b32'} strokeWidth={1.5} strokeDasharray={current.earthVisibility.visible ? '' : '3 2'} />
+              <circle cx={earthX} cy={earthY} r={6} fill={visibilityBlocked ? '#efe8da' : current.earthVisibility.visible ? '#0e7490' : '#e7f0f4'} stroke={visibilityBlocked ? '#8a7358' : current.earthVisibility.visible ? '#0e7490' : '#c23b32'} strokeWidth={1.5} strokeDasharray={visibilityBlocked || !current.earthVisibility.visible ? '3 2' : ''} />
               <circle cx={earthX - 2} cy={earthY - 1} r={2} fill="#0e7490" opacity={0.7} />
-              <text x={earthX > W - 130 ? earthX - 11 : earthX + 11} y={earthY - 8} textAnchor={earthX > W - 130 ? "end" : "start"} fontSize={10} fill={current.earthVisibility.visible ? '#0e7490' : '#c23b32'} fontFamily="IBM Plex Mono, monospace">EARTH {current.earth.elevationDeg.toFixed(2)}°</text>
+              <text x={earthX > W - 130 ? earthX - 11 : earthX + 11} y={earthY - 8} textAnchor={earthX > W - 130 ? "end" : "start"} fontSize={10} fill={visibilityBlocked ? '#8a7358' : current.earthVisibility.visible ? '#0e7490' : '#c23b32'} fontFamily="IBM Plex Mono, monospace">EARTH {current.earth.elevationDeg.toFixed(2)}°</text>
             </g>
           )}
           {sunX != null && (
             <g>
               <circle cx={sunX} cy={sunY} r={24} fill="url(#sunGlow)" />
-              <circle cx={sunX} cy={sunY} r={7} fill={current.sunVisibility.visible ? '#c4842a' : '#fdf0d5'} stroke={current.sunVisibility.visible ? '#8a5a16' : '#c23b32'} strokeWidth={1.5} strokeDasharray={current.sunVisibility.visible ? '' : '3 2'} />
-              <text x={sunX > W - 130 ? sunX - 12 : sunX + 12} y={sunY + 4} textAnchor={sunX > W - 130 ? "end" : "start"} fontSize={10} fill={current.sunVisibility.visible ? '#8a5a16' : '#c23b32'} fontFamily="IBM Plex Mono, monospace">SUN {current.sun.elevationDeg.toFixed(2)}°</text>
+              <circle cx={sunX} cy={sunY} r={7} fill={visibilityBlocked ? '#efe8da' : current.sunVisibility.visible ? '#c4842a' : '#fdf0d5'} stroke={visibilityBlocked ? '#8a7358' : current.sunVisibility.visible ? '#8a5a16' : '#c23b32'} strokeWidth={1.5} strokeDasharray={visibilityBlocked || !current.sunVisibility.visible ? '3 2' : ''} />
+              <text x={sunX > W - 130 ? sunX - 12 : sunX + 12} y={sunY + 4} textAnchor={sunX > W - 130 ? "end" : "start"} fontSize={10} fill={visibilityBlocked ? '#8a7358' : current.sunVisibility.visible ? '#8a5a16' : '#c23b32'} fontFamily="IBM Plex Mono, monospace">SUN {current.sun.elevationDeg.toFixed(2)}°</text>
             </g>
           )}
           {probe && (() => {

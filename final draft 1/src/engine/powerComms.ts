@@ -203,11 +203,11 @@ export function summarizeMission(
   const longestDteGapHours = longestGapHours(samples, events, 'earth', startMs, endMs);
   const longestCombinedGapHours = longestGapHours(samples, events, 'combined', startMs, endMs);
 
-  const survivalScore = battery.depletionHours <= 0 ? 100 : clamp(100 - (battery.depletionHours / Math.max(1, durationHours)) * 160, 0, 100);
+  const energyMarginScore = battery.depletionHours <= 0 ? 100 : clamp(100 - (battery.depletionHours / Math.max(1, durationHours)) * 160, 0, 100);
   // Application-defined heuristic weights (documented, NOT a NASA methodology).
   const W = { combined: 0.45, illumination: 0.2, earth: 0.15, energy: 0.2 };
   const feasibilityScore = Math.round(
-    combinedPct * W.combined + illuminationPct * W.illumination + dtePct * W.earth + survivalScore * W.energy,
+    combinedPct * W.combined + illuminationPct * W.illumination + dtePct * W.earth + energyMarginScore * W.energy,
   );
   const dataConfidence = site ? terrainDataConfidence(site) : 'illustrative';
   const frameVerified = site ? (site.terrain.kind === 'dem' ? (site.terrain.frameVerified ?? false) : true) : true;
@@ -219,7 +219,7 @@ export function summarizeMission(
       { key: 'combined', label: 'Simultaneous Sun + Earth visibility', valuePct: combinedPct, weight: W.combined, contribution: combinedPct * W.combined },
       { key: 'illumination', label: 'Solar illumination', valuePct: illuminationPct, weight: W.illumination, contribution: illuminationPct * W.illumination },
       { key: 'earth', label: 'Geometric Earth line-of-sight', valuePct: dtePct, weight: W.earth, contribution: dtePct * W.earth },
-      { key: 'energy', label: 'Energy-balance margin (battery model)', valuePct: survivalScore, weight: W.energy, contribution: survivalScore * W.energy },
+      { key: 'energy', label: 'Energy-balance margin (battery model)', valuePct: energyMarginScore, weight: W.energy, contribution: energyMarginScore * W.energy },
     ],
     note: 'Application-defined heuristic, not a NASA methodology. '
       + (dataConfidence !== 'measured' ? 'Terrain is not a measured DEM — treat this ranking as indicative, not as a measured-terrain comparison. ' : '')

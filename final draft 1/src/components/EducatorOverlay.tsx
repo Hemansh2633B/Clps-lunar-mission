@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BookOpen, ChevronLeft, ChevronRight, Play, X, Lightbulb, Search } from 'lucide-react';
 import type { GuidedScenario } from '../types/mission';
 import { GUIDED_SCENARIOS } from '../data/guidedScenarios';
-import { GLOSSARY } from '../data/glossary';
+import { GLOSSARY, GLOSSARY_BY_ID } from '../data/glossary';
 
 interface Props {
   open: boolean;
@@ -12,22 +12,33 @@ interface Props {
   onStart: (s: GuidedScenario) => void;
   onStep: (delta: number) => void;
   onApply: (s: GuidedScenario) => void;
+  /** Deep-link from the story's "Go deeper": a glossary id to pre-filter + scroll to. */
+  glossaryFocus?: string;
+  /** THE 14-DAY WINDOW entry point (start/resume/replay from the Field Guide). */
+  story?: { status: string; chapter: number; onStart: () => void; onReplay: () => void };
 }
 
 const FAQS: { q: string; a: string }[] = [
   { q: 'Is this flight software?', a: 'No. It is a planning-grade briefing desk. The Sun/Earth ephemeris and IAU 2015 Moon rotation are real, the illustrative benchmark masks are LOLA-style planning profiles, and nothing here is certified for a countdown.' },
   { q: 'Why do horizontal panels fail at 89°S?', a: 'Because the Sun stays within a couple of degrees of the horizon. A flat panel’s power follows the sine of that tiny elevation, so most of the solar constant glances off. A vertical mast facing the Sun follows the cosine, which is nearly 1.' },
-  { q: 'What is optical libration doing to the radio?', a: 'It moves the sub-Earth point by several degrees in latitude and longitude. Near the pole, Earth lives on the horizon. A few degrees of wobble, plus a crater rim, is the difference between a Direct-to-Earth pass and a blackout.' },
+  { q: 'What is optical libration doing to Earth visibility?', a: 'It moves the sub-Earth point by several degrees in latitude and longitude. Near the pole, Earth lives on the horizon. A few degrees of wobble, plus a crater rim, is the difference between an open geometric Direct-to-Earth window and a blocked one. That is line-of-sight geometry, not a radio-link prediction.' },
   { q: 'How is this different from QuickMap and Horizons?', a: 'QuickMap is a map. Horizons is a sky. This desk asks the only question that joins them: at this latitude, this longitude, and this hour, is the Sun above my mask, and is Earth?' },
-  { q: 'Why does a 14-day slip matter so much?', a: 'The Sun walks about half a degree of azimuth every hour. Fourteen days is most of the way around the crater. A stay planned for the lit arc can land inside a multi-day massif eclipse. The slip slider computes that, it does not illustrate it.' },
-  { q: 'Does the far side ever see Earth in this model?', a: 'No. Chang’e-4 in Von Kármán sits on the far side. Earth remains tens of degrees below the geometric horizon for the whole synodic day. Terrain cannot save a radio pointed at rock. You need a relay.' },
-  { q: 'Can I bring my own coordinates or DEM?', a: 'Yes. Drop a custom latitude/longitude, edit an 8-sector mask, or load a real single-band lunar GeoTIFF in the Terrain Lab. Real DEM horizons are preserved sample-for-sample and labeled with their source frame; synthetic demos stay labeled.' },
+  { q: 'Why does a 14-day slip matter so much?', a: 'The Sun walks about half a degree of azimuth every hour. Fourteen days carries it about halfway around the horizon. A stay planned for the lit arc can land inside a multi-day massif eclipse. The slip slider computes that, it does not illustrate it.' },
+  { q: 'Does the far side ever see Earth in this model?', a: 'No. Chang’e-4 in Von Kármán sits on the far side. Earth remains tens of degrees below the geometric horizon for the whole synodic day. No terrain mask can lift Earth above the geometric horizon there, so direct line-of-sight is 0% and a relay orbiter would be required. This desk reports the geometry, not radio performance.' },
+  { q: 'Can I bring my own coordinates or DEM?', a: 'Yes. Drop a custom latitude/longitude, edit an 8-sector mask, or load a real single-band lunar GeoTIFF in the Terrain Lab. Real DEM horizons are preserved sample-for-sample; allowlisted frames (MOON_ME/PA · DE421, IAU 2015) are rotated into the ephemeris frame with a disclosed residual, unknown frames are blocked from quantitative use, and synthetic demos stay labeled.' },
   { q: 'What does educator mode change?', a: 'Only the language. The elevations, watts, and blackouts stay. The captions stop saying MJD and start saying why a mast is standing in the dust.' },
 ];
 
-export function EducatorOverlay({ open, onClose, active, step, onStart, onStep, onApply }: Props) {
+export function EducatorOverlay({ open, onClose, active, step, onStart, onStep, onApply, glossaryFocus, story }: Props) {
   const [faqOpen, setFaqOpen] = useState<number | null>(0);
   const [glossaryQuery, setGlossaryQuery] = useState('');
+  const glossaryRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open || !glossaryFocus) return;
+    setGlossaryQuery(GLOSSARY_BY_ID[glossaryFocus]?.term ?? glossaryFocus);
+    const id = window.setTimeout(() => glossaryRef.current?.scrollIntoView({ block: 'start' }), 60);
+    return () => window.clearTimeout(id);
+  }, [open, glossaryFocus]);
   if (!open) return null;
   const filteredGlossary = GLOSSARY.filter((g) => `${g.term} ${g.plain} ${g.technical}`.toLowerCase().includes(glossaryQuery.toLowerCase()));
   return (
@@ -44,9 +55,28 @@ export function EducatorOverlay({ open, onClose, active, step, onStart, onStep, 
           <figcaption className="hint" style={{ marginTop: 8 }}>PLATE 01 · RIM STUDY · GRAZING SUNLIGHT, LOW EARTH</figcaption>
         </figure>
 
+        {story && (
+          <div className="plate" style={{ padding: 14 }} data-tour="story-guide-card">
+            <span className="stamp brass" style={{ transform: 'rotate(-1deg)' }}>INTERACTIVE BRIEFING · 10–15 MIN</span>
+            <h3 className="display" style={{ fontSize: 18, margin: '8px 0 4px' }}>THE 14-DAY WINDOW</h3>
+            <p className="small" style={{ margin: '0 0 8px' }}>
+              Join Mira’s fictional mission team as the new analyst: pick a region, follow the Sun and Earth, budget the power, ride out a two-week launch slip and file the report — with real controls and live numbers.
+              {' '}{story.status === 'paused' ? `Paused at CH 0${story.chapter}.` : story.status === 'active' ? `In progress · CH 0${story.chapter}.` : story.status === 'completed' ? 'Completed — replay any time.' : 'Not started yet.'}
+            </p>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button className="btn sm primary" onClick={() => { onClose(); story.onStart(); }}>
+                {story.status === 'paused' || story.status === 'active' ? 'Resume the briefing' : story.status === 'completed' ? 'Open the debrief' : 'Start the briefing'}
+              </button>
+              {(story.status === 'completed' || story.status === 'paused') && (
+                <button className="btn sm" onClick={() => { onClose(); story.onReplay(); }}>Restart from CH 00</button>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="plate" style={{ padding: 14 }}>
           <span className="stamp coral" style={{ transform: 'rotate(-1deg)' }}>THE 1.54° PROBLEM</span>
-          <h3 className="display" style={{ fontSize: 21, lineHeight: 1.12, margin: '10px 0 8px' }}>At 89° South, a 48-hour launch slip can freeze your lander in <em style={{ color: 'var(--coral)' }}>permanent shadow.</em></h3>
+          <h3 className="display" style={{ fontSize: 21, lineHeight: 1.12, margin: '10px 0 8px' }}>At 89° South, a launch slip can trade a sunlit window for <em style={{ color: 'var(--coral)' }}>days of terrain shadow.</em></h3>
           <p className="small" style={{ margin: 0 }}>South-pole mission design is a slow argument between a 1.54° tilt, a wobbling Earth, and the day you actually launch. This desk keeps both problems on one sheet of paper.</p>
         </div>
 
@@ -124,7 +154,7 @@ export function EducatorOverlay({ open, onClose, active, step, onStart, onStep, 
           </div>
         </div>
 
-        <div>
+        <div ref={glossaryRef}>
           <div className="panel-title" style={{ marginBottom: 8 }}>Glossary · plain language + technical definition</div>
           <div style={{ position: 'relative', marginBottom: 8 }}>
             <Search size={13} style={{ position: 'absolute', left: 8, top: 8, color: 'var(--dim)' }} />

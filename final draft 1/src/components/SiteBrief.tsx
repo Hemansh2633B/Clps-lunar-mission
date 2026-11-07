@@ -7,9 +7,10 @@ interface Props {
   current: EvaluatedSample;
   onHorizonTable: () => void;
   onPin: () => void;
+  visibilityBlocked?: boolean;
 }
 
-export function SiteBrief({ site, current, onHorizonTable, onPin }: Props) {
+export function SiteBrief({ site, current, onHorizonTable, onPin, visibilityBlocked }: Props) {
   return (
     <section className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="panel-header">
@@ -50,11 +51,11 @@ export function SiteBrief({ site, current, onHorizonTable, onPin }: Props) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 10 }}>
           <div className="panel" style={{ padding: 8, background: '#fffdf7' }}>
             <div style={{ color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '.06em', fontSize: 9 }}>Sun clearance</div>
-            <div className="mono" style={{ fontSize: 14, color: current.sunVisibility.visible ? 'var(--nominal)' : 'var(--blocked)' }}>{current.sunVisibility.clearanceDeg.toFixed(2)}°</div>
+            <div className="mono" style={{ fontSize: 14, color: visibilityBlocked ? 'var(--dim)' : current.sunVisibility.visible ? 'var(--nominal)' : 'var(--blocked)' }}>{visibilityBlocked ? 'blocked' : `${current.sunVisibility.clearanceDeg.toFixed(2)}°`}</div>
           </div>
           <div className="panel" style={{ padding: 8, background: '#fffdf7' }}>
             <div style={{ color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '.06em', fontSize: 9 }}>Earth clearance</div>
-            <div className="mono" style={{ fontSize: 14, color: current.earthVisibility.visible ? 'var(--nominal)' : 'var(--blocked)' }}>{current.earthVisibility.clearanceDeg.toFixed(2)}°</div>
+            <div className="mono" style={{ fontSize: 14, color: visibilityBlocked ? 'var(--dim)' : current.earthVisibility.visible ? 'var(--nominal)' : 'var(--blocked)' }}>{visibilityBlocked ? 'blocked' : `${current.earthVisibility.clearanceDeg.toFixed(2)}°`}</div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>

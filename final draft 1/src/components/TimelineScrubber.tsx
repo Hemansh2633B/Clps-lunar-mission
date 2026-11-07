@@ -157,7 +157,7 @@ export function TimelineScrubber(props: Props) {
         {loading && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(243,230,208,.6)', fontSize: 11, color: 'var(--ink-soft)' }} className="pulse">Recomputing window…</div>}
       </div>
       <div style={{ padding: '0 12px 6px' }}>
-        <input type="range" min={win.startMs} max={win.endMs} step={60000} value={timeMs} onChange={(e) => onTime(Number(e.target.value))} aria-label="Mission time scrubber" aria-valuetext={formatUTC(timeMs)} />
+        <input type="range" min={win.startMs} max={win.endMs} step={60000} value={timeMs} onChange={(e) => onTime(Number(e.target.value))} aria-label="Mission time scrubber" data-tour="scrubber" aria-valuetext={formatUTC(timeMs)} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '7px 12px', borderTop: '1px solid var(--border)', background: 'var(--panel-2)', flexWrap: 'wrap' }}>
@@ -166,7 +166,7 @@ export function TimelineScrubber(props: Props) {
           <span className="panel-title" style={{ whiteSpace: 'nowrap' }}>Launch slip</span>
           <span className="chip solar">+{slipDays} d</span>
         </div>
-        <input type="range" className="solar" min={0} max={60} step={0.25} value={slipDays} onChange={(e) => onSlip(Number(e.target.value))} style={{ flex: 1, minWidth: 140 }} aria-label="Launch slip days" />
+        <input type="range" className="solar" min={0} max={60} step={0.25} value={slipDays} onChange={(e) => onSlip(Number(e.target.value))} style={{ flex: 1, minWidth: 140 }} aria-label="Launch slip days" data-tour="slip" />
         <div style={{ display: 'flex', gap: 4 }}>
           <button className="btn sm" onClick={() => onSlip(clamp(slipDays - 14, 0, 60))}>−14 d</button>
           <button className="btn sm" onClick={() => onSlip(clamp(slipDays + 14, 0, 60))}>+14 d</button>

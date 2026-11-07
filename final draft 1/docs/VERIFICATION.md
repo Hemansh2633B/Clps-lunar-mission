@@ -1,4 +1,4 @@
-# Verification evidence · CHANDRA v1.7 (product hardening)
+# Verification evidence · CHANDRA v1.8 (interactive briefing)
 
 This file records what was actually executed in the Arena sandbox. It distinguishes software-path
 verification from scientific validation, and **passed from skipped** (a skipped SPICE test is never
@@ -15,14 +15,43 @@ explicit UTC, worker performance, accessibility, report horizon labeling, and CI
 |---|---|---|
 | TypeScript typecheck | `npm run typecheck` | clean |
 | Production build | `npm run build` | clean; React / Three / ephemeris split into separate chunks |
-| Engine + SPICE-reference validation + frame allowlist + transition stress + event-aware energy + analysis status + sampling/battery + catalogue + presets + explanations + UTC + workflow + simulation client + export + DEM-profile + vehicle/geo unit tests | `npm test` | **151 passed** (Vitest, 17 files) |
+| Engine + SPICE-reference validation + frame allowlist + transition stress + event-aware energy + analysis status + sampling/battery + catalogue + presets + explanations + UTC + workflow + simulation client + export + DEM-profile + vehicle/geo + story chapter/progress/narrative unit tests | `npm test` | **192 passed** (Vitest, 20 files) |
 | Backend / DEM / horizon / downloader / API errors / lunar-frame module | `npm run test:python` | **92 passed, 4 skipped** (pytest). The 4 skips are the SPICE-kernel-gated frame tests (kernels not fetched in the ordinary run) — **skipped, not passed**; the optional CI `spice-validation` job fetches kernels and runs them for real. |
 | Geometry checks | `npm run test:geometry` | passed: curvature, pole coordinates, Sun directions, exact landing origin, shadow casting, NoData topology, synthetic demo, horizon ray-marching |
 | Horizon parity | `npm run test:parity` | passed: TypeScript and Python ray-marchers agree on elevations, coverage, edge inset, obstacle ranges |
 | Mission + Terrain Lab + Space views browser E2E | `npm run test:browser` | passed: catalog, Apollo/far-side, comparison, educator, custom site, modal keyboard guard/focus, export (blocked while computing), playback; Terrain Lab orbit drag, keyboard orbit, top/oblique presets, inspection pin, exaggeration, shadow pixel brightening, Sun extremes, all grid qualities, radius, horizon CSV/import, real-mode no-DEM safeguard, 390 px mobile layout; **Space views**: planet markers/labels, time-lapse clock + sub-solar sweep, south-pole preset, fleet stack/HLS/CLPS switching, stage separation, engine plume, hover part callout, view close; **v1.7 features**: first-run onboarding offers demo / real-DEM choice and dismisses cleanly; guided six-step workflow opens, shows six steps and advances; chart text alternatives (panorama/timeline/polar-map `role="img"`) and a labelled keyboard time scrubber; **2024 Regions** tab shows exactly nine region-approximate regions; explicit **UTC date + time** mission-start fields drive recompute; persistent provenance indicator; heuristic score breakdown + "not an RF link budget" disclosure |
 | Real-DEM browser smoke | `npm run test:real-dem` | passed against the verification fixture below |
+| THE 14-DAY WINDOW story E2E (personas A–E) | `npm run test:story` | passed — see the v1.8 section below |
 
 Python warnings are Rasterio `Affine` `*` vs `@` PendingDeprecationWarnings from the installed wheel; they do not indicate a CHANDRA failure.
+
+## v1.8 interactive briefing — executed evidence
+
+Executed in the Arena sandbox on branch `arena/c8be366b-clps-lunar-mission` (from merged
+v1.7 `main` @ `182a4fc`), Node 22 / Python 3.11, Sparticuz Chromium (single-process).
+
+| Check | Result |
+|---|---|
+| Typecheck (`tsc --noEmit` / `tsc -b`) | clean |
+| Unit tests | **192 passed, 0 failed** (20 files) — includes 41 new story tests: chapter ordering/terminology/glossary links, versioned persistence + corrupt-payload handling, pause/resume/restart/skip immutability, suggestion policy, live narrative vs real engine fixtures, slip better/worse/similar/computing branches, all 5 blocked statuses × 7 chapters (no fabricated verdicts), provenance tiers |
+| Python | **92 passed, 4 skipped** (SPICE-kernel-gated; skipped ≠ passed) |
+| Geometry / parity | passed / passed |
+| Production build | clean (~5.5 s) |
+| Existing browser E2E (`test:browser`) | passed (~175 s), incl. multi-TZ (Asia/Kolkata) slip check — no regressions from the briefing wiring |
+| Story browser E2E (`test:story`) | **personas A–E passed** (~256 s): A beginner full run (suggestion → training → real site selection → scrub → preset change → +14 d slip → battery → 2 real pins → guarded JSON export → 9/9 debrief → progress persisted); B student (Go deeper → glossary deep-link → return without progress loss; keyboard scrubbing; Escape pauses; explore-first leaves state untouched); C returning (saved ch3 paused: never force-opened, never re-suggested, resume/restart, reload-safe); D invalid data (ME-frame DEM import via real Terrain Lab pipeline + epoch 2040 → FRAME_MODEL_OUTSIDE_VALIDATED_RANGE: narrative explains, instruments gated, export refused with no download, objective not credited; unknown-frame import disabled with alert); E mobile 390×844 (no overflow, collapse/expand, real selection + scrub, reduced-motion ⇒ spotlight transition 0 s) |
+| Screenshots | `screenshots/15…22-story-*.png` (7 of 8 captured; the ch5 slip capture timed out under SwiftShader while workers were computing — best-effort capture, the ch5 state assertions passed) |
+
+**Persona D fidelity note:** NASA DEM downloads are unavailable in CI, so the DEM API
+responses are stubbed at the network boundary; frame classification, ME→IAU conversion,
+import gating, computation-boundary analysis status, narrative branching and the export
+guard all run live in the browser. The deeper blocked statuses (FRAME_UNVERIFIED,
+INCOMPLETE_COVERAGE) are unreachable through the UI because the Terrain Lab import gate
+fires first — they are covered by unit tests instead.
+
+**Defect fixed en route:** instantaneous visibility chips ("Window viable" / "Sunlit" /
+"DTE open") bypassed the epoch-aware frame gate; now gated via
+`assessTerrainEligibility(site, timeMs, timeMs)` with persona-D browser assertions and
+the existing engine-level epoch unit test. See SCIENTIFIC_METHOD §11.
 
 ## v1.7 product hardening — executed evidence
 
