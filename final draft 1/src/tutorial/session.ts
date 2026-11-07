@@ -41,12 +41,30 @@ export interface WorkspaceSnapshot {
   customSites: LandingSite[];
 }
 
+/**
+ * The active chapter's witness baseline, persisted so a refresh does not void
+ * work already done (e.g. the chapter-5 slip change still differs from the
+ * chapter-start value after reload). Export credit is intentionally NOT restored:
+ * after a refresh the report must be filed again in the new page session.
+ */
+export interface SessionBaseline {
+  chapter: number;
+  selectedId: string;
+  timeMs: number;
+  slipDays: number;
+  configKey: string;
+  reportExportCount: number;
+  scenarioIds: string[];
+}
+
 export interface TrainingSession {
   v: typeof SESSION_VERSION;
   /** The user's workspace at training start — restored on exit/finish. */
   user: WorkspaceSnapshot;
   /** The live training workspace — updated (debounced) as the user works. */
   training: WorkspaceSnapshot;
+  /** Witness baseline of the active chapter (optional for forward compat). */
+  baseline?: SessionBaseline | null;
 }
 
 const ARRAY_MODES = new Set(['horizontal', 'vertical-tracking', 'vertical-fixed']);
@@ -95,6 +113,15 @@ function validSite(s: unknown): s is LandingSite {
   });
 }
 
+function validBaseline(b: unknown): b is SessionBaseline {
+  if (typeof b !== 'object' || b === null) return false;
+  const o = b as Record<string, unknown>;
+  return Number.isInteger(o.chapter) && (o.chapter as number) >= 0 && (o.chapter as number) <= 8
+    && typeof o.selectedId === 'string' && finite(o.timeMs) && finite(o.slipDays)
+    && typeof o.configKey === 'string' && finite(o.reportExportCount)
+    && Array.isArray(o.scenarioIds) && o.scenarioIds.every((x) => typeof x === 'string');
+}
+
 function validWorkspace(w: unknown): w is WorkspaceSnapshot {
   if (typeof w !== 'object' || w === null) return false;
   const o = w as Record<string, unknown>;
@@ -118,7 +145,8 @@ export function parseSession(raw: string | null): TrainingSession | null {
     const p = JSON.parse(raw) as Partial<TrainingSession>;
     if (p.v !== SESSION_VERSION) return null;
     if (!validWorkspace(p.user) || !validWorkspace(p.training)) return null;
-    return { v: SESSION_VERSION, user: p.user, training: p.training };
+    if (p.baseline !== undefined && p.baseline !== null && !validBaseline(p.baseline)) return null;
+    return { v: SESSION_VERSION, user: p.user, training: p.training, baseline: p.baseline ?? null };
   } catch {
     return null;
   }

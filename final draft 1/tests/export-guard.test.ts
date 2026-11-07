@@ -57,12 +57,16 @@ describe('mission export gate', () => {
 describe('mission report content', () => {
   it('carries provenance, warnings and the analysis status alongside the numbers', () => {
     const current = evaluateAt(site, START + DAY_MS, config);
-    const report = missionReportJSON(site, config, sim, current) as unknown as Record<string, unknown>;
+    const report = JSON.parse(missionReportJSON(site, config, sim, current)) as Record<string, unknown>;
     const json = JSON.stringify(report);
     expect(json).toContain('siteProvenance');
     expect(json).toContain('analysisStatus');
     expect(json).toContain('LOCAL HORIZON');
-    expect(json).toContain('warnings');
     expect(json).toContain('dataConfidence');
+    const repro = report.reproducibility as Record<string, unknown>;
+    expect(Array.isArray(repro.warnings)).toBe(true);
+    expect((repro.warnings as string[]).length).toBeGreaterThan(0);
+    expect(repro.siteProvenance).toBeTruthy();
+    expect(repro.analysisStatus).toBeTruthy();
   });
 });

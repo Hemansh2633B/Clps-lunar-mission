@@ -330,20 +330,16 @@ export default function App() {
   liveTrainingRef.current = session ? takeWorkspace() : null;
   const sessionRef = useRef(session);
   sessionRef.current = session;
+  const persistTraining = useCallback(() => {
+    if (sessionRef.current && liveTrainingRef.current) {
+      saveSession({ ...sessionRef.current, training: liveTrainingRef.current, baseline: storyRef.current.witnessBaseline }, appStorage());
+    }
+  }, []);
   useEffect(() => {
-    if (!session) return;
-    const id = window.setTimeout(() => {
-      if (sessionRef.current && liveTrainingRef.current) saveSession({ ...sessionRef.current, training: liveTrainingRef.current }, appStorage());
-    }, 250);
-    return () => window.clearTimeout(id);
-  }, [session, selectedId, baselineMs, slipDays, config, viewDays, timeMs, mode, compareMode, terrainView, spaceView, scenarios, playing, speed, sites]);
-  useEffect(() => {
-    const flush = () => {
-      if (sessionRef.current && liveTrainingRef.current) saveSession({ ...sessionRef.current, training: liveTrainingRef.current }, appStorage());
-    };
+    const flush = () => persistTraining();
     window.addEventListener('pagehide', flush);
     return () => window.removeEventListener('pagehide', flush);
-  }, []);
+  }, [persistTraining]);
   useEffect(() => {
     // Orphaned session at boot (progress gone/completed): the user workspace was
     // restored above; drop the stale storage payload once.
@@ -396,7 +392,7 @@ export default function App() {
     notify,
   }), [loadTrainingMission, restoreMission, focusStoryTarget, pinCurrent, handleExport, notify]);
 
-  const story = useStoryTutorial(storySignals, storyActions);
+  const story = useStoryTutorial(storySignals, storyActions, { initialBaseline: boot.keepSession ? boot.session?.baseline ?? null : null });
   const storyRef = useRef(story);
   storyRef.current = story;
 
@@ -429,6 +425,14 @@ export default function App() {
   useEffect(() => {
     if (story.progress?.status === 'completed' && session) restoreMission();
   }, [story.progress?.status, session, restoreMission]);
+
+  // Debounced session persistence (workspace + chapter witness baseline). Runs
+  // after every relevant state change; pagehide flushes synchronously for refresh.
+  useEffect(() => {
+    if (!session) return;
+    const id = window.setTimeout(persistTraining, 250);
+    return () => window.clearTimeout(id);
+  }, [session, selectedId, baselineMs, slipDays, config, viewDays, timeMs, mode, compareMode, terrainView, spaceView, scenarios, playing, speed, sites, story.progress?.chapter, persistTraining]);
 
   // Per-scenario outcomes for the briefing's comparison chapter: the SAME cached
   // simulations the matrix renders, with honest computing/blocked/error states.

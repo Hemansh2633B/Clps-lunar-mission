@@ -1,26 +1,33 @@
 /**
- * THE 14-DAY WINDOW — story tutorial browser tests (personas A–E).
+ * THE 14-DAY WINDOW — v1.9 story tutorial browser tests (personas A–E).
  *
  * Real interactions and state assertions, not text-presence checks:
- *   A  beginner     — suggestion → training → site → Sun/Earth scrub → settings →
- *                     slip → battery → compare (2 real pins) → guarded export → debrief
- *   B  student      — Go deeper → Field Guide glossary deep-link → return without
- *                     progress loss; keyboard scrubbing; Escape pauses
- *   C  returning    — saved progress: no forced tutorial, resume/restart from Field Guide
- *   D  invalid data — ME-frame DEM (stubbed API payload; real import/conversion pipeline)
- *                     + epoch 2040 → FRAME_MODEL_OUTSIDE_VALIDATED_RANGE: narrative
- *                     explains, export refused, no fabricated verdict; unknown-frame
- *                     horizon import stays disabled with an actionable alert
- *   E  mobile       — 390×844: essential interactions, no horizontal overflow,
- *                     collapse/expand, reduced-motion disables spotlight transitions
+ *   A  existing user — 3 pre-existing pins + custom config + playback → briefing
+ *                      isolates a clean training workspace, ch7 demands NEW
+ *                      distinct resolved scenarios (identical repeats refused),
+ *                      completion restores the user's workspace EXACTLY
+ *   B  export truth  — CSV exports never credit ch8; a blocked analysis never
+ *                      downloads; only a guard-passing JSON report (provenance +
+ *                      warnings verified in the file) earns credit
+ *   C  refresh       — reload at ch5 and ch7 restores the exact training context
+ *                      (slip, pins, chapter, baseline); corrupt/missing session →
+ *                      explicit Rebuild/Exit recovery, never silent defaults
+ *   D  invalid data  — genuine Real-DEM pipeline (API mocked at the network
+ *                      boundary): ME import → epoch 2040 → blocked analysis,
+ *                      export refusal, gated visual AND screen-reader descriptions,
+ *                      withheld horizon clearances; unknown frame AND incomplete
+ *                      coverage imports both refused with actionable alerts
+ *   E  mobile a11y   — 390×844 + 320×568: keyboard-only activation, focus management,
+ *                      modal focus trap + restore, Escape pause/resume, collapse,
+ *                      reduced motion, contrast ratios, no horizontal overflow
  *
- * NOTE on persona D: NASA DEM downloads are unavailable in CI, so the DEM API
- * responses are stubbed at the network boundary. Everything downstream — frame
- * classification, ME→IAU conversion, import gating, computation-boundary analysis
- * status, narrative branching and the export guard — runs live in the browser.
- * The deeper blocked statuses (FRAME_UNVERIFIED etc.) are unreachable through the
- * UI because the Terrain Lab import gate fires first; they are covered by the
- * unit suite (story-narrative, analysis-status, frame-gating).
+ * NOTE on persona D: NASA DEM downloads are unavailable in CI, so DEM API responses
+ * are stubbed at the network boundary ONLY. Frame classification, ME→IAU conversion,
+ * import gating, computation-boundary analysis status, narrative branching, a11y
+ * descriptions and the export guard all run live in the browser. The deeper blocked
+ * statuses unreachable through the UI (import gate fires first) are unit-tested.
+ * Automated aria-label checks are NOT a screen-reader pass; see the manual NVDA/
+ * VoiceOver checklist in docs/ACCESSIBILITY_AUDIT.md.
  *
  * Run: node scripts/story-browser-test.mjs   (needs npm run dev:full on :5173/:8000)
  */
@@ -90,9 +97,13 @@ const nextEnabled = (page) => page.waitForFunction(() => {
 }, null, { timeout: 30000 });
 const clickNext = async (page) => { await nextEnabled(page); await page.locator('.story-nav button', { hasText: /Next chapter|Finish briefing/ }).click(); await page.waitForTimeout(350); };
 const answerCheck = async (page, idx) => { await page.locator('.story-opt').nth(idx).click(); await page.waitForTimeout(150); };
-const objectiveMet = (page) => page.waitForSelector('.story-objective.met', { timeout: 20000 });
+const objectiveMet = (page) => page.waitForSelector('.story-objective.met', { timeout: 30000 });
+const objectiveUnmet = async (page) => { await page.waitForTimeout(600); assert(await page.locator('.story-objective.met').count() === 0, 'objective must NOT be credited'); };
+const skipChapters = async (page, n) => { for (let i = 0; i < n; i++) { await page.locator('.story-nav').getByRole('button', { name: 'Skip chapter' }).click(); await page.waitForTimeout(300); } };
+const focusPress = async (loc, key = 'Enter') => { await loc.focus(); await loc.press(key); };
+const getSession = (page) => page.evaluate(() => { try { return JSON.parse(window.localStorage.getItem('chandra-story-session-v1')); } catch { return null; } });
 // Best-effort captures: let workers settle first (SwiftShader can stall captures
-// mid-compute); the state assertions above are the actual verification.
+// mid-compute); the state assertions are the actual verification.
 const shot = async (page, name) => {
   await page.waitForTimeout(1500);
   await page.screenshot({ animations: 'disabled', path: `${OUT}/${name}.png`, timeout: 25000 }).catch(() => {});
@@ -102,94 +113,133 @@ const chooseTraining = async (page) => {
   await page.locator('.story-panel').getByRole('button', { name: 'Start the training mission' }).click();
   await page.waitForTimeout(900);
 };
+const pinViaStory = async (page) => {
+  await page.locator('.story-objective').getByRole('button', { name: 'Pin this window & compare' }).click();
+  await page.waitForTimeout(700);
+};
+
+/**
+ * Stub the DEM API at the NETWORK BOUNDARY ONLY (NASA downloads are unavailable in
+ * CI). Everything downstream — frame classification, ME→IAU conversion, import
+ * gating, analysis status, a11y descriptions, export guard — runs live. The explicit
+ * buildRealDem workflow never relies on the auto-real race that broke v1.8 on CI.
+ */
+async function setupRealDemMocks(page) {
+  const SIZE = 129;
+  const elevations = new Array(SIZE * SIZE).fill(0);
+  const source = {
+    filename: 'TEST_FIXTURE_ME.tif', lunar_radius_m: 1737400, elevation_reference_radius_m: 1737400,
+    elevation_reference: 'mean radius', lunar_reference_frame: 'MOON_ME (JPL DE421)', synthetic: false,
+  };
+  const terrainPayload = {
+    mode: 'real', synthetic: false, latitude: -89.5, longitude: 45, radius_km: 5,
+    grid: { size: SIZE, spacing_m: 78.1, order: 'row-major north-to-south', elevations_m: elevations },
+    landing_elevation_m: 0,
+    statistics: { minimum_m: 0, maximum_m: 0, range_m: 0, coverage_percent: 100 },
+    source,
+  };
+  const azimuths = Array.from({ length: 360 }, (_, i) => i);
+  let horizonFrame = 'MOON_ME (JPL DE421)';
+  let horizonCoverage = 100;
+  let horizonCalls = 0;
+  let terrainCalls = 0;
+  const horizonPayload = () => ({
+    latitude: -89.5, longitude: 45, radius_km: 5, horizon_radius_km: 4.5, edge_inset_m: 28.3,
+    sampling_step_m: 20, grid_size: SIZE, grid_spacing_m: 78.1, eye_height_m: 2, azimuth_step_deg: 1,
+    azimuths_deg: azimuths, elevations_deg: azimuths.map(() => 0.5),
+    ray_coverage_percent: azimuths.map(() => horizonCoverage), max_obstacle_range_km: azimuths.map(() => 4),
+    mean_coverage_percent: horizonCoverage, synthetic: false,
+    source: { ...source, lunar_reference_frame: horizonFrame },
+    model: 'ray-marched local horizon', frame_note: 'Test fixture payload.',
+  });
+  await page.route('**/api/config', (r) => r.fulfill({ json: {
+    dem_ready: true, source, dem_error: null, quality_grids: { low: 65, medium: 129, high: 257 },
+    radius_limits_km: [0.5, 20], latitude_convention: 'planetocentric', longitude_convention: '0-360E',
+    synthetic_warning: 'demo', render_coordinates: 'IAU', geometry_model: 'sphere',
+  } }));
+  await page.route('**/api/terrain', (r) => { terrainCalls += 1; return r.fulfill({ json: terrainPayload }); });
+  await page.route('**/api/horizon', (r) => { horizonCalls += 1; return r.fulfill({ json: horizonPayload() }); });
+  const buildRealDem = async () => {
+    await page.waitForSelector('.terrain-lab');
+    // Config arrival marks the backend online (and flips the source select to real).
+    await page.waitForFunction(() => document.querySelector('#terrain-mode')?.value === 'real', null, { timeout: 20000 });
+    await page.locator('#terrain-mode').selectOption('real');
+    await page.locator('.terrain-lab').getByRole('button', { name: 'Build terrain' }).click();
+    // The loaded model must be REAL DEM data before any horizon is computed.
+    await page.waitForFunction(() => window.__CHANDRA_TERRAIN__?.mode === 'real', null, { timeout: 30000 });
+    await page.waitForSelector('text=TEST_FIXTURE_ME.tif', { timeout: 30000 });
+    assert(await page.locator('.terrain-lab').getByText('Real DEM', { exact: false }).count() > 0, 'model identified as real DEM');
+  };
+  return {
+    buildRealDem,
+    setFrame: (f) => { horizonFrame = f; },
+    setCoverage: (c) => { horizonCoverage = c; },
+    calls: () => ({ horizon: horizonCalls, terrain: terrainCalls }),
+  };
+}
 
 try {
-  // ================= PERSONA A · beginner, fresh profile =================
+  // ============ PERSONA A · existing user: isolation + exact restore ============
   {
-    const page = await newPage({ onboarded: false });
+    const page = await newPage();
     await page.goto(BASE, { waitUntil: 'networkidle' });
-    await page.waitForSelector('[role="dialog"]');
-    await page.getByRole('button', { name: 'Skip for now' }).click();
-    await page.waitForSelector('.story-suggestion');
-    await shot(page, '15-story-suggestion');
-    await page.locator('.story-suggestion').getByRole('button', { name: 'Start the briefing' }).click();
-    await page.waitForSelector('.story-panel');
-    assert((await title(page)).includes('First shift'), 'A: ch0 title');
-    assert(await page.locator('.story-panel').getByText('fictional training exercise', { exact: false }).count() > 0, 'A: fiction notice present');
-    await shot(page, '16-story-ch0');
-    await chooseTraining(page);
-    assert((await title(page)).includes('Pick the ground'), 'A: ch1 after training choice');
-    assert(await page.locator('.story-spotlight').count() === 1, 'A: spotlight rings the real catalogue');
-    await shot(page, '17-story-ch1-spotlight');
-
-    // Real catalogue selection
-    await page.locator('.site-item', { hasText: 'Shackleton' }).first().click();
-    await objectiveMet(page);
-    await answerCheck(page, 1);
-    assert(await page.locator('.story-feedback').innerText().then((t) => t.startsWith('Correct.')), 'A: check feedback');
-    await clickNext(page);
-    assert((await title(page)).includes('Follow the Sun'), 'A: ch2');
-
-    // Real time scrubbing
-    const scrub = page.locator('[data-tour="scrubber"]');
-    await setRange(scrub, Number(await scrub.inputValue()) + 2 * 86400000);
-    await objectiveMet(page);
-    await page.waitForFunction(() => document.querySelector('.story-readouts')?.textContent?.includes('Window illumination'), null, { timeout: 30000 });
-    await answerCheck(page, 0);
-    await clickNext(page);
-    assert((await title(page)).includes('Find Earth'), 'A: ch3');
-    assert(await page.locator('.story-note').innerText().then((t) => /NOT an RF link budget/.test(t)), 'A: RF disclaimer prominent');
-    await setRange(scrub, Number(await scrub.inputValue()) + 3 * 86400000);
-    await objectiveMet(page);
-    await answerCheck(page, 1);
-    await clickNext(page);
-    assert((await title(page)).includes('Budget the power'), 'A: ch4');
-
-    // Real settings modal + preset experiment
-    await page.locator('.story-objective').getByRole('button', { name: 'Open Mission settings' }).click();
+    // Build a real user workspace: site + preset + 3 distinct pins + playback.
+    await page.locator('.site-item', { hasText: 'Haworth' }).first().click();
+    await page.locator('[aria-label="Mission parameters"]').click();
     await page.waitForSelector('[role="dialog"]');
     await page.locator('[role="dialog"]').getByRole('button', { name: /Small robotic lander/ }).click();
     await page.waitForTimeout(200);
-    assert(await page.locator('[role="dialog"]').getByLabel('Array area', { exact: false }).inputValue() === '2', 'A: preset applied real config (2 m²)');
     await page.locator('[role="dialog"]').getByRole('button', { name: 'Done' }).click();
-    await objectiveMet(page);
-    await answerCheck(page, 0);
-    await clickNext(page);
-    assert((await title(page)).includes('The slip'), 'A: ch5');
+    const slip = page.locator('[data-tour="slip"]');
+    for (const v of [3, 6, 9]) {
+      await setRange(slip, v);
+      await page.waitForTimeout(500);
+      await page.keyboard.press('p');
+      await page.waitForTimeout(500);
+    }
+    assert(await page.locator('text=3/4 pinned').count() > 0, 'A: three pre-existing user pins');
+    await page.keyboard.press('c'); // back to planner
+    await page.getByRole('button', { name: /^Play/ }).click(); // playback ON
+    await page.waitForTimeout(300);
+    assert(await page.getByRole('button', { name: /^Pause/ }).count() > 0, 'A: user playback running');
 
-    // Real slip slider → live baseline-vs-slipped narrative
-    await setRange(page.locator('[data-tour="slip"]'), 14);
-    await objectiveMet(page);
-    await page.waitForFunction(() => document.querySelector('.story-readouts')?.textContent?.includes('baseline → slipped'), null, { timeout: 40000 });
-    const slipReadout = await page.locator('.story-readouts').innerText();
-    assert(slipReadout.includes('+14.00 days'), 'A: live slip readout');
-    await shot(page, '18-story-ch5-slip');
-    await answerCheck(page, 1);
-    await clickNext(page);
-    assert((await title(page)).includes('battery report'), 'A: ch6');
-    await page.waitForFunction(() => document.querySelector('.story-readouts')?.textContent?.includes('Verdict'), null, { timeout: 40000 });
-    const battery = await page.locator('.story-readouts').innerText();
-    assert(/Generated \/ consumed/.test(battery) && /kWh/.test(battery), 'A: live battery totals');
-    assert(await page.locator('.story-note').innerText().then((t) => /not thermal or spacecraft survival/.test(t)), 'A: energy≠survival note');
-    await answerCheck(page, 1);
-    await clickNext(page);
+    await startFromLauncher(page);
+    assert((await title(page)).includes('First shift'), 'A: ch0');
+    await chooseTraining(page);
+    // ISOLATION: training workspace is clean; the user's 3 pins are preserved, not merged.
+    assert(await page.locator('.site-item.selected', { hasText: 'Connecting Ridge' }).count() > 0, 'A: training site loaded');
+    assert(await page.getByRole('button', { name: /^Play/ }).count() > 0, 'A: playback paused for training');
+    const sess = await getSession(page);
+    assert(sess && sess.user.scenarios.length === 3 && sess.user.playing === true && sess.user.slipDays === 9, 'A: user workspace (3 pins, playback, slip) snapshotted');
+    assert(sess.training.scenarios.length === 0, 'A: isolated training workspace starts empty');
+    await page.keyboard.press('c');
+    await page.waitForTimeout(400);
+    assert(await page.locator('text=0/4 pinned').count() > 0, 'A: user pins invisible inside training');
+    await page.keyboard.press('c');
+    await shot(page, '15-story-isolation');
+
+    // Advance to the comparison chapter; pre-existing pins must not credit it.
+    await skipChapters(page, 6);
     assert((await title(page)).includes('Compare like with like'), 'A: ch7');
-    await page.waitForSelector('text=Scenario comparison', { timeout: 15000 });
-
-    // Two real pins with a real slip change between them
-    await page.locator('.story-objective').getByRole('button', { name: 'Pin this window & compare' }).click();
-    await page.waitForTimeout(700);
-    await setRange(page.locator('[data-tour="slip"]'), 0);
-    await page.waitForTimeout(1200);
-    await page.locator('.story-objective').getByRole('button', { name: 'Pin this window & compare' }).click();
+    await objectiveUnmet(page);
+    assert(await page.locator('.story-panel').getByText('Nothing pinned in this briefing yet', { exact: false }).count() > 0, 'A: 3 user pins earn zero tutorial credit');
+    await pinViaStory(page);
+    await objectiveUnmet(page);
+    await pinViaStory(page); // identical repeat — same site/start/config
+    await objectiveUnmet(page);
+    assert(await page.locator('.story-panel').getByText('One briefing window pinned', { exact: false }).count() > 0, 'A: identical repeat is not a comparison');
+    assert(await page.locator('text=2/4 pinned').count() > 0, 'A: both pins really exist in the matrix');
+    // A genuinely different window completes the pair; credit waits for resolution.
+    await setRange(slip, 7);
+    await page.waitForTimeout(900);
+    await pinViaStory(page);
     await objectiveMet(page);
-    assert(await page.locator('text=2/4 pinned').count() > 0, 'A: two real scenarios pinned');
-    await shot(page, '19-story-ch7-compare');
+    const readouts = await page.locator('.story-readouts').innerText();
+    assert(/Sun \+ Earth/.test(readouts) && /Confidence tiers/.test(readouts), 'A: narrative reads real resolved deltas');
+    await shot(page, '16-story-ch7-compare');
     await answerCheck(page, 0);
     await clickNext(page);
     assert((await title(page)).includes('File the report'), 'A: ch8');
-
-    // Real guarded export
     await page.waitForFunction(() => document.querySelector('.story-readouts')?.textContent?.includes('Samples / effective step'), null, { timeout: 40000 });
     const [download] = await Promise.all([
       page.waitForEvent('download'),
@@ -199,266 +249,405 @@ try {
     await objectiveMet(page);
     await clickNext(page);
     await page.waitForSelector('text=Shift complete');
-    assert(await page.locator('.story-panel').getByText('9 of 9 chapters completed', { exact: false }).count() > 0, 'A: all chapters credited');
-    await shot(page, '20-story-debrief');
+    await page.waitForTimeout(700);
+
+    // EXACT RESTORE on completion: site, slip, config, pins, playback all return.
+    assert(await page.locator('.site-item.selected', { hasText: 'Haworth' }).count() > 0, 'A: user site restored');
+    assert(await slip.inputValue() === '9', 'A: user slip restored');
+    assert(await page.getByRole('button', { name: /^Pause/ }).count() > 0, 'A: user playback restored');
+    assert(await getSession(page) === null, 'A: training session cleared after completion');
+    await page.keyboard.press('c');
+    await page.waitForTimeout(400);
+    assert(await page.locator('text=3/4 pinned').count() > 0, 'A: the user\'s exact 3 pins restored');
+    await page.keyboard.press('c');
+    await page.locator('[aria-label="Mission parameters"]').click();
+    assert(await page.locator('[role="dialog"]').getByLabel('Array area', { exact: false }).inputValue() === '2', 'A: user config restored (2 m² preset)');
+    await page.locator('[role="dialog"]').getByRole('button', { name: 'Done' }).click();
+    await shot(page, '17-story-restored');
     await page.locator('.story-panel').getByRole('button', { name: 'Explore the planner' }).click();
-    await page.waitForTimeout(500);
-    assert(await page.locator('.story-panel').count() === 0, 'A: debrief closes to planner');
+    await page.waitForTimeout(400);
+    assert(await page.locator('.story-panel').count() === 0, 'A: debrief closes');
     const stored = await page.evaluate(() => JSON.parse(window.localStorage.getItem('chandra-story-v1')));
-    assert(stored.status === 'completed' && stored.completed.length === 9, 'A: versioned progress persisted');
-    console.log('PERSONA A (beginner full run) PASSED');
+    assert(stored.status === 'completed', 'A: completion persisted');
+    console.log('PERSONA A (existing user: isolation + new-scenario witness + exact restore) PASSED');
   }
 
-  // ================= PERSONA B · student, deeper + keyboard =================
+  // ============ PERSONA B · export correctness: CSV/blocked never credit ============
+  {
+    const page = await newPage();
+    const dem = await setupRealDemMocks(page);
+    const downloads = [];
+    page.on('download', (d) => downloads.push(d));
+    await page.goto(BASE, { waitUntil: 'networkidle' });
+    await startFromLauncher(page);
+    await chooseTraining(page);
+    // Import the (stubbed) ME-frame DEM so the blocked-export branch is reached
+    // through the GENUINE pipeline: the constant ME→IAU correction is only
+    // validated 2020–2035, so epoch 2040 blocks THIS site (illustrative IAU-frame
+    // sites are correctly NOT epoch-gated — there is no correction to extrapolate).
+    await page.keyboard.press('t');
+    await dem.buildRealDem();
+    await page.locator('.terrain-lab').getByRole('button', { name: 'Compute 360° horizon' }).click();
+    await page.waitForSelector('button:has-text("Use in mission")');
+    await page.locator('.terrain-lab').getByRole('button', { name: 'Use in mission' }).click();
+    await page.waitForTimeout(900);
+    await skipChapters(page, 7);
+    assert((await title(page)).includes('File the report'), 'B: ch8');
+    await page.waitForFunction(() => document.querySelector('.story-readouts')?.textContent?.includes('Samples / effective step'), null, { timeout: 40000 });
+
+    // CSV exports are real downloads but NEVER credit the mission-report objective.
+    for (const label of ['Telemetry timeseries (.csv)', 'Window summary (.csv)']) {
+      await page.getByRole('button', { name: 'Export', exact: true }).click();
+      const [dl] = await Promise.all([
+        page.waitForEvent('download'),
+        page.getByRole('button', { name: label, exact: true }).click(),
+      ]);
+      assert(dl.suggestedFilename().endsWith('.csv'), `B: ${label} downloaded`);
+      await objectiveUnmet(page);
+    }
+    assert(downloads.length === 2, 'B: both CSVs really downloaded');
+
+    // Blocked analysis: the guard refuses the JSON report — no download, no credit.
+    await page.getByLabel('Mission start date (UTC)').fill('2040-01-01');
+    await page.getByLabel('Mission start date (UTC)').blur();
+    await page.waitForFunction(() => document.querySelector('.story-readouts')?.textContent?.includes('FRAME_MODEL_OUTSIDE_VALIDATED_RANGE'), null, { timeout: 40000 });
+    await page.locator('.story-objective').getByRole('button', { name: 'Export mission report (.json)' }).click();
+    await page.waitForTimeout(1200);
+    assert(downloads.length === 2, 'B: blocked analysis never downloads');
+    assert(await page.locator('[role="status"]').innerText().then((t) => /Export blocked/.test(t)).catch(() => false), 'B: refusal explained');
+    await objectiveUnmet(page);
+    assert(await page.locator('.story-nav button', { hasText: 'Finish briefing' }).isDisabled(), 'B: cannot finish on refused/CSV exports');
+    await shot(page, '18-story-export-blocked');
+
+    // Valid window: the JSON report downloads WITH provenance + warnings, and credits.
+    await page.getByLabel('Mission start date (UTC)').fill('2026-09-01');
+    await page.getByLabel('Mission start date (UTC)').blur();
+    await page.waitForFunction(() => document.querySelector('.story-readouts')?.textContent?.includes('Samples / effective step'), null, { timeout: 40000 });
+    const [report] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator('.story-objective').getByRole('button', { name: 'Export mission report (.json)' }).click(),
+    ]);
+    assert(report.suggestedFilename().endsWith('.json'), 'B: JSON report downloaded');
+    const body = readFileSync(await report.path(), 'utf8');
+    const parsed = JSON.parse(body);
+    assert(body.includes('siteProvenance') && body.includes('analysisStatus'), 'B: report carries provenance + analysis status');
+    assert(Array.isArray(parsed.reproducibility?.warnings) && parsed.reproducibility.warnings.length > 0 && body.includes('LOCAL HORIZON'), 'B: report carries honest warnings');
+    await objectiveMet(page);
+    await clickNext(page);
+    await page.waitForSelector('text=Shift complete');
+    await page.locator('.story-panel').getByRole('button', { name: 'Explore the planner' }).click();
+    await page.waitForTimeout(400);
+    assert(await getSession(page) === null, 'B: session cleared on completion');
+    console.log('PERSONA B (export correctness: CSV/blocked never credit, JSON provenance verified) PASSED');
+  }
+
+  // ============ PERSONA C · refresh/resume at ch5 + ch7, corrupt recovery ============
   {
     const page = await newPage();
     await page.goto(BASE, { waitUntil: 'networkidle' });
     await startFromLauncher(page);
-    // Explore first: no training load, no state mutation
+    // Explore-first leaves state untouched; Field Guide resumes at ch0.
     const before = await page.locator('.site-item.selected').innerText();
     await page.locator('.story-panel').getByRole('button', { name: 'Explore first' }).click();
     await page.waitForTimeout(400);
-    assert(await page.locator('.story-panel').count() === 0, 'B: explore-first exits the panel');
-    assert((await page.locator('.site-item.selected').innerText()) === before, 'B: explore-first leaves mission state untouched');
-    // Resume from Field Guide
+    assert(await page.locator('.story-panel').count() === 0, 'C: explore-first exits');
+    assert((await page.locator('.site-item.selected').innerText()) === before, 'C: explore-first leaves state untouched');
     await page.locator('[aria-label="Field Guide"]').click();
-    await page.waitForSelector('[data-tour="story-guide-card"]');
     await page.locator('[data-tour="story-guide-card"]').getByRole('button', { name: 'Resume the briefing' }).click();
     await page.waitForSelector('.story-panel');
-    assert((await title(page)).includes('First shift'), 'B: resumed at ch0');
     await chooseTraining(page);
-    // Keep current region (explicit decision)
-    await page.locator('.story-objective').getByRole('button', { name: 'Use this region' }).click();
+    await skipChapters(page, 4);
+    assert((await title(page)).includes('The slip'), 'C: ch5');
+    await setRange(page.locator('[data-tour="slip"]'), 14);
     await objectiveMet(page);
-    // Go deeper → glossary deep-link → return without progress loss
-    await page.locator('.story-deeper summary').click();
-    assert(await page.locator('.story-term').count() >= 2, 'B: formal definitions render');
-    await page.locator('.story-deeper').getByRole('button', { name: 'Open in the Field Guide glossary' }).click();
-    await page.waitForSelector('.drawer');
-    const q = await page.locator('[aria-label="Search the glossary"]').inputValue();
-    assert(q.length > 0, 'B: glossary pre-filtered from Go deeper');
-    assert(await page.locator('.drawer').getByText('Horizon mask', { exact: false }).count() > 0, 'B: deep-linked term visible');
-    await page.locator('[aria-label="Close field guide"]').click();
-    await page.waitForTimeout(300);
-    assert((await title(page)).includes('Pick the ground'), 'B: chapter preserved after glossary round-trip');
-    assert(await page.locator('.story-objective.met').count() === 1, 'B: objective progress preserved');
     await answerCheck(page, 1);
-    await clickNext(page);
-    // Keyboard: focus moves to the panel heading on chapter change
-    const focusedTag = await page.evaluate(() => document.activeElement?.className || '');
-    assert(String(focusedTag).includes('story-title'), 'B: focus lands on chapter heading');
-    // Keyboard scrubbing via the primary action + native arrow keys on the real range
-    await page.locator('.story-objective').getByRole('button', { name: 'Focus the time scrubber' }).click();
-    const active = await page.evaluate(() => document.activeElement?.getAttribute('data-tour'));
-    assert(active === 'scrubber', 'B: primary action focuses the REAL scrubber');
-    for (let i = 0; i < 35; i++) await page.keyboard.press('ArrowRight');
-    await objectiveMet(page);
-    // Escape pauses (no modal open). Global shortcuts intentionally ignore keys
-    // aimed at inputs, so move focus back to the panel heading first — as a
-    // keyboard user would when returning to the briefing.
-    await page.locator('.story-title').click();
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(300);
-    assert(await page.locator('.story-panel').count() === 0, 'B: Escape pauses the briefing');
-    await startFromLauncher(page);
-    assert((await title(page)).includes('Follow the Sun'), 'B: resume keeps chapter');
-    assert(await page.locator('.story-objective.met').count() === 1, 'B: scrub progress kept after pause/resume');
-    console.log('PERSONA B (student deeper/keyboard) PASSED');
-  }
+    await page.waitForTimeout(600); // allow debounced persist before reload
 
-  // ================= PERSONA C · returning user, never forced =================
-  {
-    const saved = { v: 1, status: 'paused', chapter: 3, completed: [0, 1, 2], answers: { 1: 1, 2: 0 }, suggestionDismissed: true };
-    const page = await newPage({ story: saved });
-    await page.goto(BASE, { waitUntil: 'networkidle' });
+    // REFRESH at ch5: training context (site, slip, chapter, baseline) survives.
+    await page.reload({ waitUntil: 'networkidle' });
     await page.waitForTimeout(800);
-    assert(await page.locator('.story-panel').count() === 0, 'C: returning user is never force-opened');
+    assert(await page.locator('.story-panel').count() === 0, 'C: reload never force-opens the panel');
     assert(await page.locator('.story-suggestion').count() === 0, 'C: no repeated suggestion');
+    assert(await page.locator('[data-tour="story-launch"]').innerText().then((t) => /Resume briefing/.test(t)), 'C: launcher offers Resume');
+    assert(await page.locator('.site-item.selected', { hasText: 'Connecting Ridge' }).count() > 0, 'C: training site restored after refresh');
+    assert(await page.locator('[data-tour="slip"]').inputValue() === '14', 'C: ch5 slip restored exactly');
+    await startFromLauncher(page);
+    assert((await title(page)).includes('The slip'), 'C: resumed at ch5');
+    await objectiveMet(page); // persisted baseline keeps the slip change credited
+    assert(await page.locator('.story-feedback').count() > 0, 'C: ch5 answer survived the refresh');
+    await shot(page, '19-story-refresh-ch5');
+    await clickNext(page); // ch6
+    await answerCheck(page, 1);
+    await clickNext(page); // ch7
+    assert((await title(page)).includes('Compare like with like'), 'C: ch7');
+    await pinViaStory(page);
+    await setRange(page.locator('[data-tour="slip"]'), 0);
+    await page.waitForTimeout(900);
+    await pinViaStory(page);
+    await objectiveMet(page);
+    await page.waitForTimeout(600);
+
+    // REFRESH at ch7: pins + chapter + witness survive; results re-resolve.
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForTimeout(800);
+    assert(await page.locator('.story-panel').count() === 0, 'C: ch7 reload keeps panel closed');
+    const sess7 = await getSession(page);
+    assert(sess7 && sess7.training.scenarios.length === 2, 'C: both training pins persisted');
+    // ch7 restores the COMPARISON view; the planner launcher isn't rendered there,
+    // so resume via the Field Guide — the path that works from every view.
     await page.locator('[aria-label="Field Guide"]').click();
-    await page.waitForSelector('[data-tour="story-guide-card"]');
-    assert(await page.locator('[data-tour="story-guide-card"]').getByText('Paused at CH 03.', { exact: false }).count() > 0, 'C: saved position shown');
     await page.locator('[data-tour="story-guide-card"]').getByRole('button', { name: 'Resume the briefing' }).click();
     await page.waitForSelector('.story-panel');
-    assert((await title(page)).includes('Find Earth'), 'C: resumed at saved chapter 3');
-    // Exit without training loaded this session → no snapshot restore, state untouched
-    const sel = await page.locator('.site-item.selected').innerText();
+    assert((await title(page)).includes('Compare like with like'), 'C: resumed at ch7');
+    assert(await page.locator('text=2/4 pinned').count() > 0, 'C: pins restored into the matrix');
+    await objectiveMet(page); // witness re-resolves the restored pins
+    await answerCheck(page, 0);
+    await clickNext(page); // ch8
+    assert((await title(page)).includes('File the report'), 'C: ch8 after refresh-resume');
+
+    // CORRUPT session: explicit recovery, never silent defaults. The app flushes
+    // its live session on pagehide (correct behavior), so corruption must be
+    // injected by a one-shot init script that runs BEFORE app code on the next
+    // load — simulating real on-disk corruption, not fighting the flush.
+    await page.addInitScript(() => {
+      if (window.sessionStorage.getItem('chandra-corrupt-once')) return;
+      window.localStorage.setItem('chandra-story-session-v1', '{corrupt');
+      window.sessionStorage.setItem('chandra-corrupt-once', '1');
+    });
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForTimeout(800);
+    await startFromLauncher(page);
+    await page.waitForSelector('.story-panel [role="alert"]');
+    assert(await page.locator('.story-panel [role="alert"]').innerText().then((t) => /TRAINING CONTEXT UNAVAILABLE/.test(t)), 'C: corrupt session surfaced honestly');
+    assert(await page.locator('.story-nav button', { hasText: /Next chapter|Finish briefing/ }).count() === 0, 'C: no chapter navigation while context is lost');
+    await shot(page, '20-story-recovery');
+    await page.locator('.story-panel').getByRole('button', { name: 'Rebuild the training mission' }).click();
+    await page.waitForTimeout(900);
+    assert((await title(page)).includes('File the report'), 'C: rebuild keeps the saved chapter');
+    assert(await page.locator('.site-item.selected', { hasText: 'Connecting Ridge' }).count() > 0, 'C: rebuild loads a fresh training mission');
+    assert(await getSession(page) !== null, 'C: rebuild re-establishes the session');
     await page.locator('[aria-label="Exit briefing and restore my previous setup"]').click();
-    await page.waitForTimeout(400);
-    assert((await page.locator('.site-item.selected').innerText()) === sel, 'C: exit without training does not mutate state');
-    // Restart from CH 00 via Field Guide
-    await page.locator('[aria-label="Field Guide"]').click();
-    await page.locator('[data-tour="story-guide-card"]').getByRole('button', { name: 'Restart from CH 00' }).click();
-    await page.waitForSelector('.story-panel');
-    assert((await title(page)).includes('First shift'), 'C: restart returns to ch0');
-    const stored = await page.evaluate(() => JSON.parse(window.localStorage.getItem('chandra-story-v1')));
-    assert(stored.chapter === 0 && stored.completed.length === 0 && stored.suggestionDismissed === true, 'C: restart persisted, suggestion stays dismissed');
-    // Reload: still never auto-opened
+    await page.waitForTimeout(500);
+    assert(await page.locator('.site-item.selected', { hasText: 'Shackleton' }).count() > 0, 'C: exit after rebuild restores the captured workspace');
+    assert(await getSession(page) === null, 'C: exit clears the session');
+
+    // v1.8 progress without any session key: same honest recovery path.
+    await page.evaluate(() => {
+      window.localStorage.removeItem('chandra-story-session-v1');
+      window.localStorage.setItem('chandra-story-v1', JSON.stringify({ v: 1, status: 'paused', chapter: 5, completed: [0, 1, 2, 3, 4], answers: {}, suggestionDismissed: true }));
+    });
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForTimeout(700);
-    assert(await page.locator('.story-panel').count() === 0, 'C: reload never auto-opens the story');
-    assert(await page.locator('.story-suggestion').count() === 0, 'C: reload never re-suggests');
-    console.log('PERSONA C (returning user) PASSED');
+    assert(await page.locator('.story-panel').count() === 0, 'C: v1.8 save never force-opens');
+    await startFromLauncher(page);
+    await page.waitForSelector('.story-panel [role="alert"]');
+    assert(await page.locator('.story-panel').getByText('predates v1.9', { exact: false }).count() > 0, 'C: v1.8 gap explained');
+    await page.locator('.story-panel').getByRole('button', { name: 'Exit the briefing' }).click();
+    await page.waitForTimeout(400);
+    assert(await page.locator('.story-panel').count() === 0, 'C: recovery exit works');
+    console.log('PERSONA C (refresh at ch5/ch7 + corrupt/v1.8 recovery) PASSED');
   }
 
-  // ================= PERSONA D · invalid data, honest refusal =================
+  // ============ PERSONA D · invalid data: honest refusal everywhere ============
   {
     const page = await newPage();
-    const SIZE = 129;
-    const elevations = new Array(SIZE * SIZE).fill(0);
-    const source = {
-      filename: 'TEST_FIXTURE_ME.tif', lunar_radius_m: 1737400, elevation_reference_radius_m: 1737400,
-      elevation_reference: 'mean radius', lunar_reference_frame: 'MOON_ME (JPL DE421)', synthetic: false,
-    };
-    const terrainPayload = {
-      mode: 'real', synthetic: false, latitude: -89.5, longitude: 45, radius_km: 5,
-      grid: { size: SIZE, spacing_m: 78.1, order: 'row-major north-to-south', elevations_m: elevations },
-      landing_elevation_m: 0,
-      statistics: { minimum_m: 0, maximum_m: 0, range_m: 0, coverage_percent: 100 },
-      source,
-    };
-    const azimuths = Array.from({ length: 360 }, (_, i) => i);
-    const horizonPayload = (frame) => ({
-      latitude: -89.5, longitude: 45, radius_km: 5, horizon_radius_km: 4.5, edge_inset_m: 28.3,
-      sampling_step_m: 20, grid_size: SIZE, grid_spacing_m: 78.1, eye_height_m: 2, azimuth_step_deg: 1,
-      azimuths_deg: azimuths, elevations_deg: azimuths.map(() => 0.5),
-      ray_coverage_percent: azimuths.map(() => 100), max_obstacle_range_km: azimuths.map(() => 4),
-      mean_coverage_percent: 100, synthetic: false,
-      source: { ...source, lunar_reference_frame: frame },
-      model: 'ray-marched local horizon', frame_note: 'Test fixture payload.',
-    });
-    let horizonFrame = 'MOON_ME (JPL DE421)';
-    let horizonCalls = 0;
-    let terrainCalls = 0;
-    await page.route('**/api/config', (r) => r.fulfill({ json: {
-      dem_ready: true, source, dem_error: null, quality_grids: { low: 65, medium: 129, high: 257 },
-      radius_limits_km: [0.5, 20], latitude_convention: 'planetocentric', longitude_convention: '0-360E',
-      synthetic_warning: 'demo', render_coordinates: 'IAU', geometry_model: 'sphere',
-    } }));
-    await page.route('**/api/terrain', (r) => { terrainCalls += 1; return r.fulfill({ json: terrainPayload }); });
-    await page.route('**/api/horizon', (r) => { horizonCalls += 1; return r.fulfill({ json: horizonPayload(horizonFrame) }); });
-
-    // Explicit Real-lunar-DEM workflow. A freshly mounted Terrain Lab always starts
-    // with an illustrative SYNTHETIC model; relying on the config-triggered auto-real
-    // build is a race (the CI failure: Compute ran against the synthetic grid, so the
-    // mocked /api/horizon was never called and no import alert could appear).
-    const buildRealDem = async () => {
-      await page.waitForSelector('.terrain-lab');
-      // Config arrival marks the backend online (and flips the source select to real).
-      await page.waitForFunction(() => document.querySelector('#terrain-mode')?.value === 'real', null, { timeout: 20000 });
-      await page.locator('#terrain-mode').selectOption('real');
-      await page.locator('.terrain-lab').getByRole('button', { name: 'Build terrain' }).click();
-      // The loaded model must be REAL DEM data before any horizon is computed.
-      await page.waitForFunction(() => window.__CHANDRA_TERRAIN__?.mode === 'real', null, { timeout: 30000 });
-      await page.waitForSelector('text=TEST_FIXTURE_ME.tif', { timeout: 30000 });
-      assert(await page.locator('.terrain-lab').getByText('Real DEM', { exact: false }).count() > 0, 'D: model identified as real DEM');
-    };
+    const dem = await setupRealDemMocks(page);
 
     await page.goto(BASE, { waitUntil: 'networkidle' });
     await startFromLauncher(page);
     await chooseTraining(page);
-    // Import the (stubbed) ME-frame DEM through the REAL Terrain Lab pipeline
+    // Visit 1: allowlisted ME frame + full coverage imports through the REAL pipeline.
     await page.keyboard.press('t');
-    await buildRealDem();
-    const callsBeforeFirst = horizonCalls;
+    await dem.buildRealDem();
+    const callsBeforeFirst = dem.calls().horizon;
     await page.locator('.terrain-lab').getByRole('button', { name: 'Compute 360° horizon' }).click();
     await page.waitForSelector('button:has-text("Use in mission")');
-    assert(horizonCalls > callsBeforeFirst, 'D: real horizon API actually called (first visit)');
-    assert(terrainCalls > 0, 'D: real terrain API actually called');
+    assert(dem.calls().horizon > callsBeforeFirst, 'D: real horizon API actually called (visit 1)');
+    assert(dem.calls().terrain > 0, 'D: real terrain API actually called');
     const useBtn = page.locator('.terrain-lab').getByRole('button', { name: 'Use in mission' });
     assert(await useBtn.isEnabled(), 'D: allowlisted ME frame + full coverage imports');
     await useBtn.click();
     await page.waitForTimeout(900);
-    assert((await title(page)).includes('Pick the ground'), 'D: story still at ch1');
-    await objectiveMet(page); // site changed to the DEM site
+    await objectiveMet(page); // ch1: site changed to the DEM site
     await answerCheck(page, 1);
     await clickNext(page); // ch2
     await page.waitForFunction(() => document.querySelector('.story-readouts')?.textContent?.includes('Window illumination'), null, { timeout: 40000 });
 
-    // Push the epoch outside the SPICE-validated range via the REAL UTC date input
+    // Epoch 2040: outside the SPICE-validated range → everything gates consistently.
     await page.getByLabel('Mission start date (UTC)').fill('2040-01-01');
     await page.getByLabel('Mission start date (UTC)').blur();
     await page.waitForFunction(() => document.querySelector('.story-readouts')?.textContent?.includes('FRAME_MODEL_OUTSIDE_VALIDATED_RANGE'), null, { timeout: 40000 });
     const blockedText = await page.locator('.story-panel').innerText();
     assert(/blocked/i.test(blockedText), 'D: narrative says blocked');
     assert(/outside that range|only SPICE-validated/.test(blockedText), 'D: actual reason quoted');
-    assert(!/Window illumination/.test(blockedText), 'D: no quantitative readouts while blocked');
-    assert(!/Verdict/.test(blockedText), 'D: no fabricated verdict');
-    // The surrounding instruments must not contradict the block either:
+    assert(!/Window illumination/.test(blockedText) && !/Verdict/.test(blockedText), 'D: no quantitative readouts or verdict while blocked');
     assert(await page.locator('.telemetry-rail .chip', { hasText: 'Visibility blocked' }).count() > 0, 'D: telemetry header gated');
-    assert(await page.locator('.telemetry-rail').getByText('Window viable', { exact: false }).count() === 0, 'D: no Window-viable claim while blocked');
+    assert(await page.locator('.telemetry-rail').getByText('Window viable', { exact: false }).count() === 0, 'D: no Window-viable claim');
     assert(await page.locator('text=Sun visibility blocked').count() > 0, 'D: panorama Sun chip gated');
     assert(await page.locator('text=Earth visibility blocked').count() > 0, 'D: panorama Earth chip gated');
+    // Screen-reader descriptions must not out-claim the visuals (automated label
+    // check — NOT a screen-reader pass; manual checklist lives in the docs).
+    const panoLabel = await page.getByRole('img', { name: /Local horizon panorama/ }).getAttribute('aria-label');
+    assert(/BLOCKED/.test(panoLabel) && !/\bvisible\b/.test(panoLabel) && !/DTE open/.test(panoLabel), 'D: panorama aria-label claims positions only');
+    const demNote = await page.getByRole('note', { name: 'Terrain data status' }).innerText();
+    assert(/FRAME_MODEL_OUTSIDE_VALIDATED_RANGE/.test(demNote), 'D: DEM footer quotes the assessment');
+    const tlLabel = await page.getByRole('img', { name: /Mission timeline/ }).getAttribute('aria-label');
+    assert(/BLOCKED/.test(tlLabel) && !/percent sunlit/.test(tlLabel), 'D: timeline aria-label gated');
+    const mapLabel = await page.getByRole('img', { name: /Stereographic map/ }).getAttribute('aria-label');
+    assert(/unverified/.test(mapLabel), 'D: map aria-label flags azimuth-only vector');
+    // Horizon table: clearance columns withheld, CSV disabled at the blocked epoch.
+    await page.locator('.panel').getByRole('button', { name: 'Horizon table' }).first().click();
+    await page.waitForSelector('[role="dialog"]');
+    assert(await page.locator('[role="dialog"] td', { hasText: 'blocked' }).count() > 0, 'D: horizon table withholds clearances');
+    assert(await page.locator('[role="dialog"]').getByRole('button', { name: 'CSV' }).isDisabled(), 'D: horizon CSV disabled at blocked epoch');
+    await page.locator('[role="dialog"]').getByRole('button', { name: 'Close dialog' }).click();
     await shot(page, '21-story-blocked');
 
-    // Skip to ch8 and attempt the real export — the guard must refuse
-    for (let i = 0; i < 6; i++) { await page.locator('.story-nav').getByRole('button', { name: 'Skip chapter' }).click(); await page.waitForTimeout(250); }
+    // ch8: the export guard refuses the blocked window.
+    await skipChapters(page, 6);
     assert((await title(page)).includes('File the report'), 'D: reached ch8 via skips');
-    await page.waitForSelector('.story-objective');
     let downloaded = false;
     page.on('download', () => { downloaded = true; });
     await page.locator('.story-objective').getByRole('button', { name: 'Export mission report (.json)' }).click();
     await page.waitForTimeout(1200);
     assert(!downloaded, 'D: blocked analysis never downloads');
     assert(await page.locator('[role="status"]').innerText().then((t) => /Export blocked/.test(t)).catch(() => false), 'D: export guard explains the refusal');
-    assert(await page.locator('.story-objective.met').count() === 0, 'D: export objective NOT credited');
+    await objectiveUnmet(page);
     assert(await page.locator('.story-nav button', { hasText: 'Finish briefing' }).isDisabled(), 'D: cannot finish via a refused export');
 
-    // Unknown-frame horizon: the import gate itself must refuse (unavailable control).
-    // Re-run the FULL explicit real-DEM workflow on the fresh mount — never compute
-    // against the initial synthetic model.
-    horizonFrame = 'WEIRD_TEST_FRAME';
+    // Visit 2: UNKNOWN frame — full explicit real workflow, import gate refuses.
+    dem.setFrame('WEIRD_TEST_FRAME');
     await page.keyboard.press('t');
-    await buildRealDem();
-    const callsBeforeSecond = horizonCalls;
+    await dem.buildRealDem();
+    const callsBeforeSecond = dem.calls().horizon;
     await page.locator('.terrain-lab').getByRole('button', { name: 'Compute 360° horizon' }).click();
-    // Scope to the lab: the telemetry rail also shows a role=alert for the 2040 epoch.
     await page.waitForSelector('.terrain-lab [role="alert"]');
-    assert(horizonCalls > callsBeforeSecond, 'D: mocked real horizon endpoint exercised (second visit)');
-    const importAlert = await page.locator('.terrain-lab [role="alert"]').innerText();
-    assert(/FRAME UNVERIFIED/.test(importAlert), 'D: unknown frame identified');
-    assert(/WEIRD_TEST_FRAME/.test(importAlert), 'D: the actual unknown frame is named');
-    assert(/allowlist|confirmed compatible/.test(importAlert), 'D: warning is actionable (how to resolve)');
+    assert(dem.calls().horizon > callsBeforeSecond, 'D: mocked horizon endpoint exercised (visit 2)');
+    const frameAlert = await page.locator('.terrain-lab [role="alert"]').innerText();
+    assert(/FRAME UNVERIFIED/.test(frameAlert) && /WEIRD_TEST_FRAME/.test(frameAlert), 'D: unknown frame identified by name');
+    assert(/allowlist|confirmed compatible/.test(frameAlert), 'D: frame warning actionable');
     assert(await page.locator('.terrain-lab').getByRole('button', { name: 'Use in mission' }).isDisabled(), 'D: unknown-frame import disabled');
-    console.log('PERSONA D (invalid data / honest refusal) PASSED');
+
+    // Visit 3: allowlisted frame but INCOMPLETE ray coverage — import still refuses.
+    await page.keyboard.press('t'); // close lab
+    await page.waitForTimeout(400);
+    dem.setFrame('MOON_ME (JPL DE421)');
+    dem.setCoverage(92);
+    await page.keyboard.press('t');
+    await dem.buildRealDem();
+    const callsBeforeThird = dem.calls().horizon;
+    await page.locator('.terrain-lab').getByRole('button', { name: 'Compute 360° horizon' }).click();
+    await page.waitForSelector('.terrain-lab [role="alert"]');
+    assert(dem.calls().horizon > callsBeforeThird, 'D: mocked horizon endpoint exercised (visit 3)');
+    const covAlert = await page.locator('.terrain-lab [role="alert"]').innerText();
+    assert(/incomplete ray coverage/i.test(covAlert), 'D: incomplete coverage identified');
+    assert(/wider crop|covered location/.test(covAlert), 'D: coverage warning actionable');
+    assert(await page.locator('.terrain-lab').getByRole('button', { name: 'Use in mission' }).isDisabled(), 'D: incomplete-coverage import disabled');
+    console.log('PERSONA D (unverified frame + incomplete coverage + out-of-range epoch + gated a11y) PASSED');
   }
 
-  // ================= PERSONA E · mobile + reduced motion =================
+  // ============ PERSONA E · mobile keyboard/focus/reduced-motion/contrast ============
   {
-    const page = await newPage({ viewport: { width: 390, height: 844 } });
+    const page = await newPage({ onboarded: false, viewport: { width: 390, height: 844 } });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(BASE, { waitUntil: 'networkidle' });
-    await startFromLauncher(page);
-    assert((await title(page)).includes('First shift'), 'E: ch0 on mobile');
-    await chooseTraining(page);
+    // Fresh mobile user: onboarding → suggestion → keyboard-only briefing start.
+    await page.waitForSelector('[role="dialog"]');
+    await focusPress(page.getByRole('button', { name: 'Skip for now' }));
+    await page.waitForSelector('.story-suggestion');
+    await focusPress(page.locator('.story-suggestion').getByRole('button', { name: 'Start the briefing' }));
+    await page.waitForSelector('.story-panel');
+    assert((await title(page)).includes('First shift'), 'E: ch0 via keyboard');
+    await focusPress(page.locator('.story-panel').getByRole('button', { name: 'Start the training mission' }));
+    await page.waitForTimeout(900);
+    assert(await page.evaluate(() => document.activeElement?.className.includes('story-title')), 'E: focus lands on the chapter heading');
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    assert(overflow <= 1, `E: no horizontal overflow (${overflow}px)`);
+    assert(overflow <= 1, `E: no horizontal overflow at 390px (${overflow}px)`);
     const box = await page.locator('.story-panel').boundingBox();
     assert(box && box.x >= 0 && box.x + box.width <= 391 && box.y + box.height <= 845, 'E: panel fits the viewport');
-    // Collapse / expand
-    await page.locator('[aria-label="Collapse briefing panel"]').click();
+    // Collapse / expand with keyboard, aria-expanded tracked.
+    await focusPress(page.locator('[aria-label="Collapse briefing panel"]'));
     assert(await page.locator('.story-panel.collapsed').count() === 1, 'E: collapses to header');
-    await page.locator('[aria-label="Expand briefing panel"]').click();
+    assert(await page.locator('[aria-label="Expand briefing panel"]').getAttribute('aria-expanded') === 'false', 'E: aria-expanded false');
+    await focusPress(page.locator('[aria-label="Expand briefing panel"]'));
     assert(await page.locator('.story-body').count() === 1, 'E: expands again');
-    // Real site selection on mobile
-    await page.locator('.site-item', { hasText: 'Haworth' }).first().click();
+    // Real site selection + check + navigation, all via keyboard.
+    await focusPress(page.locator('.site-item', { hasText: 'Haworth' }).first());
     await objectiveMet(page);
-    await answerCheck(page, 1);
-    await clickNext(page);
-    assert((await title(page)).includes('Follow the Sun'), 'E: ch2 on mobile');
-    // Reduced motion: spotlight must not animate
+    await focusPress(page.locator('.story-opt').nth(1));
+    assert(await page.locator('.story-feedback').innerText().then((t) => t.startsWith('Correct.')), 'E: check answered via keyboard');
+    await focusPress(page.locator('.story-nav button', { hasText: 'Next chapter' }));
+    await page.waitForTimeout(400);
+    assert((await title(page)).includes('Follow the Sun'), 'E: ch2 via keyboard');
+    // Primary action focuses the REAL scrubber; native arrow keys do the work.
+    await focusPress(page.locator('.story-objective').getByRole('button', { name: 'Focus the time scrubber' }));
+    assert(await page.evaluate(() => document.activeElement?.getAttribute('data-tour')) === 'scrubber', 'E: primary focuses the real scrubber');
+    for (let i = 0; i < 35; i++) await page.keyboard.press('ArrowRight');
+    await objectiveMet(page);
+    // Reduced motion: spotlight must not animate.
     const dur = await page.locator('.story-spotlight').evaluate((el) => getComputedStyle(el).transitionDuration);
     assert(dur === '0s', `E: reduced motion disables spotlight transition (${dur})`);
-    const scrub = page.locator('[data-tour="scrubber"]');
-    await setRange(scrub, Number(await scrub.inputValue()) + 86400000);
+    // Contrast: dialogue + objective text ≥ 4.5:1 against the panel background.
+    const ratios = await page.evaluate(() => {
+      const lum = (rgb) => {
+        const [r, g, b] = rgb.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number).map((v) => v / 255)
+          .map((x) => (x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4)));
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      const ratio = (fg, bg) => { const a = lum(fg); const b = lum(bg); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); };
+      const panelBg = getComputedStyle(document.querySelector('.story-panel')).backgroundColor;
+      const line = document.querySelector('.story-line p');
+      const obj = document.querySelector('.story-objective p');
+      return {
+        dialogue: ratio(getComputedStyle(line).color, panelBg),
+        objective: ratio(getComputedStyle(obj).color, panelBg),
+      };
+    });
+    assert(ratios.dialogue >= 4.5 && ratios.objective >= 4.5, `E: text contrast ≥ 4.5 (${ratios.dialogue.toFixed(2)}, ${ratios.objective.toFixed(2)})`);
+    // Modal focus trap + restore (Settings via the header control).
+    await page.locator('[aria-label="Mission parameters"]').click();
+    await page.waitForSelector('[role="dialog"]');
+    assert(await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]')), 'E: focus enters the dialog');
+    for (let i = 0; i < 4; i++) await page.keyboard.press('Tab');
+    assert(await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]')), 'E: Tab stays trapped');
+    await page.keyboard.press('Shift+Tab');
+    assert(await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]')), 'E: Shift+Tab stays trapped');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    assert(await page.locator('[role="dialog"]').count() === 0, 'E: Escape closes the dialog');
+    assert(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')) === 'Mission parameters', 'E: focus restored to the opener');
+    // Escape pauses the briefing (focus off inputs first, as a keyboard user would).
+    await page.locator('.story-title').click();
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    assert(await page.locator('.story-panel').count() === 0, 'E: Escape pauses');
+    await startFromLauncher(page);
+    assert((await title(page)).includes('Follow the Sun'), 'E: resume keeps chapter');
     await objectiveMet(page);
+    // Go deeper → glossary deep-link → return without progress loss.
+    await page.locator('.story-deeper summary').click();
+    await page.locator('.story-deeper').getByRole('button', { name: 'Open in the Field Guide glossary' }).click();
+    await page.waitForSelector('.drawer');
+    assert((await page.locator('[aria-label="Search the glossary"]').inputValue()).length > 0, 'E: glossary deep-linked');
+    await page.locator('[aria-label="Close field guide"]').click();
+    await page.waitForTimeout(300);
+    assert((await title(page)).includes('Follow the Sun'), 'E: chapter preserved after glossary');
+    // Narrow viewport (small phone / zoomed layout): still no horizontal overflow.
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.waitForTimeout(500);
+    const overflow320 = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert(overflow320 <= 1, `E: no horizontal overflow at 320px (${overflow320}px)`);
+    const box320 = await page.locator('.story-panel').boundingBox();
+    assert(box320 && box320.x >= 0 && box320.x + box320.width <= 321, 'E: panel fits 320px');
+    await page.setViewportSize({ width: 390, height: 844 });
     await shot(page, '22-story-mobile');
-    console.log('PERSONA E (mobile/reduced-motion) PASSED');
+    console.log('PERSONA E (mobile keyboard/focus/trap/reduced-motion/contrast/zoom-width) PASSED');
   }
 
   const unexpectedConsole = allConsole.filter((e) => !e.includes('status of 400'));
   assert(allErrors.length === 0, `page errors: ${allErrors.join(' | ')}`);
   assert(unexpectedConsole.length === 0, `console errors: ${unexpectedConsole.join(' | ')}`);
-  console.log('STORY BROWSER TESTS PASSED · personas A–E · screenshots in', OUT);
+  console.log('STORY BROWSER TESTS PASSED · v1.9 personas A–E · screenshots in', OUT);
 } catch (err) {
   console.error(err);
   const last = contexts[contexts.length - 1]?.pages()[0];

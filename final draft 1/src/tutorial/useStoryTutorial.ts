@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Scenario } from '../types/mission';
 import { LAST_CHAPTER, STORY_CHAPTERS } from './story';
 import { comparisonWitness, type ScenarioResolution } from './witnesses';
+import type { SessionBaseline } from './session';
 import {
   advance, back, dismissSuggestion, exitStory, freshProgress, jumpTo, loadProgress,
   pause as pauseProgress, restart as restartProgress, resume as resumeProgress,
@@ -51,27 +52,43 @@ export interface StoryActions {
   notify: (msg: string) => void;
 }
 
-interface WitnessBaseline {
-  selectedId: string;
-  timeMs: number;
-  slipDays: number;
-  configKey: string;
-  reportExportCount: number;
-  /** Scenario IDs present when the chapter became active (audit baseline). */
-  scenarioIds: string[];
-}
+type WitnessBaseline = Omit<SessionBaseline, 'chapter'>;
 
 function storage(): Storage | null {
   try { return window.localStorage; } catch { return null; }
 }
 
-export function useStoryTutorial(signals: StorySignals, actions: StoryActions) {
-  const [progress, setProgress] = useState<StoryProgress | null>(() => loadProgress(storage()));
+export function useStoryTutorial(
+  signals: StorySignals,
+  actions: StoryActions,
+  options: { initialBaseline?: SessionBaseline | null } = {},
+) {
+  const [progress, setProgress] = useState<StoryProgress | null>(() => {
+    const p = loadProgress(storage());
+    // A fresh page mount never has the panel open, so a persisted 'active' status
+    // is stale (e.g. the user refreshed mid-chapter). Normalize to 'paused' so the
+    // launcher/Field Guide honestly offer Resume instead of implying a live panel.
+    return p && p.status === 'active' ? pauseProgress(p) : p;
+  });
   const [panelOpen, setPanelOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
   /** ch1 escape hatch: explicitly keep the current region (a decision, not a fake control). */
   const [keptRegion, setKeptRegion] = useState(false);
-  const baseline = useRef<{ chapter: number; values: WitnessBaseline } | null>(null);
+  // A persisted baseline (refresh mid-chapter) keeps already-done work credited.
+  // Read ONCE at mount — later rebuilds must not resurrect a stale baseline.
+  const [initialBaseline] = useState(() => options.initialBaseline ?? null);
+  const baseline = useRef<{ chapter: number; values: WitnessBaseline } | null>(
+    initialBaseline
+      ? {
+          chapter: initialBaseline.chapter,
+          values: {
+            selectedId: initialBaseline.selectedId, timeMs: initialBaseline.timeMs,
+            slipDays: initialBaseline.slipDays, configKey: initialBaseline.configKey,
+            reportExportCount: initialBaseline.reportExportCount, scenarioIds: initialBaseline.scenarioIds,
+          },
+        }
+      : null,
+  );
 
   const active = panelOpen && progress !== null && (progress.status === 'active' || progress.status === 'completed');
   const chapter = progress ? STORY_CHAPTERS[progress.chapter] : STORY_CHAPTERS[0];
@@ -236,6 +253,7 @@ export function useStoryTutorial(signals: StorySignals, actions: StoryActions) {
     progress, chapter, active, debrief, panelOpen, suggestOpen,
     objectiveMet, answered, canContinue, furthest, lastChapter: LAST_CHAPTER,
     recoveryNeeded, rebuildTraining, comparison,
+    witnessBaseline: baseline.current ? { chapter: baseline.current.chapter, ...baseline.current.values } : null,
     start, replay, suggestAfterOnboarding, dismissSuggestion: dismissSuggestionUi,
     chooseTraining, chooseExplore, answer, next, back: goBack, skip, jump,
     pause, exit, closeDebrief, runPrimary, openDeeper,
