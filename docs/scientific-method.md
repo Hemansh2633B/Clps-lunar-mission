@@ -1,4 +1,4 @@
-# Scientific method & audit notes · CHANDRA // OPS
+# Scientific method · CHANDRA
 
 This document records the physical models, reference frames, validation evidence, and
 **explicit limitations** behind the console. It is written so a reviewer can reproduce
@@ -6,7 +6,7 @@ every number and see exactly where the tool is an engineering heuristic rather t
 certified flight analysis. Nothing here upgrades illustrative or synthetic data into a
 scientific result.
 
-Companion files: `docs/VERIFICATION.md` (executed test evidence), `tests/data/frame-reference.json`
+Companion files: `docs/verification.md` (executed test evidence), `tests/data/frame-reference.json`
 (SPICE validation reference), `backend/lunar_frame.py` and `scripts/generate-frame-constants.py`
 (authoritative frame constants generator).
 
@@ -415,7 +415,7 @@ the timeline description names a blocked status instead of implying "not compute
 yet"; the polar-map Earth vector becomes azimuth-only (neutral color + disclosure);
 the horizon table withholds clearance columns and disables its CSV at blocked
 epochs. Automated label assertions are **not** a screen-reader pass; the manual
-NVDA/VoiceOver protocol in `docs/ACCESSIBILITY_AUDIT.md` is explicitly unexecuted.
+NVDA/VoiceOver protocol in `docs/accessibility.md` is explicitly unexecuted.
 
 ### 12.4 Comparison narrative reads resolved results only
 
@@ -430,7 +430,7 @@ never outranks stronger data. No delta is hardcoded.
 
 ### 12.5 Regional terrain & per-epoch frames — researched, not implemented
 
-`docs/FEASIBILITY_TERRAIN_FRAMES_v1.9.md` documents the authoritative PGDA LOLA
+`docs/implementation-history/v1.9-terrain-frames-feasibility.md` documents the authoritative PGDA LOLA
 products (CRS, datum, effective resolution, NoData) and the NAIF per-epoch
 `PXFORM` method with acceptance plans. Neither data access nor safe validation was
 possible in this environment, so the **LOCAL HORIZON** model and the **constant

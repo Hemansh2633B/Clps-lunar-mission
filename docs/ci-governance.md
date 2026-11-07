@@ -1,8 +1,8 @@
-# CI Governance — CHANDRA v1.10
+# CI governance · CHANDRA
 
-**Date:** 2026-11-07. This document records the exact CI contract, the verified
-action pins, and what the repository owner must configure. Claims here are
-limited to what was actually verified via the GitHub API on the date above.
+**Last verified:** 2026-11-08. This document records the CI contract, the
+verified action pins, and what the repository owner must configure. Claims
+here are limited to what was actually verified via the GitHub API.
 
 ## 1. Required checks (owner action needed)
 
@@ -18,7 +18,7 @@ owner should require **all three** by their exact check names:
 
 **Branch-protection status (verified 2026-11-07; re-checked for v1.10 — still
 `protected: false`, still owner action outstanding):**
-- `GET /repos/Hemansh2633B/Clps-lunar-mission/branches/main` reports
+- `GET /repos/Hemansh2633B/chandra/branches/main` (formerly `Clps-lunar-mission`) reports
   `protected: false`.
 - The branch-protection API returns **403 "Resource not accessible by
   integration"** for this environment's token, so protection can be neither
@@ -79,7 +79,7 @@ commit SHA, update both the SHA and the comment, and let CI prove the change.
 
 ## 5. Local suite contract
 
-Every release run executes, in `final draft 1/`:
+Every release run executes, in the repository root:
 
 ```
 npm run typecheck && npm run build
@@ -89,6 +89,24 @@ npm run test:geometry
 npm run test:parity
 npm run test:browser      # needs npm run dev:full on :5173/:8000
 npm run test:story        # personas A–E, same servers
+npm run test:exports      # export personas A–E, same servers
 ```
 
-Skips are reported as skips in VERIFICATION.md, never as passes.
+Skips are reported as skips in docs/verification.md, never as passes.
+
+## 6. Repository rebrand (2026-11-08)
+
+The application moved from `final draft 1/` to the repository root; the
+workflow's `working-directory` default and path-qualified cache/artifact
+entries were removed accordingly. The three required check names are
+unchanged.
+
+**GitHub rename — owner action outstanding.** The canonical repository name
+is `Hemansh2633B/chandra`. Both `PATCH /repos/Hemansh2633B/Clps-lunar-mission`
+and the GraphQL `updateRepository` mutation return **403 "Resource not
+accessible by integration"** for this environment's token (verified
+2026-11-08), so the rename could not be performed here. The owner must rename
+via Settings → General → Repository name → `chandra`, and set the description
+to "Open-source lunar mission planning and analysis workbench." GitHub
+redirects the old URL after a rename. Until then, clone URLs pointing at
+`chandra` will 404 and the old slug remains canonical.

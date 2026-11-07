@@ -1,13 +1,10 @@
-# Verification evidence · CHANDRA v1.8 (interactive briefing)
+# Verification evidence · CHANDRA
 
-This file records what was actually executed in the Arena sandbox. It distinguishes software-path
-verification from scientific validation, and **passed from skipped** (a skipped SPICE test is never
-reported as a passed validation). The v1.6 audit added independent SPICE frame/ephemeris validation,
-sampling/battery correctness fixes, frame gating, provenance, and export integrity. The **v1.7**
-pass (below) hardened the frame allowlist, transition reliability, event-aware energy integration,
-computation-boundary validation, the catalogue/Artemis context, first-time UX, the guided workflow,
-explicit UTC, worker performance, accessibility, report horizon labeling, and CI. See
-`docs/SCIENTIFIC_METHOD.md` for the method and limits.
+This file records what was actually executed, release by release (most recent
+first). It distinguishes software-path verification from scientific
+validation, and passed from skipped — a skipped SPICE test is never reported
+as a passed validation. See `docs/scientific-method.md` for the method and its
+limits, and `docs/known-issues.md` for open engineering findings.
 
 ## Automated suites
 
@@ -72,7 +69,7 @@ is extrapolated.
   initiated" via `role="status"`; a refused (blocked) export announces the
   refusal; blocked-analysis notices are `role="alert"`; 390 px mobile and
   reduced-motion behavior verified. **No screen-reader pass is claimed** —
-  NVDA/VoiceOver remain an unexecuted manual checklist (ACCESSIBILITY_AUDIT §4).
+  NVDA/VoiceOver remain an unexecuted manual checklist (docs/accessibility.md §4).
 
 Network mocking is confined to the DEM API boundary (same helpers as the story
 suite); all technology under test — engine, guard, exporters, session
@@ -106,7 +103,7 @@ Executed 2026-11-07 in the Arena sandbox on branch `arena/860e2f06-clps-lunar-mi
 | Browser E2E (`npm run test:browser`) | passed — no regressions from the session/a11y/stacking changes |
 | Story E2E (`npm run test:story`) | **v1.9 personas A–E passed** (~600 s): A existing user (3 real pre-pins + preset + playback → isolated empty training workspace, user pins invisible, ch7 refuses pre-existing/identical pins, credits a NEW distinct resolved pair, completion restores site/slip/config/pins/playback exactly, session cleared); B export correctness (real ME-DEM import; two CSV downloads never credit; epoch-2040 blocked analysis never downloads; guard-passing JSON credits only after provenance + warnings verified in the downloaded file); C refresh/resume (ch5 slip + baseline + answer survive reload; ch7 pins + witness re-resolve; corrupt session injected pre-app-load → explicit Rebuild/Exit recovery; v1.8 progress without session → same path; never force-opened); D invalid data (three explicit Real-DEM visits with API-call counters: ME import / WEIRD_TEST_FRAME / 92 % coverage; epoch 2040 gated across narrative, telemetry, chips AND aria-labels, DEM footer, timeline/map descriptions, withheld horizon clearances + disabled CSV; refused export, no credit); E mobile a11y (keyboard-only activation, heading focus, modal trap + focus restore, Escape pause/resume, glossary deep-link, reduced motion, runtime contrast ≥ 4.5 for dialogue/objective/log/scene, 390 px + 320 px no overflow) |
 | Real-DEM smoke (`test:real-dem`) | **not executed** — verification fixture TIF absent in this environment |
-| Manual screen reader | **not executed** — NVDA/VoiceOver protocol recorded in `docs/ACCESSIBILITY_AUDIT.md`; no screen-reader pass claimed |
+| Manual screen reader | **not executed** — NVDA/VoiceOver protocol recorded in `docs/accessibility.md`; no screen-reader pass claimed |
 | Screenshots | `screenshots/15…22-story-*.png` (best-effort under SwiftShader; assertions are the verification) |
 
 **GitHub Actions evidence (queried via API on 2026-11-07):**
@@ -124,14 +121,14 @@ Raw CI log download is blocked in this sandbox (`results-receiver.actions.github
 outside the egress allowlist); job/step metadata was read via `api.github.com` and the
 failure was additionally reproduced experimentally in the sandbox (delayed-API probe:
 mode `synthetic` at compute-click, 0 mocked horizon calls, 0 alerts; fast-API: mode
-`real`, 1 call, alert present). See `docs/CI_GOVERNANCE.md` §4.
+`real`, 1 call, alert present). See `docs/ci-governance.md` §4.
 
 **Defects fixed en route (found by the new tests, not assumed):** ticker marquee
 intercepting Export-dropdown clicks (stacking + pointer-events); stale `active` story
 status after refresh; `--dim` small text below AA (4.32/3.65 → 5.65/4.76); Terrain Lab
 alert text 4.19 → 5.23; panorama/timeline/map aria-labels and the horizon table
-out-claiming the visibility gate. Details: `docs/ACCESSIBILITY_AUDIT.md`,
-`docs/IMPLEMENTATION_REPORT_v1.9.md`.
+out-claiming the visibility gate. Details: `docs/accessibility.md`,
+`docs/implementation-history/v1.9-reliability.md`.
 
 ## v1.8 interactive briefing — executed evidence
 

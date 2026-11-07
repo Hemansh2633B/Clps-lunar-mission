@@ -46,4 +46,4 @@ npm run build
 npm run test:real-dem
 ```
 
-See the root README and `docs/VERIFICATION.md` for Windows instructions, scientific conventions, coordinate handling, tests, limitations, and frame caveats.
+See the root README and `docs/verification.md` for Windows instructions, scientific conventions, coordinate handling, tests, limitations, and frame caveats.

@@ -1,3 +1,12 @@
+> **Historical record — prototype port (pre-v1.7).** This document describes the repository
+> as it stood at that release and is kept unchanged apart from this note. The
+> application has since moved from `final draft 1/` to the repository root, and
+> several documents were renamed: `SCIENTIFIC_METHOD.md` → `docs/scientific-method.md`,
+> `VERIFICATION.md` → `docs/verification.md`, `ACCESSIBILITY_AUDIT.md` →
+> `docs/accessibility.md`, `CI_GOVERNANCE.md` → `docs/ci-governance.md`. Path and
+> branch references below reflect the old layout. For current behavior see the
+> root README and the current docs.
+
 # Prototype → CHANDRA feature port
 
 This document maps every working capability from the repository’s `prototype/` directory into the integrated application in `final draft 1/`. The original prototype is left untouched; the new console keeps its mission-planning workspace and adds the prototype’s terrain tooling as **Terrain Lab**.

@@ -27,7 +27,7 @@
  * descriptions and the export guard all run live in the browser. The deeper blocked
  * statuses unreachable through the UI (import gate fires first) are unit-tested.
  * Automated aria-label checks are NOT a screen-reader pass; see the manual NVDA/
- * VoiceOver checklist in docs/ACCESSIBILITY_AUDIT.md.
+ * VoiceOver checklist in docs/accessibility.md.
  *
  * Run: node scripts/story-browser-test.mjs   (needs npm run dev:full on :5173/:8000)
  */

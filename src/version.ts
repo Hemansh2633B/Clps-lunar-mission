@@ -5,7 +5,7 @@
  * REPORT_SCHEMA_VERSION tracks the JSON mission-report FORMAT and changes ONLY
  * when that format changes. They are deliberately independent: an application
  * release that does not alter the report format must NOT bump the schema version,
- * and a schema change is called out explicitly in docs/SCIENTIFIC_METHOD.md.
+ * and a schema change is called out explicitly in docs/scientific-method.md.
  *
  * Schema history:
  *  - '1.7.0-product' (≤ v1.9): legacy label that conflated product and format.

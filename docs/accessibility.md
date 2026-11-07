@@ -1,6 +1,6 @@
-# CHANDRA v1.9 — Accessibility & Usability Audit
+# Accessibility · CHANDRA
 
-**Date:** 2026-11-07 · **Scope:** planner, Terrain Lab, comparison, briefings,
+**Audit date:** 2026-11-07 (v1.9), extended for v1.10 · **Scope:** planner, Terrain Lab, comparison, briefings,
 modals, exports, mobile layouts. **Identity preserved:** paper-folio (cream paper,
 coral, brass; Fraunces / Outfit / IBM Plex Mono), no added animation.
 
@@ -111,7 +111,7 @@ against the live panel background at runtime and fails below 4.5:1.
 ## 4. Manual screen-reader checklist — **NOT YET EXECUTED**
 
 Run with NVDA + Firefox/Chrome (Windows) and VoiceOver + Safari (macOS/iOS).
-Record pass/fail + SR/version/date in VERIFICATION.md when done. Until then,
+Record pass/fail + SR/version/date in docs/verification.md when done. Until then,
 no screen-reader pass is claimed.
 
 1. **Landmarks & heading order:** navigate by landmark/heading; confirm one h1,
