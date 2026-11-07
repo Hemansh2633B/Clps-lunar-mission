@@ -52,6 +52,9 @@ Executed 2026-11-07 in the Arena sandbox on branch `arena/860e2f06-clps-lunar-mi
 | 42379651272 (post-merge v1.8, push to main) | `03c3522` | quality ✓ · spice-validation ✓ · **browser ✗** at "Run story tutorial E2E" (Persona D timeout; A–C passed, E never ran) — the failure v1.9 fixes |
 | 42383009327 (Phase-1 fix only) | `23c4117` | **all green**, incl. step 10 "Run story tutorial E2E (personas A–E)" — root-cause fix verified on the real runner before further changes |
 | 42389036663 (Phases 2–4 + new personas) | `ccfd8cf` | **all green** (quality + browser with the rewritten personas; SPICE job not yet PR-triggered at this commit) |
+| 42389576252 (a11y + SHA-pinned actions + governance) | `12f4556` | **all green** — pinned checkout v7.0.1 / setup-node v7.1.0 / setup-python v7.1.0 / upload-artifact v7.0.2 proven on the runner |
+| **42391771892 (PR #5, pull_request, final tree)** | `8d777fc` | **all three required jobs green**: quality ✓ · browser ✓ (steps "Run browser E2E" ✓ and "Run story tutorial E2E (personas A–E)" ✓; screenshots uploaded; failure-log step correctly skipped) · **spice-validation ✓ on the PR** (kernels fetched from checksummed mirrors, presence asserted, kernel-gated frame tests executed — not skipped) |
+| 42391720246 (push, same final tree) | `8d777fc` | all green |
 
 Raw CI log download is blocked in this sandbox (`results-receiver.actions.githubusercontent.com`
 outside the egress allowlist); job/step metadata was read via `api.github.com` and the

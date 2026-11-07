@@ -139,7 +139,7 @@ npm run test:parity                           # passed
 npm run test:browser                          # passed
 npm run test:story                            # v1.9 personas A–E passed (~600 s)
 npm version 1.9.0 --no-git-tag-version
-gh run view/list (API)                        # CI evidence: 42379651272 ✗ → 42383009327 ✓ → 42389036663 ✓
+gh run view/list (API)                        # CI: 42379651272 ✗ → 42383009327 ✓ → 42389036663 ✓ → 42389576252 ✓ → PR#5 42391771892 ✓ (all 3 jobs incl. SPICE-on-PR)
 gh api repos/.../releases/latest + commits    # action pin verification
 gh api repos/.../branches/main[/protection]   # protected:false; protection API 403
 ```
@@ -157,8 +157,14 @@ blocked (metadata + local reproduction used instead).
 3. `ccfd8cf` — v1.9 personas A–E + real UI fixes the audit surfaced
 4. `12f4556` — measured contrast fixes, accessibility audit, feasibility research,
    CI governance (SHA pins, SPICE-on-PR, failure logs)
-5. (docs commit) — README/SCIENTIFIC_METHOD/VERIFICATION corrections + this report,
+5. `8d777fc` — README/SCIENTIFIC_METHOD/VERIFICATION corrections + this report,
    version 1.9.0
+6. (evidence commit) — PR #5 run 42391771892 recorded: all three required checks
+   green on the final tree, including the SPICE validation executing for real on
+   the pull request (kernels fetched + presence asserted + frame tests run).
+
+**Pull request:** [#5](https://github.com/Hemansh2633B/Clps-lunar-mission/pull/5)
+against `main` — intentionally **not self-merged**; the owner merges after review.
 
 ## 9. Limitations carried forward (unchanged, disclosed)
 
