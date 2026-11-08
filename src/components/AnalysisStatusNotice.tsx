@@ -1,5 +1,6 @@
 import { ShieldAlert, FlaskConical, Mountain, AlertTriangle, Gauge } from 'lucide-react';
-import type { AnalysisAssessment, AnalysisStatus } from '../types/mission';
+import type { AnalysisAssessment, AnalysisStatus, MissionSummary } from '../types/mission';
+import { energyResolutionDisclosure } from '../engine/analysisStatus';
 
 const STATUS_LABEL: Record<AnalysisStatus, string> = {
   VALID: 'Quantitative analysis',
@@ -55,5 +56,20 @@ export function AnalysisStatusBadge({ analysis }: { analysis: AnalysisAssessment
     <span className="mono" title={STATUS_LABEL[analysis.status]} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 8.5, fontWeight: 700, color, letterSpacing: 0.3 }}>
       <Icon size={10} /> {blocked ? 'BLOCKED' : demo ? 'DEMO' : 'VALID'}
     </span>
+  );
+}
+
+
+/** Persistent, non-blocking warning shared by telemetry and comparison cards. */
+export function EnergyResolutionNotice({ summary, compact }: { summary: MissionSummary | null | undefined; compact?: boolean }) {
+  const disclosure = energyResolutionDisclosure(summary?.integrationDiagnostics);
+  if (!disclosure) return null;
+  return (
+    <div role="note" aria-label="Energy integration resolution warning" style={{ border: '1px solid var(--solar)', background: '#fdf0d5', color: 'var(--brass)', padding: compact ? 8 : 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: compact ? 10.5 : 11.5 }}>
+        <Gauge size={13} style={{ flexShrink: 0 }} /> Coarse energy integration — result uncertain
+      </div>
+      <p style={{ margin: 0, fontSize: compact ? 10 : 11, lineHeight: 1.5 }}>{disclosure.message}</p>
+    </div>
   );
 }

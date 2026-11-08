@@ -8,6 +8,8 @@ import {
   eventsCSV, energyHistoryCSV, horizonCSV, comparisonCSV, comparisonJSON, resolveComparisonRow,
 } from '../src/utils/export';
 import { missionExportGate } from '../src/utils/exportGuard';
+import { energyResolutionDisclosure } from '../src/engine/analysisStatus';
+import { timelineDescription } from '../src/utils/a11y';
 import type { SimulationResult } from '../src/types/mission';
 
 const CODE = 'ENERGY_RESOLUTION_COARSE';
@@ -77,5 +79,23 @@ describe('coarse energy-resolution policy', () => {
     expect(await comparisonCSV([row])).toContain(CODE);
     const json = JSON.parse(await comparisonJSON([row]));
     expect(json.rows[0].warnings.some((w: string) => w.includes(CODE))).toBe(true);
+  });
+});
+
+
+describe('shared coarse-resolution wording', () => {
+  it('uses the integrator status and includes the estimate without claiming a confidence interval', () => {
+    const d = coarse().summary!.integrationDiagnostics!;
+    const notice = energyResolutionDisclosure(d)!;
+    expect(notice.code).toBe(CODE);
+    expect(notice.message).toContain('2.00%');
+    expect(notice.message).toContain('not a confidence interval');
+    expect(energyResolutionDisclosure({ ...d, resolutionStatus: 'adequate' })).toBeNull();
+    expect(energyResolutionDisclosure(undefined)).toBeNull();
+  });
+
+  it('adds the warning to the timeline screen-reader description only when coarse', () => {
+    expect(timelineDescription(coarse().summary, coarse().analysis)).toContain(CODE);
+    expect(timelineDescription(base.summary, base.analysis)).not.toContain(CODE);
   });
 });

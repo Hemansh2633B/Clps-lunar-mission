@@ -28,6 +28,7 @@ import { EPHEMERIS_FRAME, FRAME_VALIDATED_RANGE_LABEL, frameResidualDeg } from '
 import { BATTERY_CHARGE_EFF, BATTERY_DISCHARGE_EFF, terrainDataConfidence } from '../engine/powerComms';
 import { MISSION_LIMITS, sanitizeConfig, type NumericConfigKey } from '../engine/configLimits';
 import { simulationKey } from '../engine/simulation';
+import { energyResolutionDisclosure, ENERGY_RESOLUTION_COARSE } from '../engine/analysisStatus';
 import { APP_VERSION, REPORT_SCHEMA_VERSION, REPORT_SCHEMA_POLICY } from '../version';
 import { analysisFingerprint, shortFingerprint } from './analysisId';
 
@@ -150,6 +151,8 @@ export function reportWarnings(site: LandingSite, sim: SimulationResult | null):
   w.push('Feasibility score is an application-defined heuristic, NOT a NASA methodology.');
   w.push('Earth visibility is geometric line-of-sight only — NOT an RF link budget.');
   w.push('Battery result is an energy-balance model only — NOT thermal/radiation survival.');
+  const energyResolution = energyResolutionDisclosure(sim?.summary?.integrationDiagnostics);
+  if (energyResolution) w.push(energyResolution.message);
   if (sim?.sampling.capped) w.push(`Sampling capped at ${sim.sampling.sampleCount} samples; step coarsened to ${sim.sampling.effectiveStepMinutes.toFixed(2)} min (full span + both endpoints preserved).`);
   return w;
 }
@@ -167,6 +170,7 @@ export function disclosureCodes(site: LandingSite, sim: SimulationResult | null)
   if (sim?.analysis.status === 'FRAME_MODEL_OUTSIDE_VALIDATED_RANGE') codes.push('FRAME_EPOCH_UNVALIDATED');
   if (sim?.sampling.capped) codes.push('SAMPLING_CAPPED');
   if (sim?.transitionDiagnostics.fallbackUsed) codes.push('TRANSITION_FALLBACK');
+  if (energyResolutionDisclosure(sim?.summary?.integrationDiagnostics)) codes.push(ENERGY_RESOLUTION_COARSE);
   return codes;
 }
 

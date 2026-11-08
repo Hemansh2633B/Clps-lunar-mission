@@ -7,6 +7,7 @@ import { siteById } from '../src/data/landingSites';
 import { DAY_MS } from '../src/engine/constants';
 import { analysisFingerprint } from '../src/utils/analysisId';
 import { missionExportGate } from '../src/utils/exportGuard';
+import { canonicalJson } from '../src/engine/canonicalJson';
 import type { LandingSite, MissionConfig } from '../src/types/mission';
 
 const START = Date.parse('2026-12-18T00:00:00Z');
@@ -88,5 +89,23 @@ describe('exact simulation identity', () => {
       expectedSite: withTerrain({ elevations }), expectedConfig: sanitizeConfig(cfg),
     });
     expect(gate).toMatchObject({ ok: false, code: 'stale' });
+  });
+});
+
+
+describe('canonical serializer boundary', () => {
+  it('rejects cycles, sparse arrays and non-JSON values explicitly', () => {
+    const cycle: Record<string, unknown> = {}; cycle.self = cycle;
+    expect(() => canonicalJson(cycle)).toThrow(/cycle/i);
+    expect(() => canonicalJson(new Array(2))).toThrow(/sparse/i);
+    expect(() => canonicalJson({ fn: () => 1 })).toThrow(/does not accept/i);
+    expect(() => canonicalJson({ when: new Date(0) })).toThrow(/plain JSON objects/i);
+  });
+  it('preserves null, omitted properties, string escaping and full number round-trips', () => {
+    expect(canonicalJson({ b: null, a: undefined })).toBe('{"b":null}');
+    expect(canonicalJson('a"\n')).toBe(JSON.stringify('a"\n'));
+    const x = 1.2345678901234567;
+    expect(JSON.parse(canonicalJson({ x })).x).toBe(x);
+    expect(canonicalJson(-0)).toBe('0');
   });
 });

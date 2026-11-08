@@ -5,6 +5,7 @@
  * quantitative mission conclusions. The result is a discriminated AnalysisAssessment.
  */
 import type { AnalysisAssessment, LandingSite } from '../types/mission';
+import type { IntegrationDiagnostics } from './integration';
 import { frameIntervalValidated, FRAME_VALIDATED_RANGE_LABEL } from './lunarFrame';
 
 /**
@@ -73,5 +74,24 @@ export function computationFailed(message: string): AnalysisAssessment {
     status: 'COMPUTATION_FAILED', quantitativeEligible: false, demoEligible: false,
     reason: `The mission computation failed: ${message}`,
     resolution: 'Check the mission dates and parameters, then retry. If it persists, reload the application.',
+  };
+}
+
+/**
+ * Non-blocking numerical-quality disclosure (v1.11). A coarse energy integral
+ * remains exportable for research, but every consumer must show this warning.
+ * It does not change terrain eligibility or data confidence, and the Richardson
+ * estimate is not a statistical confidence interval or a thermal-survival model.
+ */
+
+export const ENERGY_RESOLUTION_COARSE = 'ENERGY_RESOLUTION_COARSE';
+
+export function energyResolutionDisclosure(diagnostics: IntegrationDiagnostics | null | undefined): { code: typeof ENERGY_RESOLUTION_COARSE; message: string } | null {
+  if (diagnostics?.resolutionStatus !== 'coarse') return null;
+  const pct = (diagnostics.relativeEnergyError * 100).toFixed(2);
+  const kwh = diagnostics.estimatedEnergyErrorKWh.toFixed(4);
+  return {
+    code: ENERGY_RESOLUTION_COARSE,
+    message: `${ENERGY_RESOLUTION_COARSE}: estimated relative integration error is at least 1% (${pct}% here; Richardson estimate ${kwh} kWh, not a confidence interval). Energy totals, battery SOC and deficit hours may shift at this resolution. Treat the energy verdict as uncertain; compare shorter windows or alternative configurations and inspect the quadrature diagnostics. Export remains available with this warning. This does not model thermal/radiation survival.`,
   };
 }
