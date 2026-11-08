@@ -1,5 +1,5 @@
 /**
- * CHANDRA v1.10 — scientific-export browser personas (real UI, real downloads).
+ * CHANDRA v1.11 — scientific-export browser personas (real UI, real downloads).
  *
  * Persona A · Scientist: runs an analysis, exports JSON + timeseries + events +
  *   energy history, and RECONCILES the exported energy trajectory with the
@@ -190,7 +190,7 @@ try {
     await selectSite(page, 'de Gerlache Rim 2');
     await resolved(page);
     const report = JSON.parse((await exportViaMenu(page, 'json')).body);
-    assert(report.applicationVersion === '1.10.0', 'A: report carries the application version');
+    assert(report.applicationVersion === '1.11.0', 'A: report carries the application version');
     assert(report.reportSchemaVersion === '2.0.0' && report.reportSchemaVersion !== report.applicationVersion, 'A: independent report schema version');
     assert(/^[0-9a-f]{64}$/.test(report.analysisFingerprint), 'A: SHA-256 analysis fingerprint');
     assert(report.timeReference === 'UTC' && report.reproducibility.siteProvenance.siteId === 'de-gerlache-rim-2', 'A: UTC + site identity');
@@ -220,7 +220,7 @@ try {
     const ts = parseCSV((await exportViaMenu(page, 'timeseries')).body);
     assert(ts.rows.length === report.reproducibility.sampling.sampleCount, 'A: timeseries sample count matches');
     assert(ts.rows.every((r) => r.analysis_fingerprint === report.analysisFingerprintShort && r.analysis_status === 'ILLUSTRATIVE'), 'A: timeseries provenance on every row');
-    await shot(page, 'v110-a-scientist-reconciled');
+    await shot(page, 'v111-a-scientist-reconciled');
     console.log('PERSONA A (scientist: JSON + timeseries + events + energy exported and RECONCILED with the summary) PASSED');
   }
 
@@ -277,7 +277,7 @@ try {
     const blockedRow = csv.rows.find((r) => r.resolution_state === 'BLOCKED');
     assert(blockedRow && blockedRow.illumination_pct === '' && blockedRow.score === '', 'B: blocked row is NOT a zero-valued valid case');
     assert(csv.rows.every((r) => r.resolution_state !== ''), 'B: no blank implicit statuses');
-    await shot(page, 'v110-b-comparison-states');
+    await shot(page, 'v111-b-comparison-states');
     console.log('PERSONA B (comparison: valid/blocked rows exported with explicit states, never zero-filled) PASSED');
   }
 
@@ -374,7 +374,7 @@ try {
     assert(await getSession(page) === null, 'C: oversized payload never applied and is cleared');
     await page.locator('[data-tour="story-launch"]').click();
     await page.waitForSelector('text=TRAINING CONTEXT UNAVAILABLE');
-    await shot(page, 'v110-c-persisted-recovery');
+    await shot(page, 'v111-c-persisted-recovery');
     console.log('PERSONA C (persisted state: custom sites survive reload, v1→v2 migration, out-of-range + oversized rejected with recovery) PASSED');
   }
 
@@ -418,7 +418,7 @@ try {
     assert(me.summary.scoreBreakdown.heuristic === true, 'D: even measured terrain scores remain heuristic (confidence ≠ performance)');
     const meEvents = (await exportViaMenu(page, 'events')).body;
     assert(meEvents.split('\n')[0].includes('analysis_fingerprint'), 'D: events CSV carries provenance for the measured analysis');
-    await shot(page, 'v110-d-confidence-provenance');
+    await shot(page, 'v111-d-confidence-provenance');
     console.log('PERSONA D (data confidence: illustrative/synthetic/measured exports each carry provenance; confidence ≠ performance) PASSED');
   }
 
@@ -459,7 +459,7 @@ try {
     const refusal = await toastText(page);
     assert(refusal.includes('blocked') || refusal.includes('BLOCKED') || refusal.includes('FRAME_MODEL'), 'E: refusal reason announced in the live region');
     assert(await page.locator('[role="alert"]').count() > 0, 'E: blocked-analysis notice present');
-    await shot(page, 'v110-e-refusal-announced');
+    await shot(page, 'v111-e-refusal-announced');
 
     // Mobile layout + reduced motion: export controls remain reachable.
     const mob = await newPage({ viewport: { width: 390, height: 844 } });
@@ -471,18 +471,18 @@ try {
     await mExport.click();
     assert(await mob.getByRole('button', { name: EXPORT_LABELS.energy, exact: true }).count() > 0, 'E: energy-history export reachable on mobile');
     await mob.keyboard.press('Escape');
-    await shot(mob, 'v110-e-mobile-390');
+    await shot(mob, 'v111-e-mobile-390');
     console.log('PERSONA E (accessibility: keyboard initiation + refusal announcements, blocked notices, mobile + reduced motion) PASSED');
   }
 
   const realErrors = allConsole.filter((m) => !/Failed to load resource.*\b(400|404)\b/.test(m) && !/favicon/.test(m));
   assert(allErrors.length === 0, `no page errors (got: ${allErrors.slice(0, 3).join(' | ')})`);
   assert(realErrors.length === 0, `no unexpected console errors (got: ${realErrors.slice(0, 3).join(' | ')})`);
-  console.log(`\nALL v1.10 EXPORT PERSONAS (A–E) PASSED in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
+  console.log(`\nALL v1.11 EXPORT PERSONAS (A–E) PASSED in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 } catch (err) {
   console.error(String(err));
   for (const ctx of contexts) {
-    for (const p of ctx.pages()) await p.screenshot({ path: `${OUT}/v110-failure-${Date.now()}.png`, timeout: 10000 }).catch(() => {});
+    for (const p of ctx.pages()) await p.screenshot({ path: `${OUT}/v111-failure-${Date.now()}.png`, timeout: 10000 }).catch(() => {});
   }
   process.exitCode = 1;
 } finally {

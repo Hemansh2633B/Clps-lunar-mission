@@ -1,5 +1,5 @@
 /**
- * Analysis identity for v1.10 exports.
+ * Analysis identity for scientific exports (exact canonical key since v1.11).
  *
  * The fingerprint is SHA-256 over EXACTLY the `simulationKey()` string used by
  * useSimulation and the simulation cache — one source of truth, never a second

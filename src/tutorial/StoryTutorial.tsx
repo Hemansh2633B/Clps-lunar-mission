@@ -138,7 +138,7 @@ export function StoryTutorial({ controller, world, timeMs }: PanelProps) {
                 <p>
                   Your saved place is chapter {chapter.id}, but the isolated training workspace could not be
                   restored — storage was cleared or corrupted, this save predates v1.9 session snapshots, or it
-                  failed v1.10 validation (mission settings outside the supported ranges, inconsistent terrain
+                  failed session validation (oversized payload, mission settings outside the supported ranges, inconsistent terrain
                   frame metadata, or duplicate/dangling references). Invalid values are never silently clamped
                   or partially applied. Resuming on the current planner state would misreport your progress, so
                   the briefing will not pretend. Rebuild a fresh training mission (your current setup is
