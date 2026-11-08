@@ -1,0 +1,73 @@
+name: Real-DEM fixture smoke (optional)
+
+# Optional software-path verification, NOT a required branch-protection check.
+# It fetches a small third-party LOLA-derived downsample from GitHub (not NASA)
+# and exercises projected-DEM loading → crop → horizon → mission import.
+# The fixture is gap-filled and is NOT a flight or science product; see
+# scripts/fetch-lola-verification-fixture.py and docs/verification.md.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-dem-fixture:
+    name: Real-DEM fixture smoke (third-party downsample, software only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.11'
+      - name: Install Node dependencies
+        run: npm ci
+      - name: Install Python dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements-dev.txt
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Fetch software verification fixture (GitHub derivative, not NASA)
+        run: .venv/bin/python scripts/fetch-lola-verification-fixture.py
+      - name: Production build
+        run: npm run build
+      - name: Start backend with the verification DEM
+        run: |
+          .venv/bin/python -m backend.server --dem-config data/verification/lola_verification_config.json --port 8001 > /tmp/real-dem-api.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8001/api/health >/dev/null 2>&1; then
+              echo "real-DEM API up"; break
+            fi
+            sleep 2
+          done
+          curl -sf http://localhost:8001/api/health >/dev/null || (echo "real-DEM API failed"; cat /tmp/real-dem-api.log; exit 1)
+      - name: Run real-DEM browser smoke
+        env:
+          CHANDRA_BROWSER_CI: '1'
+          BASE_URL: http://localhost:8001/
+        run: npm run test:real-dem
+      - name: Upload fixture provenance and screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: real-dem-fixture-evidence
+          path: |
+            data/verification/PROVENANCE.json
+            data/verification/lola_verification_config.json
+            screenshots/09-real-dem-lab.png
+            screenshots/10-real-dem-mission-site.png
+          if-no-files-found: warn
+      - name: Upload API log on failure
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: real-dem-api-log
+          path: /tmp/real-dem-api.log
+          if-no-files-found: warn
