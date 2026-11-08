@@ -116,6 +116,9 @@ Python tests gated on SPICE kernels skip (and report as skipped) when kernels
 are absent. The CI `spice-validation` job fetches checksummed kernel mirrors
 and runs them for real. `npm run test:real-dem` additionally requires the
 verification fixture described in [verification.md](docs/verification.md).
+An optional, manually dispatched workflow (`.github/workflows/real-dem-fixture.yml`)
+fetches that third-party software fixture and runs the smoke; it is not a
+required CI check and is not a science-product validation.
 
 CI (`.github/workflows/ci.yml`) runs three jobs: quality (typecheck, build,
 unit, geometry, parity, Python), browser E2E (all three Playwright suites),
@@ -134,9 +137,10 @@ flowchart LR
 ```
 
 Window simulations run in a dedicated Web Worker with a 36-entry LRU cache;
-results are keyed to an input-identity fingerprint, and the export guard
-re-checks that identity before any download (the key currently rounds some
-inputs — see [known-issues.md](docs/known-issues.md)). The backend is optional and only serves
+results are keyed to an exact canonical input identity (full-precision site,
+millisecond window and config; v1.11), and the export guard re-checks that same
+identity before any download. The SHA-256 fingerprint hashes the canonical key;
+values changed across v1.11 while the report schema stayed 2.0.0. The backend is optional and only serves
 DEM extraction and horizon computation — all mission science runs client-side.
 
 Component responsibilities and data flow: [docs/architecture/overview.md](docs/architecture/overview.md).
@@ -185,17 +189,20 @@ Full method, validation evidence and error analysis:
 
 ## Project status
 
-Current release: **1.10.0** (scientific exports, reproducibility and session
-integrity). The unit, geometry, parity, Python, and all three browser E2E
-suites pass; executed evidence per release is recorded in
-[docs/verification.md](docs/verification.md). The real-DEM browser test runs
-only when its fixture is present and is reported as not run otherwise.
-Manual screen-reader testing (NVDA/VoiceOver) has not been executed; the
-checklist in [docs/accessibility.md](docs/accessibility.md) is explicit about
-that.
+Current release: **1.11.0** (integrity release: exact analysis identity,
+pre-parse session size cap, coarse-energy disclosure). Executed evidence per
+release is recorded in [docs/verification.md](docs/verification.md); skipped and
+not-run gates are never reported as passes. The real-DEM browser test runs only
+when its fixture is present and is reported as not run otherwise. Manual
+screen-reader testing (NVDA/VoiceOver) has not been executed; the protocol and
+expected results are in
+[docs/accessibility-manual-protocol.md](docs/accessibility-manual-protocol.md).
 
-Open engineering findings (analysis-identity rounding, session size cap,
-coarse-resolution disclosure) are tracked in [docs/known-issues.md](docs/known-issues.md).
+The three v1.10 priority-0 findings (identity rounding, session size cap,
+coarse-resolution disclosure) are closed in
+[docs/known-issues.md](docs/known-issues.md). The landing/workspace product
+redesign is specified, not yet shipped, in
+[docs/product-design.md](docs/product-design.md).
 
 Release history and implementation reports:
 [docs/implementation-history/](docs/implementation-history/README.md).

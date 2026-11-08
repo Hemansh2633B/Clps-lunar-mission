@@ -1,6 +1,6 @@
 # CI governance · CHANDRA
 
-**Last verified:** 2026-11-08. This document records the CI contract, the
+**Last verified:** 2026-11-08 (rebrand); v1.11 metadata re-read in §7. This document records the CI contract, the
 verified action pins, and what the repository owner must configure. Claims
 here are limited to what was actually verified via the GitHub API.
 
@@ -11,15 +11,15 @@ owner should require **all three** by their exact check names:
 
 1. `Typecheck · build · unit · geometry · parity · Python`
 2. `Browser E2E (mission · terrain · space · onboarding)` — includes the story
-   tutorial personas A–E **and the v1.10 scientific-export personas A–E** as
+   tutorial personas A–E **and the v1.11 scientific-export personas A–E** as
    mandatory steps (any suite failing fails the job).
 3. `Independent SPICE validation (fetched kernels)` — v1.9 runs this on every
    pull request as well as pushes to `main` and manual dispatch.
 
-**Branch-protection status (verified 2026-11-07; re-checked for v1.10 — still
-`protected: false`, still owner action outstanding):**
-- `GET /repos/Hemansh2633B/chandra/branches/main` (formerly `Clps-lunar-mission`) reports
-  `protected: false`.
+**Branch-protection status (verified 2026-11-07; re-checked for v1.10 and
+v1.11 — still `protected: false`, still owner action outstanding):**
+- `GET /repos/Hemansh2633B/Clps-lunar-mission/branches/main` reports
+  `protected: false` (v1.11 re-read; the rename has not happened).
 - The branch-protection API returns **403 "Resource not accessible by
   integration"** for this environment's token, so protection can be neither
   enabled nor read in detail from here. **No claim is made that protection is
@@ -94,6 +94,21 @@ npm run test:exports      # export personas A–E, same servers
 
 Skips are reported as skips in docs/verification.md, never as passes.
 
+Optional, not required checks and not part of every release battery:
+
+```
+npm run bench:identity    # canonical-key sanity benchmark, no CI threshold
+npm run test:real-dem     # needs the fetched verification fixture + backend :8001
+```
+
+`.github/workflows/real-dem-fixture.yml` is a **workflow_dispatch-only** optional
+smoke job. It fetches the third-party gap-filled downsample from GitHub, builds,
+starts the backend with that fixture and runs the real-DEM browser smoke. It is
+not one of the three required branch-protection checks and does not validate the
+source datum/frame as a science product. The equivalent local smoke was executed
+for v1.11 (see verification.md); the workflow itself has not been dispatched in
+GitHub Actions from this environment.
+
 ## 6. Repository rebrand (2026-11-08)
 
 The application moved from `final draft 1/` to the repository root; the
@@ -110,3 +125,29 @@ via Settings → General → Repository name → `chandra`, and set the descript
 to "Open-source lunar mission planning and analysis workbench." GitHub
 redirects the old URL after a rename. Until then, clone URLs pointing at
 `chandra` will 404 and the old slug remains canonical.
+
+
+## 7. v1.11 GitHub metadata re-read (owner actions still outstanding)
+
+Read-only GitHub API checks during the v1.11 integrity work returned:
+
+- `full_name`: `Hemansh2633B/Clps-lunar-mission` (rename to `chandra` **not** done)
+- `description`: `keep working ` (not the proposed product description)
+- `default_branch`: `main`
+- `main.protected`: `false`
+- local `origin`: `https://github.com/Hemansh2633B/Clps-lunar-mission.git`
+
+No rename, description edit or branch-protection write was attempted again after
+the earlier 403s; this environment's token cannot perform them. Owner checklist:
+
+1. Settings → General → Repository name → `chandra`; description →
+   `Open-source lunar mission planning and analysis workbench.`
+2. Update local remote: `git remote set-url origin https://github.com/Hemansh2633B/chandra.git`.
+3. Settings → Branches → Add rule for `main` → require the three exact checks:
+   - `Typecheck · build · unit · geometry · parity · Python`
+   - `Browser E2E (mission · terrain · space · onboarding)`
+   - `Independent SPICE validation (fetched kernels)`
+4. Re-read `GET /repos/Hemansh2633B/chandra` and
+   `GET /repos/Hemansh2633B/chandra/branches/main` before claiming success.
+5. Optional: choose and add a LICENSE; enable a static demo host only after the
+   base-path asset fixes in `docs/product-design.md` are implemented and verified.

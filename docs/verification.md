@@ -6,20 +6,82 @@ validation, and passed from skipped — a skipped SPICE test is never reported
 as a passed validation. See `docs/scientific-method.md` for the method and its
 limits, and `docs/known-issues.md` for open engineering findings.
 
+## v1.11.0 integrity release — executed evidence
+
+Executed on branch `arena/df057ecf-clps-lunar-mission` from the merged v1.10
+base `57e4c3c`. `APP_VERSION` is **1.11.0**; `REPORT_SCHEMA_VERSION` remains
+**2.0.0**. The three v1.10 priority-0 findings are closed in
+[known-issues.md](known-issues.md). Analysis fingerprint **values** change
+because the canonical key no longer rounds; the opaque fingerprint field and
+report format do not change.
+
+| Gate | Command | Executed result |
+|---|---|---|
+| Dependencies | `npm ci`; Python `.venv` + `requirements-dev.txt` | clean; 0 npm vulnerabilities |
+| Typecheck / build | `npm run typecheck && npm run build` | clean; React / Three / ephemeris remain split chunks |
+| Unit suites | `npm test` | **328 passed, 32 files** (adds analysis-identity, session-size, energy-resolution-disclosure and cache-collision regressions) |
+| Geometry | `npm run test:geometry` | passed |
+| TS ↔ Python horizon parity | `npm run test:parity` | passed |
+| Python (ordinary, no kernels) | `npm run test:python` | **92 passed, 4 skipped** — the 4 SPICE-kernel-gated tests are skips, not passes |
+| Independent SPICE validation | fetch kernels + `pip install spiceypy`; `pytest -q -rs`; `pytest tests/python/test_lunar_frame.py -q -rs` | kernels fetched from the checksummed GitHub mirrors (`data/kernels/PROVENANCE.json`, git-ignored); full pytest **96 passed**; frame suite **26 passed** |
+| Mission / Terrain / Space browser E2E | `npm run test:browser` | passed (console, Terrain Lab, Space views, mobile) |
+| Story briefing E2E | `npm run test:story` | **personas A–E passed** under the v1.11 session/export code |
+| Scientific-export E2E | `npm run test:exports` | **personas A–E passed, 567 s** on the clean re-run. First clean attempt passed A–C, then Persona D hit the known 20 s Terrain Lab `#terrain-mode === 'real'` SwiftShader-load flake; re-run passed with no source/test expectation change and no timeout lengthened. Persona C now also injects an 800,001-character session and asserts the size-specific rejection + Rebuild/Exit. |
+| Real-DEM software fixture smoke | fetch fixture; backend `:8001`; `npm run test:real-dem` | **passed** against the third-party gap-filled verification downsample (software path only — not a science product). First two attempts timed out because the first-run welcome modal trapped the `t` shortcut; the harness now seeds `chandra-onboarded-v1` (setup fix, no assertion removed, no timeout lengthened). |
+| Canonical-key sanity benchmark | `npm run bench:identity` | Node v22.22.3; 3,601 bins; 1,000 calls; key length 25,586 chars; median **1.0109 ms**, p95 **1.8401 ms**; 36-entry LRU key storage ≈ **1.76 MiB**. Optional sanity check, not a CI gate or performance guarantee. |
+| Manual screen-reader protocol | NVDA / VoiceOver | **NOT EXECUTED** — protocol + expected results in [accessibility-manual-protocol.md](accessibility-manual-protocol.md); no screen-reader pass claimed |
+| Optional real-DEM workflow | `.github/workflows/real-dem-fixture.yml` | added as `workflow_dispatch` only; **not executed in GitHub Actions here**. The equivalent local smoke above passed. |
+| Static demo deploy | — | **not deployed**; base-path asset blockers and owner steps recorded in [product-design.md](product-design.md) |
+
+### What the new regressions prove
+
+- **Exact identity:** elevation +1e-4°, coordinate +1e-6°, azimuth offset,
+  +1 ms / +1000 ms windows, terrain metadata and config edits produce distinct
+  canonical keys; property order is stable; non-finite/sparse/cyclic inputs are
+  rejected; the worker cache posts separate requests and the export guard
+  refuses near-identical terrain substitution; the SHA-256 fingerprint consumes
+  the same key. LRU stays 36.
+- **Session size:** 800,001 UTF-16 code units are rejected before `JSON.parse`
+  (spy-verified), exactly-800,000 valid v1 migration is accepted, save preflight
+  refuses oversized writes, storage failures are returned, and boot shows a
+  persistent dismissible notice. Structural validation/migration are unchanged.
+- **Coarse energy:** `ENERGY_RESOLUTION_COARSE` appears in JSON warnings, all
+  five mission CSV disclosure columns, comparison CSV/JSON warnings, telemetry
+  and comparison notices, and the timeline a11y description; converged/adequate
+  results are not flagged. The wording names the ≥1% threshold and the
+  Richardson estimate as not a confidence interval / not thermal survival.
+
+### Honesty notes
+
+- Browser suites were run against the live dev stack with **no concurrent
+  repository edits**; Vite HMR/page-reload events from editing watched files
+  during a run invalidate that attempt. Interrupted attempts are not counted.
+- The real-DEM fixture is a third-party bilinear downsample whose invalid source
+  pixels were filled by the derivative author. Passing the smoke verifies
+  loading/cropping/horizon/import software paths, **not** the source datum,
+  frame, NoData coverage or shadow science. Fixture provenance is recorded in
+  `data/verification/PROVENANCE.json` (git-ignored).
+- `spiceypy` is an optional validation dependency installed for the kernel-gated
+  run (the CI `spice-validation` job already installs it). Ordinary
+  `requirements-dev.txt` runs still report the 4 frame tests as skipped.
+- Repository owner actions remain outstanding: rename to `chandra`, product
+  description, and branch protection with the three exact checks. Read-only
+  metadata re-read: `Hemansh2633B/Clps-lunar-mission`, `main.protected = false`.
+
 ## Automated suites
 
 | Suite | Command | Result |
 |---|---|---|
 | TypeScript typecheck | `npm run typecheck` | clean |
 | Production build | `npm run build` | clean; React / Three / ephemeris split into separate chunks |
-| Engine + SPICE-reference validation + frame allowlist + transition stress + event-aware energy + analysis status + sampling/battery + catalogue + presets + explanations + UTC + workflow + simulation client + export + DEM-profile + vehicle/geo + story chapter/progress/narrative unit tests | `npm test` | **300 passed** (Vitest, 29 files — v1.10 adds export-provenance, comparison-export, session-validation and output-consistency suites on top of the v1.9 witness/session/export-guard/a11y suites) |
-| Backend / DEM / horizon / downloader / API errors / lunar-frame module | `npm run test:python` | **92 passed, 4 skipped** (pytest). The 4 skips are the SPICE-kernel-gated frame tests (kernels not fetched in the ordinary run) — **skipped, not passed**; the optional CI `spice-validation` job fetches kernels and runs them for real. |
+| Engine + SPICE-reference validation + frame allowlist + transition stress + event-aware energy + analysis status + sampling/battery + catalogue + presets + explanations + UTC + workflow + simulation client + export + DEM-profile + vehicle/geo + story chapter/progress/narrative + v1.11 identity/session/coarse-resolution unit tests | `npm test` | **328 passed** (Vitest, 32 files) |
+| Backend / DEM / horizon / downloader / API errors / lunar-frame module | `npm run test:python` | **92 passed, 4 skipped** ordinary (kernel-gated tests skipped, not passed); with fetched kernels + spiceypy the full suite is **96 passed** and the frame suite **26 passed** (v1.11 executed evidence above). |
 | Geometry checks | `npm run test:geometry` | passed: curvature, pole coordinates, Sun directions, exact landing origin, shadow casting, NoData topology, synthetic demo, horizon ray-marching |
 | Horizon parity | `npm run test:parity` | passed: TypeScript and Python ray-marchers agree on elevations, coverage, edge inset, obstacle ranges |
 | Mission + Terrain Lab + Space views browser E2E | `npm run test:browser` | passed: catalog, Apollo/far-side, comparison, educator, custom site, modal keyboard guard/focus, export (blocked while computing), playback; Terrain Lab orbit drag, keyboard orbit, top/oblique presets, inspection pin, exaggeration, shadow pixel brightening, Sun extremes, all grid qualities, radius, horizon CSV/import, real-mode no-DEM safeguard, 390 px mobile layout; **Space views**: planet markers/labels, time-lapse clock + sub-solar sweep, south-pole preset, fleet stack/HLS/CLPS switching, stage separation, engine plume, hover part callout, view close; **v1.7 features**: first-run onboarding offers demo / real-DEM choice and dismisses cleanly; guided six-step workflow opens, shows six steps and advances; chart text alternatives (panorama/timeline/polar-map `role="img"`) and a labelled keyboard time scrubber; **2024 Regions** tab shows exactly nine region-approximate regions; explicit **UTC date + time** mission-start fields drive recompute; persistent provenance indicator; heuristic score breakdown + "not an RF link budget" disclosure |
-| Real-DEM browser smoke | `npm run test:real-dem` | passed historically against the verification fixture below; **not executed in the v1.9 run** (fixture TIF absent from this environment — reported as not run, never as passed) |
-| THE 14-DAY WINDOW story E2E (v1.9 personas A–E) | `npm run test:story` | passed — see the v1.9 section below; **re-run green under v1.10** (all five personas, ~17 min) |
-| Scientific-export E2E (v1.10 personas A–E) | `npm run test:exports` | passed — see the v1.10 section below (486 s) |
+| Real-DEM browser smoke | `npm run test:real-dem` | **passed in v1.11** against the fetched third-party software fixture (gap-filled downsample; software path only, not science validation). Earlier releases without the fixture reported it as not run. |
+| THE 14-DAY WINDOW story E2E (v1.9 personas A–E) | `npm run test:story` | passed — **re-run green under v1.11** (all five personas) |
+| Scientific-export E2E (v1.11 personas A–E) | `npm run test:exports` | passed — see the v1.11 section above (567 s clean re-run; Persona C adds oversized-session rejection) |
 
 Python warnings are Rasterio `Affine` `*` vs `@` PendingDeprecationWarnings from the installed wheel; they do not indicate a CHANDRA failure.
 

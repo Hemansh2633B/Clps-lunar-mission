@@ -8,6 +8,7 @@ docs one level up.
 
 | File | Release | What it records |
 |---|---|---|
+| [v1.11-integrity.md](v1.11-integrity.md) | v1.11 · 2026-11 | Exact analysis identity, session size cap, coarse-energy disclosure |
 | [v1.10-scientific-exports.md](v1.10-scientific-exports.md) | v1.10 · 2026-11-07 | Scientific export formats, reproducibility contract, session integrity |
 | [v1.9-reliability.md](v1.9-reliability.md) | v1.9 · 2026-11-07 | CI recovery, tutorial integrity, blocked-analysis gates |
 | [v1.9-terrain-frames-feasibility.md](v1.9-terrain-frames-feasibility.md) | v1.9 research · 2026-11-07 | Regional terrain & per-epoch frame study (research only, not implemented) |

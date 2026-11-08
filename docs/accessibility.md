@@ -1,6 +1,6 @@
 # Accessibility · CHANDRA
 
-**Audit date:** 2026-11-07 (v1.9), extended for v1.10 · **Scope:** planner, Terrain Lab, comparison, briefings,
+**Audit date:** 2026-11-07 (v1.9), extended for v1.10 and v1.11 · **Scope:** planner, Terrain Lab, comparison, briefings,
 modals, exports, mobile layouts. **Identity preserved:** paper-folio (cream paper,
 coral, brass; Fraunces / Outfit / IBM Plex Mono), no added animation.
 
@@ -8,7 +8,9 @@ coral, brass; Fraunces / Outfit / IBM Plex Mono), no added animation.
 > tests or Playwright and runs in CI. Playwright asserting `aria-label` strings is
 > **NOT a screen-reader pass**. The NVDA/VoiceOver checklist below is a *manual
 > protocol that has not been executed* in this environment (no screen reader
-> available). No screen-reader compatibility is claimed until it is.
+> available). No screen-reader compatibility is claimed until it is. The
+> reproducible manual protocol with expected announcements is
+> [accessibility-manual-protocol.md](accessibility-manual-protocol.md).
 
 ---
 
@@ -96,6 +98,27 @@ against the live panel background at runtime and fails below 4.5:1.
 - **Mobile/reduced motion:** export menu + toasts verified at 390 px and with
   `prefers-reduced-motion` (no new animation introduced).
 
+### v1.11 additions (unit/builder coverage; browser execution recorded in verification.md)
+
+- **Persistent recovery notice:** session rejection notices no longer auto-clear
+  after ~2.6 s. The toast is `role="status"` + `aria-atomic="true"` and includes
+  a keyboard-reachable **Dismiss notice** button. Oversized payloads produce a
+  specific “too large to restore safely” message with the 800,000-character
+  limit and Rebuild/Exit recovery (`tests/session-size.test.ts`; export persona C).
+- **Coarse energy warning:** `EnergyResolutionNotice` is a persistent
+  `role="note"` labeled “Energy integration resolution warning” in telemetry and
+  comparison cards. `timelineDescription()` appends the same
+  `ENERGY_RESOLUTION_COARSE` message when the integrator reports coarse
+  (`tests/energy-resolution-disclosure.test.ts`). The wording names the ≥1%
+  threshold, the Richardson estimate as not a confidence interval, and the
+  non-thermal boundary. This is automated wording coverage, **not** a
+  screen-reader pass.
+- **Manual protocol expanded:** SR-11 (oversized session) and SR-12 (coarse
+  energy warning) added to
+  [accessibility-manual-protocol.md](accessibility-manual-protocol.md) with
+  expected announcements and a NOT OBSERVED rule when a coarse result cannot be
+  produced. Still **NOT EXECUTED**.
+
 ## 3. Known limitations (not fixed, disclosed)
 
 - Canvas polar map and SVG charts are described, not navigable element-by-
@@ -111,8 +134,11 @@ against the live panel background at runtime and fails below 4.5:1.
 ## 4. Manual screen-reader checklist — **NOT YET EXECUTED**
 
 Run with NVDA + Firefox/Chrome (Windows) and VoiceOver + Safari (macOS/iOS).
-Record pass/fail + SR/version/date in docs/verification.md when done. Until then,
-no screen-reader pass is claimed.
+The full reproducible protocol, setup, expected announcements and recording
+template live in [accessibility-manual-protocol.md](accessibility-manual-protocol.md).
+Record pass/fail + SR/version/date in docs/verification.md only when executed.
+Until then, no screen-reader pass is claimed. The summary below is retained for
+continuity; the protocol document is the authoritative step list.
 
 1. **Landmarks & heading order:** navigate by landmark/heading; confirm one h1,
    panel headers reachable, story panel announced as a region with its label.
@@ -141,6 +167,10 @@ no screen-reader pass is claimed.
    corrupt session and confirm the rejection notice is announced exactly once.
 10. **Reduced motion:** with OS reduce-motion on, confirm no marquee/spotlight
     movement and instant scrolling.
+11. **Coarse energy warning (v1.11):** if a coarse result is produced, confirm
+    the persistent note and timeline description announce the threshold,
+    estimate caveat and non-thermal boundary; otherwise record NOT OBSERVED
+    (SR-12), never pass from unit tests alone.
 
 ## 5. Method notes
 
