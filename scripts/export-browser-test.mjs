@@ -356,8 +356,26 @@ try {
     await page.locator('.story-objective').getByRole('button', { name: 'Rebuild the training mission' }).click();
     await page.waitForTimeout(900);
     assert(await getSession(page) !== null, 'C: rebuild re-establishes a clean session');
+
+    // v1.11: an oversized serialized payload is rejected before JSON.parse and
+    // reported with the size-specific notice; the same Rebuild/Exit path applies.
+    await page.evaluate(() => { window.sessionStorage.setItem('chandra-inject-large', '1'); });
+    await page.addInitScript(() => {
+      if (!window.sessionStorage.getItem('chandra-inject-large')) return;
+      window.sessionStorage.removeItem('chandra-inject-large');
+      const raw = window.localStorage.getItem('chandra-story-session-v1') ?? '{}';
+      window.localStorage.setItem('chandra-story-session-v1', raw.padEnd(800001, ' '));
+      window.localStorage.setItem('chandra-story-v1', JSON.stringify({ v: 1, status: 'paused', chapter: 5, completed: [0, 1, 2, 3, 4], answers: {}, suggestionDismissed: true }));
+    });
+    await page.reload();
+    await page.waitForSelector('.site-rail');
+    await page.waitForTimeout(1200);
+    assert((await toastText(page)).includes('too large to restore safely'), 'C: oversized session reports the size-specific rejection');
+    assert(await getSession(page) === null, 'C: oversized payload never applied and is cleared');
+    await page.locator('[data-tour="story-launch"]').click();
+    await page.waitForSelector('text=TRAINING CONTEXT UNAVAILABLE');
     await shot(page, 'v110-c-persisted-recovery');
-    console.log('PERSONA C (persisted state: custom sites survive reload, v1→v2 migration, out-of-range rejected with recovery) PASSED');
+    console.log('PERSONA C (persisted state: custom sites survive reload, v1→v2 migration, out-of-range + oversized rejected with recovery) PASSED');
   }
 
   // ============ PERSONA D · Data confidence: provenance on every output ============

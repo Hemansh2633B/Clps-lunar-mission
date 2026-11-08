@@ -7,7 +7,9 @@
  * restore the user's exact prior workspace — site, dates, config, view, pins,
  * custom sites and playback.
  *
- * Safety rules (v1.10 hardened):
+ * Safety rules (v1.10 hardened; v1.11 adds a pre-parse/pre-save size cap):
+ * - Serialized payloads over MAX_SESSION_LENGTH are rejected before JSON.parse
+ *   and before storage writes, with an explicit reason for the recovery notice.
  * - The storage key is a stable namespace; the PAYLOAD version (`v`) drives
  *   migration. v1 (v1.9) payloads migrate to v2 only if they pass the full
  *   current validation — never by silently clamping out-of-range values.
@@ -37,6 +39,33 @@ import { classifyFrame } from '../engine/lunarFrame';
 export const SESSION_VERSION = 2 as const;
 /** Stable storage namespace (kept across schema versions so v1 payloads are found and migrated). */
 export const SESSION_STORAGE_KEY = 'chandra-story-session-v1';
+
+/**
+ * Maximum serialized payload length in JavaScript UTF-16 code units, checked
+ * BEFORE JSON.parse. 800,000 characters is generous for ordinary briefing
+ * workspaces while bounding parser work below typical localStorage quotas.
+ * It is intentionally below the theoretical structural maximum: two snapshots
+ * × 64 custom sites × 3,601 elevations × ~24 characters ≈ 11 million characters
+ * before metadata. A payload above this limit is rejected explicitly, never
+ * clamped or partially restored. The same limit is enforced before saving.
+ */
+export const MAX_SESSION_LENGTH = 800_000;
+
+export type SessionRejectionCode = 'SESSION_TOO_LARGE' | 'SESSION_INVALID' | 'SESSION_STORAGE_UNAVAILABLE';
+export interface SessionRejection { code: SessionRejectionCode; message: string }
+export type SessionReadResult = { session: TrainingSession; rejection: null } | { session: null; rejection: SessionRejection | null };
+export type SessionSaveResult = { ok: true } | { ok: false; rejection: SessionRejection };
+
+const INVALID_SESSION: SessionRejection = {
+  code: 'SESSION_INVALID',
+  message: 'A saved briefing session could not be restored — it failed validation (corrupt, out-of-range settings or inconsistent terrain metadata). Nothing was partially applied; the briefing offers Rebuild / Exit.',
+};
+function tooLarge(length: number): SessionRejection {
+  return {
+    code: 'SESSION_TOO_LARGE',
+    message: `A saved briefing session is too large to restore safely (${length.toLocaleString()} characters; limit ${MAX_SESSION_LENGTH.toLocaleString()}). Nothing was applied. The briefing offers Rebuild / Exit; your current workspace is unchanged.`,
+  };
+}
 
 /** Complete restorable mission workspace (all fields JSON-safe). */
 export interface WorkspaceSnapshot {
@@ -243,29 +272,49 @@ function validWorkspace(w: unknown): w is WorkspaceSnapshot {
  * v1.9 validator wrongly allowed) is rejected wholesale → the UI's Rebuild/Exit
  * recovery explains what could not be restored. Never partial, never clamped.
  */
-export function parseSession(raw: string | null): TrainingSession | null {
-  if (!raw) return null;
+export function readSession(raw: string | null): SessionReadResult {
+  if (raw === null) return { session: null, rejection: null };
+  if (raw.length > MAX_SESSION_LENGTH) return { session: null, rejection: tooLarge(raw.length) };
+  if (!raw) return { session: null, rejection: INVALID_SESSION };
   try {
     const p = JSON.parse(raw) as Partial<TrainingSession> & { v?: unknown };
-    if (p.v !== SESSION_VERSION && p.v !== 1) return null; // unknown version → recovery
-    if (!validWorkspace(p.user) || !validWorkspace(p.training)) return null;
-    if (p.baseline !== undefined && p.baseline !== null && !validBaseline(p.baseline)) return null;
-    return { v: SESSION_VERSION, user: p.user, training: p.training, baseline: p.baseline ?? null };
+    if (p.v !== SESSION_VERSION && p.v !== 1) return { session: null, rejection: INVALID_SESSION };
+    if (!validWorkspace(p.user) || !validWorkspace(p.training)) return { session: null, rejection: INVALID_SESSION };
+    if (p.baseline !== undefined && p.baseline !== null && !validBaseline(p.baseline)) return { session: null, rejection: INVALID_SESSION };
+    return { session: { v: SESSION_VERSION, user: p.user, training: p.training, baseline: p.baseline ?? null }, rejection: null };
   } catch {
-    return null;
+    return { session: null, rejection: INVALID_SESSION };
   }
+}
+
+/** Compatibility wrapper: null means absent or rejected; readSession exposes why. */
+export function parseSession(raw: string | null): TrainingSession | null {
+  return readSession(raw).session;
 }
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
-export function loadSession(storage: StorageLike | null): TrainingSession | null {
-  if (!storage) return null;
-  try { return parseSession(storage.getItem(SESSION_STORAGE_KEY)); } catch { return null; }
+export function loadSessionDetails(storage: StorageLike | null): SessionReadResult {
+  if (!storage) return { session: null, rejection: null };
+  try { return readSession(storage.getItem(SESSION_STORAGE_KEY)); }
+  catch {
+    return { session: null, rejection: { code: 'SESSION_STORAGE_UNAVAILABLE', message: 'Browser storage is unavailable, so a saved briefing could not be read. The current in-memory workspace is unchanged.' } };
+  }
 }
 
-export function saveSession(s: TrainingSession, storage: StorageLike | null): void {
-  if (!storage) return;
-  try { storage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ ...s, v: SESSION_VERSION })); } catch { /* storage full/unavailable — in-memory session still works */ }
+export function loadSession(storage: StorageLike | null): TrainingSession | null {
+  return loadSessionDetails(storage).session;
+}
+
+/** Saves only payloads the reader will accept; failures are returned, never silent. */
+export function saveSession(s: TrainingSession, storage: StorageLike | null): SessionSaveResult {
+  let raw: string;
+  try { raw = JSON.stringify({ ...s, v: SESSION_VERSION }); }
+  catch { return { ok: false, rejection: INVALID_SESSION }; }
+  if (raw.length > MAX_SESSION_LENGTH) return { ok: false, rejection: tooLarge(raw.length) };
+  if (!storage) return { ok: false, rejection: { code: 'SESSION_STORAGE_UNAVAILABLE', message: 'Browser storage is unavailable — the briefing continues in memory but will not survive a refresh.' } };
+  try { storage.setItem(SESSION_STORAGE_KEY, raw); return { ok: true }; }
+  catch { return { ok: false, rejection: { code: 'SESSION_STORAGE_UNAVAILABLE', message: 'Browser storage is full or unavailable — the briefing continues in memory but the latest changes may not survive a refresh.' } }; }
 }
 
 export function clearSession(storage: StorageLike | null): void {
