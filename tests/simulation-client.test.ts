@@ -19,8 +19,10 @@ class FakeWorker {
   onmessage: ((e: { data: unknown }) => void) | null = null;
   onerror: ((e: unknown) => void) | null = null;
   terminated = false;
+  posts: { site: typeof site; startMs: number; endMs: number; config: typeof cfg }[] = [];
   constructor() { FakeWorker.instances.push(this); }
   postMessage(req: { id: number; site: typeof site; startMs: number; endMs: number; config: typeof cfg }) {
+    this.posts.push(req);
     setTimeout(() => {
       if (this.terminated) return;
       this.onmessage?.({ data: { progress: req.id, phase: 'sampling', fraction: 0.5 } });
@@ -53,6 +55,30 @@ describe('simulation client: cache, cancellation, progress', () => {
     expect(b).toBe(a); // identical cached object
     releaseSimulation(site, START, START + 3 * DAY, cfg);
     expect(_cacheStats().size).toBe(1);
+  });
+
+  it('does not reuse a cached result for a mask differing by 0.0001 degrees', async () => {
+    const a = await requestSimulation(site, START, START + 3 * DAY, cfg);
+    releaseSimulation(site, START, START + 3 * DAY, cfg);
+    const elevations = [...site.terrain.elevations];
+    elevations[7] += 1e-4;
+    const edited = { ...site, terrain: { ...site.terrain, elevations } };
+    const b = await requestSimulation(edited, START, START + 3 * DAY, cfg);
+    releaseSimulation(edited, START, START + 3 * DAY, cfg);
+    expect(b).not.toBe(a);
+    expect(b.site.terrain.elevations[7]).toBe(elevations[7]);
+    expect(FakeWorker.instances.flatMap((w) => w.posts)).toHaveLength(2);
+    expect(_cacheStats().size).toBe(2);
+  });
+
+  it('does not reuse a cached result for a window shifted by one second', async () => {
+    const a = await requestSimulation(site, START, START + 3 * DAY, cfg);
+    releaseSimulation(site, START, START + 3 * DAY, cfg);
+    const b = await requestSimulation(site, START + 1000, START + 3 * DAY + 1000, cfg);
+    releaseSimulation(site, START + 1000, START + 3 * DAY + 1000, cfg);
+    expect(b).not.toBe(a);
+    expect(b.summary!.startMs).toBe(START + 1000);
+    expect(FakeWorker.instances.flatMap((w) => w.posts)).toHaveLength(2);
   });
 
   it('deduplicates concurrent identical requests into one inflight promise', async () => {
