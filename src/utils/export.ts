@@ -304,7 +304,7 @@ export async function missionReportJSON(site: LandingSite, config: MissionConfig
     timeReference: 'UTC',
     analysisFingerprint: fingerprint,
     analysisFingerprintShort: fingerprint ? shortFingerprint(fingerprint) : null,
-    fingerprintMethod: 'SHA-256 over the canonical simulation key (site + terrain identity + UTC window + effective config); CSV rows repeat the leading 16 hex characters.',
+    fingerprintMethod: 'SHA-256 over the canonical simulation key (full-precision site + terrain identity + millisecond UTC window + effective config; no rounding); CSV rows repeat the leading 16 hex characters.',
     disclaimer: `Ephemeris: astronomy-engine + IAU 2015 Moon rotation. ${disclosure} Horizon: LOCAL (landing-centered), not a regional distant-horizon model. Power: idealized cosine model with system derate. Geometric center-of-disk LOS (not an RF link budget); no atmospheric refraction. Feasibility score is an application-defined heuristic, not a NASA methodology. Data confidence: ${conf}.`,
     site,
     config: effectiveConfig,

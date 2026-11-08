@@ -6,6 +6,7 @@ import { computePower, summarizeMission } from './powerComms';
 import { integrateMissionEnergy } from './integration';
 import { assessTerrainEligibility, numericalResolutionBlocked, computationFailed } from './analysisStatus';
 import { sanitizeConfig } from './configLimits';
+import { canonicalJson } from './canonicalJson';
 
 export const DEFAULT_CONFIG: MissionConfig = {
   durationDays: 10,
@@ -127,19 +128,24 @@ export function simulateMission(site: LandingSite, startMs: number, endMs: numbe
   }
 }
 
+/** Internal identity-format tag; independent of REPORT_SCHEMA_VERSION. */
+export const SIMULATION_IDENTITY_VERSION = 'chandra-analysis-v2';
+
+/**
+ * Exact, synchronous cache/guard identity (v1.11). The full JSON-safe site
+ * (including every terrain bin and metadata field), millisecond window and
+ * caller config are canonically serialized without rounding. This is deliberately
+ * conservative: editing a label or provenance note creates a new identity even
+ * if the numerical result would be unchanged. Export fingerprints hash this same
+ * string with SHA-256 (see utils/analysisId), using the EFFECTIVE config.
+ *
+ * v1.10 rounded elevations/coordinates/azimuth offsets and minute-rounded the
+ * window, allowing distinct inputs to share a cache/guard/fingerprint identity.
+ * Keys and fingerprints therefore change across v1.11; the opaque fingerprint
+ * field keeps report schema 2.0.0. The 36-entry LRU is unchanged.
+ */
 export function simulationKey(site: LandingSite, startMs: number, endMs: number, config: MissionConfig): string {
-  const terrainHash = site.terrain.elevations.map((v) => v.toFixed(3)).join(',');
-  return [
-    site.id, site.latitude.toFixed(5), site.longitude.toFixed(5), site.elevationM,
-    site.terrain.kind, site.terrain.resolutionDeg, site.terrain.eyeHeightM, site.terrain.sourceFrame ?? '', site.terrain.synthetic ? 'synthetic' : 'real',
-    site.terrain.frameVerified ? 'fv1' : 'fv0', site.terrain.frameTransform ?? '', (site.terrain.azimuthOffsetDeg ?? 0).toFixed(4),
-    site.terrain.coveragePercent ?? '', site.terrain.radiusKm ?? '', site.terrain.analysisScale ?? 'local',
-    terrainHash,
-    Math.round(startMs / 60000), Math.round(endMs / 60000),
-    config.durationDays, config.arrayMode, config.arrayAreaM2, config.cellEfficiency, config.systemDerate,
-    config.fixedPanelAzimuthDeg, config.loadW, config.batteryCapacityKWh, config.initialSocPct,
-    config.commsMarginDeg, config.stepMinutes,
-  ].join('|');
+  return `${SIMULATION_IDENTITY_VERSION}:${canonicalJson({ site, startMs, endMs, config })}`;
 }
 
 export function analysisWindow(baselineMs: number, slipDays: number, durationDays: number, viewDays: number) {
