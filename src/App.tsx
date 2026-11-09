@@ -25,7 +25,7 @@ import { WorkflowGuide } from './components/WorkflowGuide';
 import { StoryTutorial, StorySuggestion } from './tutorial/StoryTutorial';
 import { useStoryTutorial, type StoryActions, type StorySignals } from './tutorial/useStoryTutorial';
 import { loadProgress } from './tutorial/progress';
-import { loadSession, saveSession, clearSession, resolveBoot, SESSION_VERSION, type TrainingSession, type WorkspaceSnapshot } from './tutorial/session';
+import { loadSessionDetails, saveSession, clearSession, resolveBoot, SESSION_VERSION, type TrainingSession, type WorkspaceSnapshot } from './tutorial/session';
 import { scenarioFingerprint, creditsMissionReport, type ScenarioResolution } from './tutorial/witnesses';
 import { missionExportGate } from './utils/exportGuard';
 import type { StoryWorld, ScenarioOutcome } from './tutorial/narrative';
@@ -62,12 +62,10 @@ export default function App() {
   // story hook as an explicit Rebuild/Exit recovery choice — never silent defaults.
   const [boot] = useState(() => {
     const st = appStorage();
-    const sess = loadSession(st);
-    // A stored payload that FAILED validation is reported, never silently dropped:
-    // the user learns what could not be restored (the briefing offers Rebuild/Exit).
-    let storedRaw: string | null = null;
-    try { storedRaw = st?.getItem('chandra-story-session-v1') ?? null; } catch { /* unavailable */ }
-    return { session: sess, sessionRejected: storedRaw !== null && sess === null, ...resolveBoot(sess, loadProgress(st)) };
+    // A stored payload that FAILED validation (including the pre-parse size cap)
+    // is reported with its reason, never silently dropped or partially applied.
+    const read = loadSessionDetails(st);
+    return { session: read.session, sessionRejection: read.rejection, ...resolveBoot(read.session, loadProgress(st)) };
   });
   const bootWs = boot.workspace;
   const [session, setSession] = useState<TrainingSession | null>(boot.keepSession ? boot.session : null);
@@ -357,9 +355,10 @@ export default function App() {
   sessionRef.current = session;
   const persistTraining = useCallback(() => {
     if (sessionRef.current && liveTrainingRef.current) {
-      saveSession({ ...sessionRef.current, training: liveTrainingRef.current, baseline: storyRef.current.witnessBaseline }, appStorage());
+      const result = saveSession({ ...sessionRef.current, training: liveTrainingRef.current, baseline: storyRef.current.witnessBaseline }, appStorage());
+      if (!result.ok) notify(result.rejection.message);
     }
-  }, []);
+  }, [notify]);
   useEffect(() => {
     const flush = () => persistTraining();
     window.addEventListener('pagehide', flush);
@@ -369,12 +368,13 @@ export default function App() {
     // Orphaned session at boot (progress gone/completed): the user workspace was
     // restored above; drop the stale storage payload once.
     if (boot.boot === 'user') clearSession(appStorage());
-    if (boot.sessionRejected) {
-      notify('A saved briefing session could not be restored — it failed validation (corrupt, out-of-range settings or inconsistent terrain metadata). Nothing was partially applied; the briefing offers Rebuild / Exit.');
+    if (boot.sessionRejection) {
+      // Persistent until dismissed: a recovery notice must not vanish after 2.6 s.
+      setToast(boot.sessionRejection.message);
       // The rejected payload is unusable and was never applied; drop it once so it
       // cannot re-trigger on every reload. Briefing progress (separate key) is kept,
       // so resuming still offers the explicit Rebuild / Exit recovery choice.
-      clearSession(appStorage());
+      if (boot.sessionRejection.code !== 'SESSION_STORAGE_UNAVAILABLE') clearSession(appStorage());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -595,7 +595,10 @@ export default function App() {
         glossaryFocus={glossaryFocus}
         story={{ status: story.progress?.status ?? 'none', chapter: story.progress?.chapter ?? 0, onStart: story.start, onReplay: story.replay }} />
       {toast && (
-        <div role="status" aria-live="polite" className="fade-in" style={{ position: 'fixed', bottom: 44, left: '50%', transform: 'translateX(-50%)', background: 'var(--paper-2)', border: '1px solid var(--ink)', borderRadius: 0, padding: '8px 14px', fontSize: 12, zIndex: 80, boxShadow: '4px 4px 0 rgba(28,36,48,.2)' }}>{toast}</div>
+        <div role="status" aria-live="polite" aria-atomic="true" className="fade-in" style={{ position: 'fixed', bottom: 44, left: '50%', transform: 'translateX(-50%)', maxWidth: 'min(560px, calc(100vw - 24px))', background: 'var(--paper-2)', border: '1px solid var(--ink)', borderRadius: 0, padding: '8px 14px', fontSize: 12, zIndex: 80, boxShadow: '4px 4px 0 rgba(28,36,48,.2)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span>{toast}</span>
+          <button className="btn sm ghost" onClick={() => setToast(null)} aria-label="Dismiss notice">Dismiss</button>
+        </div>
       )}
     </div>
   );

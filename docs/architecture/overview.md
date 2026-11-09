@@ -57,19 +57,27 @@ flowchart LR
     records its own accepted-boundary history for export.
   - `simulation.ts`: sampling (20,000-sample cap, uniform coarsening),
     `simulationKey` identity, summary assembly.
+  - `canonicalJson.ts`: deterministic full-precision serialization for the
+    v1.11 exact analysis identity (sorted keys, significant array order,
+    explicit rejection of non-finite/sparse/cyclic/non-JSON inputs).
   - `simulation.worker.ts` / `simulationClient.ts`: worker protocol with phase
     progress and request cancellation.
-  - `analysisStatus.ts`, `lunarFrame.ts`: the computation-boundary gate and the
-    frame allowlist (MOON_ME / MOON_PA DE421 constant correction, IAU 2015).
+  - `analysisStatus.ts`, `lunarFrame.ts`: the computation-boundary gate, the
+    frame allowlist (MOON_ME / MOON_PA DE421 constant correction, IAU 2015),
+    and the shared `ENERGY_RESOLUTION_COARSE` disclosure helper (v1.11).
 - `terrain/` — Terrain Lab client: DEM API calls, coordinate conversions,
   Three.js mesh/lighting, horizon ray-marching (mirrors `backend/horizon.py`;
   parity is unit-tested), mission-profile import.
 - `tutorial/` — THE 14-DAY WINDOW briefing: static chapter structure
   (`story.ts`), live narration from engine results (`narrative.ts`), objective
   witnesses (`witnesses.ts`), versioned session persistence (`session.ts`).
+  v1.11 adds a pre-parse/pre-save 800,000-character cap with explicit
+  `SESSION_TOO_LARGE` recovery and returned save failures.
 - `utils/export.ts` / `exportGuard.ts` — all six export kinds. Builders are
-  async (SHA-256 analysis fingerprint); the guard enforces result identity via
-  `simulationKey` before any download. See scientific-method §13.
+  async (SHA-256 analysis fingerprint over the exact canonical key); the guard
+  enforces result identity via the same `simulationKey` before any download.
+  Coarse energy resolution flows through the shared disclosure helper into
+  warnings/disclosures without changing the report schema. See scientific-method §13.
 - `data/` — the site catalogue (with per-site provenance), mission presets
   (illustrative), glossary and guided scenarios.
 
@@ -113,5 +121,19 @@ actionable no-DEM error instead of substituting data.
 - `tests/python/` — pytest (DEM loading, crops, API errors, horizon, frames).
 - `scripts/browser-test.mjs`, `story-browser-test.mjs`,
   `export-browser-test.mjs` — Playwright E2E personas against a live dev stack.
+- `scripts/real-dem-browser-test.mjs` + `.github/workflows/real-dem-fixture.yml`
+  — optional software-only smoke against the third-party gap-filled verification
+  downsample (not a required check, not a science product).
+- `scripts/identity-benchmark.ts` — optional canonical-key sanity benchmark,
+  not a CI gate.
 - `scripts/geometry-check.ts`, `horizon-parity.ts` — Three.js geometry and
   TS↔Python ray-marcher parity.
+
+
+## Product surface (proposed, not implemented)
+
+The current app has no router; `/` is the workspace. A landing page at `/` and
+a lazy workspace at `/workspace`, soft first-run site picker, progressive
+scientific-details disclosure and static-demo deploy considerations are
+specified in [../product-design.md](../product-design.md). That document is a
+design deliverable, not a claim of shipped routes.

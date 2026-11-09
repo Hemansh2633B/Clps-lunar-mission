@@ -1,12 +1,12 @@
 /**
- * Analysis identity for v1.10 exports.
+ * Analysis identity for scientific exports (exact canonical key since v1.11).
  *
  * The fingerprint is SHA-256 over EXACTLY the `simulationKey()` string used by
  * useSimulation and the simulation cache — one source of truth, never a second
  * incompatible identity scheme. It covers site identity, coordinates, terrain
- * kind/resolution/frame/coverage/elevations, the UTC window (minute resolution,
- * with exact endpoints checked separately by the export guard) and every mission
- * configuration field.
+ * kind/resolution/frame/coverage/elevations and all site metadata), the UTC
+ * window at millisecond precision and every mission configuration field. The
+ * canonical key itself performs no rounding (v1.11).
  *
  * Callers pass the EFFECTIVE (engine-sanitized) configuration and the result's
  * actual window so the fingerprint describes what was calculated, not what was

@@ -2,7 +2,7 @@ import { Activity, BatteryCharging, Clock, Earth, Radio, Sun, Zap, AlertTriangle
 import type { AppMode, EvaluatedSample, LandingSite, MissionConfig, SimulationResult, TransitionEvent } from '../types/mission';
 import { formatDuration, LIGHT_SPEED_KMS } from '../engine/constants';
 import { ProvenanceIndicator } from './ProvenanceIndicator';
-import { AnalysisStatusNotice } from './AnalysisStatusNotice';
+import { AnalysisStatusNotice, EnergyResolutionNotice } from './AnalysisStatusNotice';
 import { InfoTip } from './InfoTip';
 import { explainClearance, explainIllumination, explainEarthLos } from '../utils/explain';
 
@@ -151,6 +151,7 @@ export function TelemetryPanel({ site, current, sim, events, timeMs, mode, confi
           <div className="panel-title" style={{ marginBottom: 8 }}><BatteryCharging size={12} color="var(--nominal)" /> Mission window · {config.durationDays} d</div>
           {summary ? (
             <>
+              <EnergyResolutionNotice summary={summary} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
                 <Stat label="Sunlit" value={summary.illuminationPct.toFixed(0)} tip="illumination" unit="%" color="var(--solar)" />
                 <Stat label="DTE" value={summary.dtePct.toFixed(0)} tip="dte" unit="%" color="var(--earth)" />

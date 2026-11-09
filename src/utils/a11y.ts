@@ -7,6 +7,7 @@
  * states, never clearance values. Pure functions so the wording is unit-tested.
  */
 import type { AnalysisAssessment, EvaluatedSample, LandingSite, MissionSummary } from '../types/mission';
+import { energyResolutionDisclosure } from '../engine/analysisStatus';
 
 /** role="img" description for the horizon panorama. */
 export function panoramaDescription(current: EvaluatedSample, blocked: boolean): string {
@@ -65,7 +66,8 @@ export function timelineDescription(summary: MissionSummary | null, analysis: An
     return `Mission timeline. The window analysis is BLOCKED (${analysis.status}) — no quantitative sunlight, communications or viability tracks are shown. ${analysis.reason}`;
   }
   if (summary) {
-    return `Mission window: ${summary.illuminationPct.toFixed(0)} percent sunlit, ${summary.dtePct.toFixed(0)} percent Earth line-of-sight, ${summary.combinedPct.toFixed(0)} percent both at once. Longest eclipse ${summary.longestEclipseHours.toFixed(1)} hours; longest communications gap ${summary.longestDteGapHours.toFixed(1)} hours. Verdict ${summary.verdict}. Use the time scrubber slider below to move through the window.`;
+    const energyWarning = energyResolutionDisclosure(summary.integrationDiagnostics);
+    return `Mission window: ${summary.illuminationPct.toFixed(0)} percent sunlit, ${summary.dtePct.toFixed(0)} percent Earth line-of-sight, ${summary.combinedPct.toFixed(0)} percent both at once. Longest eclipse ${summary.longestEclipseHours.toFixed(1)} hours; longest communications gap ${summary.longestDteGapHours.toFixed(1)} hours. Verdict ${summary.verdict}.${energyWarning ? ` ${energyWarning.message}` : ''} Use the time scrubber slider below to move through the window.`;
   }
   return 'Mission timeline with three tracks: sunlight and power, direct-to-Earth communications, and combined mission viability. The window is still computing — no results claimed yet.';
 }

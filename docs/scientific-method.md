@@ -439,7 +439,7 @@ are not capability claims.
 
 ---
 
-## 13. Scientific exports & reproducibility (v1.10)
+## 13. Scientific exports & reproducibility (v1.10; v1.11 integrity fixes)
 
 The export pipeline was rebuilt so a downloaded file is independently
 understandable: what was calculated, from which data, under which assumptions,
@@ -456,6 +456,18 @@ with which limitations — without the app open.
   CSVs carry the 16-hex short form (`analysis_fingerprint`) on **every row**, so
   any two files can be checked for describing the same analysis even after being
   separated. `generatedAt` is an ISO-8601 UTC instant (`timeReference: 'UTC'`).
+- **v1.11 exact identity:** `simulationKey()` is a versioned canonical JSON
+  serialization (`chandra-analysis-v2`) of the full JSON-safe site (every
+  terrain bin and metadata field), the millisecond UTC window and the caller
+  config. Object keys are sorted; array order is significant; numbers keep full
+  double precision (no `toFixed`); non-finite/sparse/cyclic/non-JSON inputs are
+  rejected. The cache key is the canonical string itself; the fingerprint is its
+  SHA-256 digest. Export builders pass the **effective** config to the same key.
+  Fingerprint VALUES therefore change across v1.11 even for inputs that rounded
+  to the same v1.10 key; the opaque field format and report schema `2.0.0` do
+  not change. Regression tests prove near-identical masks/coordinates/windows
+  and metadata edits produce distinct keys, cache entries, guard decisions and
+  fingerprints.
 
 ### 13.2 Effective config, never requested config
 
@@ -478,8 +490,9 @@ unverified-frame / incomplete-coverage / out-of-epoch results state why
 quantitative use is blocked; synthetic and illustrative terrain are labeled
 demo/illustrative. The same disclosure codes appear in the UI provenance panel,
 the JSON warnings, and the CSV `disclosures` column — one vocabulary everywhere
-(`LOCAL_HORIZON`, `SCORE_HEURISTIC`, `LOS_NOT_RF`, `ENERGY_NOT_THERMAL`, plus
-terrain/frame/coverage/epoch/sampling codes as applicable).
+(`LOCAL_HORIZON`, `SCORE_HEURISTIC`, `LOS_NOT_RF`, `ENERGY_NOT_THERMAL`,
+`ENERGY_RESOLUTION_COARSE` when applicable, plus terrain/frame/coverage/epoch/
+sampling codes as applicable).
 
 ### 13.4 CSV provenance columns (standards-compatible)
 
@@ -554,3 +567,35 @@ only through full revalidation; anything invalid is rejected **whole** — never
 partially applied — and the app boots to defaults with an explicit notice while
 the briefing offers Rebuild / Exit. The unusable payload is then cleared once
 (notified, not silent) so it cannot re-trigger on every reload.
+
+**v1.11 size cap:** serialized payloads longer than `MAX_SESSION_LENGTH =
+800,000` JavaScript UTF-16 code units are rejected **before** `JSON.parse` and
+before storage writes, with a specific `SESSION_TOO_LARGE` notice. This is a
+parser-work budget, not a byte cap and not the theoretical structural maximum
+(two snapshots × 64 sites × 3,601 elevations can exceed it); an enormous but
+structurally valid session is rejected explicitly, never clamped. Save failures
+are returned to the caller instead of silently swallowed.
+
+
+### 13.10 Coarse energy resolution: allow with persistent disclosure (v1.11)
+
+`integrateMissionEnergy` labels the accepted quadrature `converged`, `adequate`
+or `coarse` from the Richardson-style relative energy estimate. `coarse` means
+the estimated relative error is **≥1%**. The v1.11 policy is to keep the result
+available for research and attach `ENERGY_RESOLUTION_COARSE` everywhere energy
+is presented or exported, rather than silently blocking export or changing
+terrain eligibility/data confidence.
+
+The shared helper `energyResolutionDisclosure()` produces one message naming:
+the ≥1% threshold and the observed estimate; that the estimate is **not a
+confidence interval**; that energy totals, battery SOC and deficit hours may
+shift at this resolution; that shorter windows / alternative configurations and
+the quadrature diagnostics should be inspected; that export remains available
+with the warning; and that thermal/radiation survival is not modeled.
+
+Propagation is tested end to end at the builder level: JSON `warnings`, the
+existing CSV `disclosures` column on all five mission CSVs, comparison CSV/JSON
+`warnings`, telemetry and comparison cards (`EnergyResolutionNotice`), and the
+timeline screen-reader description. No new CSV column or report field was
+added, so `REPORT_SCHEMA_VERSION` remains `2.0.0`. No integration equation or
+threshold changed in v1.11.

@@ -7,7 +7,7 @@ import { DAY_MS, formatCoord } from '../engine/constants';
 import type { ComparisonRow } from '../utils/export';
 import { COMPARISON_EXPORT_POLICY } from '../utils/export';
 import { ProvenanceIndicator, provenanceOf } from './ProvenanceIndicator';
-import { AnalysisStatusNotice, AnalysisStatusBadge } from './AnalysisStatusNotice';
+import { AnalysisStatusNotice, AnalysisStatusBadge, EnergyResolutionNotice } from './AnalysisStatusNotice';
 import { UtcDateTimeInput } from './UtcDateTimeInput';
 
 const CONF_RANK: Record<string, number> = { measured: 3, 'region-approximate': 2, illustrative: 1, synthetic: 0, mixed: 1 };
@@ -115,6 +115,7 @@ function ScenarioCard({ scenario, site, sites, onUpdate, onRemove, best, indicat
               <div className="metric sm"><span className="label" title="Geometric Earth line-of-sight, not an RF link budget">Earth LOS</span><span className="value" style={{ color: 'var(--earth)' }}>{s.dtePct.toFixed(0)}<span className="unit">%</span></span></div>
               <div className="metric sm"><span className="label">Both</span><span className="value" style={{ color: 'var(--nominal)' }}>{s.combinedPct.toFixed(0)}<span className="unit">%</span></span></div>
             </div>
+            <EnergyResolutionNotice summary={s} compact />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 10 }}>
               {([
                 ['Mean Sun el', `${s.meanSunElevationDeg.toFixed(2)}°`],

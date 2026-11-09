@@ -1,5 +1,5 @@
 /**
- * Application vs. report-schema versioning (v1.10).
+ * Application vs. report-schema versioning (v1.10; v1.11 keeps the format).
  *
  * APP_VERSION tracks the product release (package.json — single source of truth).
  * REPORT_SCHEMA_VERSION tracks the JSON mission-report FORMAT and changes ONLY
@@ -12,6 +12,9 @@
  *  - '2.0.0' (v1.10): independent schema; adds applicationVersion, fingerprint,
  *    effective/requested config split, status-aware terrain disclosure, energy
  *    history, and provenance columns on every CSV.
+ *  - v1.11 keeps schema '2.0.0': exact-identity fingerprints and the new
+ *    ENERGY_RESOLUTION_COARSE warning use existing fields. Fingerprint VALUES
+ *    change across the identity fix; the opaque field's format does not.
  */
 import pkg from '../package.json';
 

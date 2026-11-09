@@ -13,8 +13,12 @@ import { join } from 'node:path';
 const BASE = process.env.BASE_URL || 'http://localhost:8001/';
 const OUT = 'screenshots';
 mkdirSync(OUT, { recursive: true });
+// CI mode uses Playwright's bundled Chromium; local sandbox mode uses the
+// npm-distributed Sparticuz binary + Amazon Linux 2023 libraries (same contract
+// as the other browser suites). The fixture itself is still required.
+const CI_BROWSER = process.env.CHANDRA_BROWSER_CI === '1';
 const LIB = '/tmp/al2023/lib';
-if (!existsSync(join(LIB, 'libnss3.so'))) {
+if (!CI_BROWSER && !existsSync(join(LIB, 'libnss3.so'))) {
   const bin = 'node_modules/@sparticuz/chromium/bin';
   for (const [file, dir] of [['al2023.tar.br', '/tmp/al2023'], ['fonts.tar.br', '/tmp/fonts']]) {
     mkdirSync(dir, { recursive: true });
@@ -23,13 +27,18 @@ if (!existsSync(join(LIB, 'libnss3.so'))) {
     execSync(`tar -xf ${tarPath} -C ${dir}`);
   }
 }
-const browser = await pw.launch({
-  executablePath: process.env.CHROMIUM_PATH || (await sparticuz.executablePath()),
-  args: sparticuz.args,
-  headless: true,
-  env: { ...process.env, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH || '/tmp/al2023/lib', FONTCONFIG_PATH: '/tmp/fonts' },
-});
+const browser = CI_BROWSER
+  ? await pw.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] })
+  : await pw.launch({
+      executablePath: process.env.CHROMIUM_PATH || (await sparticuz.executablePath()),
+      args: sparticuz.args,
+      headless: true,
+      env: { ...process.env, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH || '/tmp/al2023/lib', FONTCONFIG_PATH: '/tmp/fonts' },
+    });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+// The first-run welcome modal traps keyboard shortcuts; this smoke targets the
+// configured-DEM Terrain Lab path, so dismiss onboarding deterministically.
+await page.addInitScript(() => { window.localStorage.setItem('chandra-onboarded-v1', '1'); });
 page.setDefaultTimeout(45000);
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
