@@ -24,10 +24,11 @@ jobs:
         with:
           toolchain: '1.91.0'
           components: rustfmt, clippy
-      - name: Rust formatting
+      - name: Rust formatting (apply during spike; verified at the end)
         run: |
-          cargo fmt --check
-          cargo fmt --manifest-path tools/spikes/rust-geospatial/Cargo.toml --check
+          cargo fmt
+          cargo fmt --manifest-path tools/spikes/rust-geospatial/Cargo.toml
+          git diff -- '*.rs' > /tmp/rustfmt.patch
       - name: Rust clippy
         run: |
           cargo clippy --all-targets -- -D warnings
@@ -50,6 +51,11 @@ jobs:
       - name: Attempt Vercel tooling build (credentials not supplied)
         continue-on-error: true
         run: npx --yes vercel@65.12.1 build --yes > /tmp/vercel-build.log 2>&1; code=$?; cat /tmp/vercel-build.log; exit $code
+      - name: Verify formatting after diagnostic steps
+        if: always()
+        run: |
+          cargo fmt --check
+          cargo fmt --manifest-path tools/spikes/rust-geospatial/Cargo.toml --check
       - name: Upload spike evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -59,5 +65,7 @@ jobs:
             /tmp/health.json
             /tmp/health.log
             /tmp/vercel-build.log
+            /tmp/rustfmt.patch
+            Cargo.lock
             tools/spikes/rust-geospatial/Cargo.lock
           if-no-files-found: warn
