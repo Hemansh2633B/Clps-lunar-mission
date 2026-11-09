@@ -68,7 +68,7 @@ fn candidate_wkt_parser_handles_the_python_lunar_wkt() {
         proj4wkt::wkt_to_projstring(citation).unwrap()
     };
     let parsed = proj4rs::Proj::from_proj_string(&proj_string).unwrap();
-    let (a, b) = parsed.ellipsoid().cartesian_params();
+    let (a, b) = parsed.params();
     assert!((a - 1_737_400.0).abs() < 0.01);
     assert!((a - b).abs() < 0.01);
 }
