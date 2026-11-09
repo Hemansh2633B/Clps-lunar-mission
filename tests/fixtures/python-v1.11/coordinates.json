@@ -1,0 +1,202 @@
+[
+  {
+    "latitude": -89.5,
+    "longitude": 45.0,
+    "east_m": 5000.0,
+    "north_m": 0.0,
+    "result_longitude": 63.2517265622394,
+    "result_latitude": -89.47351369029693
+  },
+  {
+    "latitude": -89.5,
+    "longitude": 45.0,
+    "east_m": 0.0,
+    "north_m": 5000.0,
+    "result_longitude": 45.0,
+    "result_latitude": -89.33511056891597
+  },
+  {
+    "latitude": -89.5,
+    "longitude": 45.0,
+    "east_m": -5000.0,
+    "north_m": 0.0,
+    "result_longitude": 26.7482734377606,
+    "result_latitude": -89.47351369029693
+  },
+  {
+    "latitude": -89.5,
+    "longitude": 45.0,
+    "east_m": 3000.0,
+    "north_m": 4000.0,
+    "result_longitude": 53.89831384667459,
+    "result_latitude": -89.36039088430111
+  },
+  {
+    "latitude": -89.5,
+    "longitude": 45.0,
+    "east_m": 0.0,
+    "north_m": 0.0,
+    "result_longitude": 45.0,
+    "result_latitude": -89.5
+  },
+  {
+    "latitude": -90.0,
+    "longitude": 0.0,
+    "east_m": 5000.0,
+    "north_m": 0.0,
+    "result_longitude": 90.0,
+    "result_latitude": -89.83511056891595
+  },
+  {
+    "latitude": -90.0,
+    "longitude": 0.0,
+    "east_m": 0.0,
+    "north_m": 5000.0,
+    "result_longitude": 0.0,
+    "result_latitude": -89.83511056891595
+  },
+  {
+    "latitude": -90.0,
+    "longitude": 0.0,
+    "east_m": -5000.0,
+    "north_m": 0.0,
+    "result_longitude": -90.0,
+    "result_latitude": -89.83511056891595
+  },
+  {
+    "latitude": -90.0,
+    "longitude": 0.0,
+    "east_m": 3000.0,
+    "north_m": 4000.0,
+    "result_longitude": 36.86989764584402,
+    "result_latitude": -89.83511056891595
+  },
+  {
+    "latitude": -90.0,
+    "longitude": 0.0,
+    "east_m": 0.0,
+    "north_m": 0.0,
+    "result_longitude": 0.0,
+    "result_latitude": -90.0
+  },
+  {
+    "latitude": -90.0,
+    "longitude": 175.0,
+    "east_m": 5000.0,
+    "north_m": 0.0,
+    "result_longitude": -95.0,
+    "result_latitude": -89.83511056891595
+  },
+  {
+    "latitude": -90.0,
+    "longitude": 175.0,
+    "east_m": 0.0,
+    "north_m": 5000.0,
+    "result_longitude": 175.0,
+    "result_latitude": -89.83511056891595
+  },
+  {
+    "latitude": -90.0,
+    "longitude": 175.0,
+    "east_m": -5000.0,
+    "north_m": 0.0,
+    "result_longitude": 85.0,
+    "result_latitude": -89.83511056891595
+  },
+  {
+    "latitude": -90.0,
+    "longitude": 175.0,
+    "east_m": 3000.0,
+    "north_m": 4000.0,
+    "result_longitude": -148.13010235415598,
+    "result_latitude": -89.83511056891595
+  },
+  {
+    "latitude": -90.0,
+    "longitude": 175.0,
+    "east_m": 0.0,
+    "north_m": 0.0,
+    "result_longitude": 175.0,
+    "result_latitude": -90.0
+  },
+  {
+    "latitude": 90.0,
+    "longitude": -45.0,
+    "east_m": 5000.0,
+    "north_m": 0.0,
+    "result_longitude": 45.0,
+    "result_latitude": 89.83511056891595
+  },
+  {
+    "latitude": 90.0,
+    "longitude": -45.0,
+    "east_m": 0.0,
+    "north_m": 5000.0,
+    "result_longitude": 135.0,
+    "result_latitude": 89.83511056891595
+  },
+  {
+    "latitude": 90.0,
+    "longitude": -45.0,
+    "east_m": -5000.0,
+    "north_m": 0.0,
+    "result_longitude": -135.0,
+    "result_latitude": 89.83511056891595
+  },
+  {
+    "latitude": 90.0,
+    "longitude": -45.0,
+    "east_m": 3000.0,
+    "north_m": 4000.0,
+    "result_longitude": 98.13010235415598,
+    "result_latitude": 89.83511056891595
+  },
+  {
+    "latitude": 90.0,
+    "longitude": -45.0,
+    "east_m": 0.0,
+    "north_m": 0.0,
+    "result_longitude": -45.0,
+    "result_latitude": 90.0
+  },
+  {
+    "latitude": 0.0,
+    "longitude": 179.99,
+    "east_m": 5000.0,
+    "north_m": 0.0,
+    "result_longitude": -179.84511056891594,
+    "result_latitude": 0.0
+  },
+  {
+    "latitude": 0.0,
+    "longitude": 179.99,
+    "east_m": 0.0,
+    "north_m": 5000.0,
+    "result_longitude": 179.99,
+    "result_latitude": 0.1648894310840403
+  },
+  {
+    "latitude": 0.0,
+    "longitude": 179.99,
+    "east_m": -5000.0,
+    "north_m": 0.0,
+    "result_longitude": 179.82511056891596,
+    "result_latitude": 0.0
+  },
+  {
+    "latitude": 0.0,
+    "longitude": 179.99,
+    "east_m": 3000.0,
+    "north_m": 4000.0,
+    "result_longitude": -179.9110661665486,
+    "result_latitude": 0.13191147931684113
+  },
+  {
+    "latitude": 0.0,
+    "longitude": 179.99,
+    "east_m": 0.0,
+    "north_m": 0.0,
+    "result_longitude": 179.99,
+    "result_latitude": 0.0
+  }
+]

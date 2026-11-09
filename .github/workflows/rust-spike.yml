@@ -1,0 +1,63 @@
+name: Rust migration spike (isolated)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['arena/91c36018-clps-lunar-mission']
+    paths:
+      - 'Cargo.toml'
+      - 'api/**'
+      - 'tools/spikes/rust-geospatial/**'
+      - 'tests/fixtures/python-v1.11/**'
+      - '.github/workflows/rust-spike.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  spike:
+    name: Rust runtime + geospatial candidate spike (Linux CI, not Vercel)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch SHA queried 2026-11-09
+        with:
+          toolchain: '1.91.0'
+          components: rustfmt, clippy
+      - name: Rust formatting
+        run: |
+          cargo fmt --check
+          cargo fmt --manifest-path tools/spikes/rust-geospatial/Cargo.toml --check
+      - name: Rust clippy
+        run: |
+          cargo clippy --all-targets -- -D warnings
+          cargo clippy --manifest-path tools/spikes/rust-geospatial/Cargo.toml --all-targets -- -D warnings
+      - name: Geospatial candidate tests against Python golden fixtures
+        run: cargo test --manifest-path tools/spikes/rust-geospatial/Cargo.toml -- --nocapture
+      - name: Compile official-runtime health function
+        run: cargo build --release --bin health
+      - name: Serve and smoke the official-runtime handler locally on Linux
+        run: |
+          VERCEL_DEV_PORT=8000 ./target/release/health > /tmp/health.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/api/health > /tmp/health.json; then break; fi
+            sleep 1
+          done
+          cat /tmp/health.json
+          python3 -c 'import json; d=json.load(open("/tmp/health.json")); assert d=={"status":"ok","product":"CHANDRA Terrain Lab API"}'
+      - name: Attempt Vercel tooling build (credentials not supplied)
+        continue-on-error: true
+        run: npx --yes vercel@65.12.1 build --yes > /tmp/vercel-build.log 2>&1; code=$?; cat /tmp/vercel-build.log; exit $code
+      - name: Upload spike evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rust-spike-evidence
+          path: |
+            /tmp/health.json
+            /tmp/health.log
+            /tmp/vercel-build.log
+            tools/spikes/rust-geospatial/Cargo.lock
+          if-no-files-found: warn

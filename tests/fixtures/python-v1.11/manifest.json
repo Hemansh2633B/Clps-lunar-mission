@@ -1,0 +1,146 @@
+{
+  "schema": "chandra-python-reference/1",
+  "baseline_commit": "9b7727776508f32c98cb14d8cb097d7326271a6c",
+  "captured_with": {
+    "python": "3.11.2",
+    "numpy": "2.4.6",
+    "rasterio": "1.4.4",
+    "gdal": "3.10.3",
+    "pyproj": "3.7.2",
+    "proj": "9.5.1"
+  },
+  "purpose": "Software parity only. Every raster is synthetic; none is lunar observation data.",
+  "tolerances": {
+    "elevations_m_abs": 0.01,
+    "landing_elevation_m_abs": 0.001,
+    "horizon_elevations_deg_abs": 0.001,
+    "horizon_ranges_km_abs": 0.001,
+    "coordinates_deg_abs": 1e-09,
+    "local_distances_m_abs": 1e-06,
+    "nodata_mask": "exact",
+    "statistics_and_coverage": "exact after Python rounding",
+    "note": "Existing v1.11 test tolerances; not widened for Rust."
+  },
+  "cases": [
+    {
+      "name": "flat",
+      "raster": "flat.tif",
+      "raster_sha256": "f957146c245fc5cf0f6735b38fd7d0c18f6596562d70e4339f98051b6130e514",
+      "config": "flat.config.json",
+      "latitude": -89.5,
+      "longitude": 45.0,
+      "radius_km": 5.0,
+      "qualities": [
+        "low"
+      ]
+    },
+    {
+      "name": "sloped",
+      "raster": "sloped.tif",
+      "raster_sha256": "de5b3c60cc3519ecc9b8945b52ef67886e31d0acb2e0effa706bf48ae299cad7",
+      "config": "sloped.config.json",
+      "latitude": -89.5,
+      "longitude": 45.0,
+      "radius_km": 5.0,
+      "qualities": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    {
+      "name": "crater",
+      "raster": "crater.tif",
+      "raster_sha256": "84093d8ecbd316d02402c211468efd92d63bd9d65b3915fc1cb428f82cdb7f6d",
+      "config": "crater.config.json",
+      "latitude": -89.5,
+      "longitude": 45.0,
+      "radius_km": 5.0,
+      "qualities": [
+        "low"
+      ]
+    },
+    {
+      "name": "nodata",
+      "raster": "nodata.tif",
+      "raster_sha256": "61d04ba80887731018ce585ed9e9ad52e2c586698456ec293d433fe19a16977a",
+      "config": "nodata.config.json",
+      "latitude": -89.5,
+      "longitude": 45.0,
+      "radius_km": 5.0,
+      "qualities": [
+        "low"
+      ]
+    },
+    {
+      "name": "scaled",
+      "raster": "scaled.tif",
+      "raster_sha256": "8cde74843181aef4faf741c29b91233a3e5431027fd33b4acea1dcb3c1a95e88",
+      "config": "scaled.config.json",
+      "latitude": -89.5,
+      "longitude": 45.0,
+      "radius_km": 5.0,
+      "qualities": [
+        "low"
+      ]
+    },
+    {
+      "name": "radius",
+      "raster": "radius.tif",
+      "raster_sha256": "df0935633a1b63e8b43d6d625b7cddf02aaeab3e9fc9fc23d05ee47aa02a8e4b",
+      "config": "radius.config.json",
+      "latitude": -89.5,
+      "longitude": 45.0,
+      "radius_km": 5.0,
+      "qualities": [
+        "low"
+      ]
+    },
+    {
+      "name": "km",
+      "raster": "km.tif",
+      "raster_sha256": "a207d59cc20496744f2693280d5941b995a265918535dbc5443264137b52ec51",
+      "config": "km.config.json",
+      "latitude": -89.5,
+      "longitude": 45.0,
+      "radius_km": 5.0,
+      "qualities": [
+        "low"
+      ]
+    },
+    {
+      "name": "lon-wrap-0",
+      "raster": "lon-wrap-0.tif",
+      "raster_sha256": "ea94712fab04385b5d3b61d52fc24f366ed10e09e934c9f815b537e2703f2fd0",
+      "config": "lon-wrap-0.config.json",
+      "latitude": -89.5,
+      "longitude": 359.0,
+      "radius_km": 5.0,
+      "qualities": [
+        "low"
+      ]
+    },
+    {
+      "name": "lon-wrap-180",
+      "raster": "lon-wrap-180.tif",
+      "raster_sha256": "ecec2a1b9612e3711a6a9f06307fd92a6c2be725674e3696d334a35e88ff9c1a",
+      "config": "lon-wrap-180.config.json",
+      "latitude": -89.5,
+      "longitude": 179.0,
+      "radius_km": 5.0,
+      "qualities": [
+        "low"
+      ]
+    }
+  ],
+  "remote_cog": {
+    "raster": "remote-cog.tif",
+    "sha256": "5b7af155e4ef16ece3f0cc54036dfa05a216721fce89355b003ef34cb48d7032",
+    "window": {
+      "row_off": 500,
+      "col_off": 500,
+      "rows": 4,
+      "cols": 4
+    }
+  }
+}

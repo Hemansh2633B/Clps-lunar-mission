@@ -1,0 +1,7 @@
+{
+  "vertical_unit": "km",
+  "value_kind": "elevation",
+  "elevation_reference": "Synthetic migration fixture; no scientific datum",
+  "lunar_reference_frame": "MOON_ME (DE421) — synthetic software fixture, not lunar observations",
+  "elevation_reference_radius_m": 1737400.0
+}
