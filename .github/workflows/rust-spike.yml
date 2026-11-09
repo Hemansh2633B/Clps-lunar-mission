@@ -35,10 +35,20 @@ jobs:
           cargo clippy --all-targets -- -D warnings
           cargo clippy --manifest-path tools/spikes/rust-geospatial/Cargo.toml --all-targets -- -D warnings
       - name: Geospatial candidate tests against Python golden fixtures
-        run: cargo test --manifest-path tools/spikes/rust-geospatial/Cargo.toml -- --nocapture
+        id: geospatial
+        continue-on-error: true
+        run: cargo test --manifest-path tools/spikes/rust-geospatial/Cargo.toml -- --nocapture 2>&1 | tee /tmp/spike-tests.log
+      - name: Surface geospatial failures as check annotations
+        if: always()
+        run: |
+          if [ -f /tmp/spike-tests.log ]; then
+            grep -E 'panicked|FAILED|failures:|assertion|Error:|test result' /tmp/spike-tests.log | while IFS= read -r line; do echo "::error::spike: $line"; done
+          fi
       - name: Compile official-runtime health function
+        if: always()
         run: cargo build --release --bin health
       - name: Serve and smoke the official-runtime handler locally on Linux
+        if: always()
         run: |
           VERCEL_DEV_PORT=8000 ./target/release/health > /tmp/health.log 2>&1 &
           pid=$!
@@ -67,6 +77,11 @@ jobs:
             /tmp/health.log
             /tmp/vercel-build.log
             /tmp/rustfmt.patch
+            /tmp/spike-tests.log
             Cargo.lock
             tools/spikes/rust-geospatial/Cargo.lock
           if-no-files-found: warn
+      - name: Fail if any required spike step failed
+        if: always()
+        run: |
+          test '${{ steps.geospatial.outcome }}' = 'success'
