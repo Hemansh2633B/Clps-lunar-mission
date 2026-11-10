@@ -1,0 +1,28 @@
+name: Go migration spike
+
+on:
+  push:
+    branches: [main, 'arena/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go tests · vet · build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Test all Go packages
+        run: go test -race ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Build Vercel health function and local server
+        run: go build ./api ./cmd/spike-server
