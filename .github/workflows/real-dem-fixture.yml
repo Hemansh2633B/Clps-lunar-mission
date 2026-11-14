@@ -4,7 +4,7 @@ name: Real-DEM fixture smoke (optional)
 # It fetches a small third-party LOLA-derived downsample from GitHub (not NASA)
 # and exercises projected-DEM loading → crop → horizon → mission import.
 # The fixture is gap-filled and is NOT a flight or science product; see
-# scripts/fetch-lola-verification-fixture.py and docs/verification.md.
+# cmd/chandra-fixture and docs/verification.md.
 on:
   workflow_dispatch:
 
@@ -22,25 +22,25 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: package-lock.json
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          python-version: '3.11'
+          go-version-file: go.mod
+          cache: false
       - name: Install Node dependencies
         run: npm ci
-      - name: Install Python dependencies
-        run: |
-          python -m venv .venv
-          .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -r requirements-dev.txt
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Fetch software verification fixture (GitHub derivative, not NASA)
-        run: .venv/bin/python scripts/fetch-lola-verification-fixture.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm run fixture:lola
+      - name: Native engine vs recorded golden outputs on the real LOLA-derived raster
+        run: npm run test:go -- ./backend/terrain -run RealLOLA -v
       - name: Production build
         run: npm run build
       - name: Start backend with the verification DEM
         run: |
-          .venv/bin/python -m backend.server --dem-config data/verification/lola_verification_config.json --port 8001 > /tmp/real-dem-api.log 2>&1 &
+          npm run dev:api -- --dem-config data/verification/lola_verification_config.json --port 8001 > /tmp/real-dem-api.log 2>&1 &
           for i in $(seq 1 60); do
             if curl -sf http://localhost:8001/api/health >/dev/null 2>&1; then
               echo "real-DEM API up"; break

@@ -17,7 +17,7 @@ import lunar_frame as lf  # noqa: E402
 
 REF = json.loads((Path(__file__).resolve().parents[2] / "tests" / "data" / "frame-reference.json").read_text())
 HAS_KERNELS = lf.kernels_available()
-needs_kernels = pytest.mark.skipif(not HAS_KERNELS, reason="SPICE kernels not present (run scripts/fetch-spice-kernels.py)")
+needs_kernels = pytest.mark.skipif(not HAS_KERNELS, reason="SPICE kernels not present (run tools/spice-evidence/fetch_spice_kernels.py)")
 
 
 @pytest.mark.parametrize("frame,transform", [
