@@ -11,11 +11,47 @@ permissions:
   contents: read
 
 jobs:
-  # Ordinary CI never depends on an external NASA download. SPICE-kernel-gated tests
-  # are skipped here and reported as SKIPPED (never as a passed validation). The
-  # separate spice-validation job runs them for real when kernels are fetched.
+  # Ordinary CI never depends on NASA/JPL/LROC network availability: service
+  # integrations are exercised against recorded fixtures (backend/horizons/testdata,
+  # tests/golden). Optional live tests are opt-in (CHANDRA_LIVE_TESTS=1) and never
+  # run here. The application, its tests and its deployment are Python-free.
   quality:
-    name: Typecheck · build · unit · geometry · parity · Python
+    name: Typecheck · build · unit · geometry · native backend · parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Install Node dependencies
+        run: npm ci
+      - name: TypeScript typecheck
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
+      - name: Unit tests (engine, ephemeris + Horizons validation, frames, sampling, energy, exports, catalogue, map)
+        run: npm test
+      - name: Geometry checks
+        run: npm run test:geometry
+      - name: Native backend (gofmt, vet, Go tests incl. Python-golden parity and Flask contract replay)
+        run: npm run test:go
+      - name: TypeScript / native Go horizon parity
+        run: npm run test:parity
+      - name: Vercel configuration (static checks)
+        run: npm run vercel:check
+
+  # Builds the real Vercel output with the official CLI (no credentials needed),
+  # checks the generated routing table and EXECUTES the compiled Go function
+  # through a local Lambda-runtime emulator. A live deployment is a separate,
+  # credentialed step that this workflow never performs.
+  vercel-build:
+    name: Vercel build output (Go function executed locally)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -26,44 +62,16 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install Node dependencies
         run: npm ci
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.11'
-      - name: Install Python dependencies
-        run: |
-          python -m venv .venv
-          .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -r requirements-dev.txt
-      - name: TypeScript typecheck
-        run: npm run typecheck
-      - name: Production build
-        run: npm run build
-      - name: Unit tests (engine, ephemeris validation, frames, sampling, energy, exports, catalogue)
-        run: npm test
-      - name: Geometry checks
-        run: npm run test:geometry
-      - name: TypeScript / Python horizon parity
-        run: npm run test:parity
-      - name: Python tests (kernel-gated SPICE tests skip without kernels)
-        run: .venv/bin/python -m pytest -q -rs
-      - name: Report SPICE validation status honestly
-        run: |
-          .venv/bin/python - <<'PY'
-          from backend import lunar_frame as lf
-          available = lf.kernels_available()
-          print(f"SPICE kernels available: {available}")
-          if not available:
-              print("Independent SPICE validation: SKIPPED in this job (kernels not fetched).")
-              print("A skipped SPICE test is NOT a passed validation. See the spice-validation job.")
-          else:
-              print("SPICE kernels present; kernel-gated tests executed in the pytest step above.")
-          PY
+      - name: vercel build + route simulation + function execution
+        run: node scripts/vercel-check.mjs --build
 
   # Real independent SPICE validation. v1.9: also runs on pull requests so every
   # PR carries a VISIBLE, required SPICE result (never skipped-as-passed). Kernels
   # come from checksummed public GitHub mirrors (not NASA), recorded in
   # data/kernels/PROVENANCE.json; the job FAILS if the fetch fails rather than
   # silently skipping. See docs/ci-governance.md for the required-check list.
+  # This is the only job that uses Python: tools/spice-evidence is an isolated
+  # evidence generator, not part of the application, its build or its deployment.
   spice-validation:
     name: Independent SPICE validation (fetched kernels)
     runs-on: ubuntu-latest
@@ -73,26 +81,26 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.11'
-      - name: Install Python dependencies + spiceypy
+      - name: Install the isolated evidence tool (Python is used ONLY by this job)
         run: |
-          python -m venv .venv
-          .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -r requirements-dev.txt spiceypy
+          python -m venv .venv-spice
+          .venv-spice/bin/pip install --upgrade pip
+          .venv-spice/bin/pip install -r tools/spice-evidence/requirements.txt
       - name: Fetch SPICE kernels (checksummed GitHub mirrors)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: .venv/bin/python scripts/fetch-spice-kernels.py
+        run: .venv-spice/bin/python tools/spice-evidence/fetch_spice_kernels.py
       - name: Verify kernels are present (fail rather than silently skip)
         run: |
-          .venv/bin/python - <<'PY'
-          from backend import lunar_frame as lf
+          cd tools/spice-evidence && ../../.venv-spice/bin/python - <<'PY'
+          import lunar_frame as lf
           assert lf.kernels_available(), "SPICE kernels missing — refusing to report a skipped validation as passed."
           print("SPICE kernels present; running the independent validation for real.")
           PY
       - name: Run kernel-gated SPICE frame tests
-        run: .venv/bin/python -m pytest tests/python/test_lunar_frame.py -q -rs
+        run: .venv-spice/bin/python -m pytest tools/spice-evidence -q -rs
 
-  # Browser E2E against a live dev server + terrain API (no DEM configured, so the
+  # Browser E2E against a live dev server + native terrain API (no DEM configured, so the
   # real-mode no-DEM safeguard is exercised). Uses Playwright's portable Chromium.
   browser:
     name: Browser E2E (mission · terrain · space · onboarding)
@@ -104,16 +112,12 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: package-lock.json
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
       - name: Install Node dependencies
         run: npm ci
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.11'
-      - name: Install Python dependencies
-        run: |
-          python -m venv .venv
-          .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -r requirements-dev.txt
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Start terrain API + dev console

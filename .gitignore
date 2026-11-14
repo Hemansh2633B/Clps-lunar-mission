@@ -14,13 +14,22 @@ data/*config.json
 __pycache__/
 *.pyc
 .pytest_cache/
+.venv-spice/
 artifacts/
 
 # Local verification DEM fixtures (large raster data)
 data/verification/
 
-# SPICE kernels (large binaries; reproducible via scripts/fetch-spice-kernels.py)
+# SPICE kernels (large binaries; reproducible via tools/spice-evidence/fetch_spice_kernels.py)
 data/kernels/
 
 # Local DEM configuration (copy of dem_config.example.json with verified values)
 dem_config.json
+
+# Native backend: acquired regional DEM subsets (local object store) and build output
+data/acquired/
+/chandra-api
+/chandra-lola
+
+# Vercel CLI project link and local build output
+.vercel/

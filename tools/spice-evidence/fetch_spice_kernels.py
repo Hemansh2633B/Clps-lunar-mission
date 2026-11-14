@@ -17,7 +17,7 @@ Mirrors:
   skyfielders/python-skyfield  ci/   (Skyfield's own CI kernel set)
   MillionConcepts/lhorizon     lhorizon/kernels/
 
-Usage:  python scripts/fetch-spice-kernels.py [--dest data/kernels]
+Usage:  python tools/spice-evidence/fetch_spice_kernels.py [--dest data/kernels]
 Requires GH_TOKEN or GITHUB_TOKEN in the environment (read-only public access).
 Writes data/kernels/PROVENANCE.json with source URL + SHA-256 for each file.
 """

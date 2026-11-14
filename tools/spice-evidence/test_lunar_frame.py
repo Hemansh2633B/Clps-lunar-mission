@@ -10,9 +10,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from backend import lunar_frame as lf
+import sys
 
-REF = json.loads((Path(__file__).resolve().parents[1] / "data" / "frame-reference.json").read_text())
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import lunar_frame as lf  # noqa: E402
+
+REF = json.loads((Path(__file__).resolve().parents[2] / "tests" / "data" / "frame-reference.json").read_text())
 HAS_KERNELS = lf.kernels_available()
 needs_kernels = pytest.mark.skipif(not HAS_KERNELS, reason="SPICE kernels not present (run scripts/fetch-spice-kernels.py)")
 

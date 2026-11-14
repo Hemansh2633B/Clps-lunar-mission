@@ -1,0 +1,12 @@
+# Keep deployments small: the Go function embeds what it needs; rasters never ship.
+node_modules
+dist
+data
+screenshots
+tests
+docs
+tools
+artifacts
+*.tif
+*.tiff
+.venv*

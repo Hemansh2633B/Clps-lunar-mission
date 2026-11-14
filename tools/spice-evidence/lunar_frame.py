@@ -41,7 +41,7 @@ except Exception:  # pragma: no cover - spiceypy is an optional validation dep
     sp = None
     _HAS_SPICE = False
 
-KERNEL_DIR = Path(os.environ.get("CHANDRA_KERNEL_DIR", Path(__file__).resolve().parent.parent / "data" / "kernels"))
+KERNEL_DIR = Path(os.environ.get("CHANDRA_KERNEL_DIR", Path(__file__).resolve().parents[2] / "data" / "kernels"))
 _REQUIRED = ["naif0012.tls", "de421.bsp", "moon_080317.tf", "moon_pa_de421_1900-2050.bpc"]
 _loaded = False
 _load_error: Optional[str] = None
@@ -66,7 +66,7 @@ def _ensure_loaded() -> None:
         return
     missing = [f for f in _REQUIRED if not (KERNEL_DIR / f).is_file()]
     if missing:
-        _load_error = f"Missing SPICE kernels in {KERNEL_DIR}: {', '.join(missing)}. Run scripts/fetch-spice-kernels.py."
+        _load_error = f"Missing SPICE kernels in {KERNEL_DIR}: {', '.join(missing)}. Run tools/spice-evidence/fetch_spice_kernels.py."
         return
     for f in _REQUIRED:
         sp.furnsh(str(KERNEL_DIR / f))

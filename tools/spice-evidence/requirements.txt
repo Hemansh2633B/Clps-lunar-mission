@@ -1,0 +1,4 @@
+# Optional, isolated evidence tool. NOT needed to install, run, test or deploy CHANDRA.
+numpy>=2.0,<3
+spiceypy>=6,<7
+pytest>=8,<10
