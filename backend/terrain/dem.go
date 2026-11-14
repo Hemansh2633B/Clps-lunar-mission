@@ -210,6 +210,30 @@ func OpenDEM(s *Settings) (*DEM, error) {
 	return d, nil
 }
 
+// OpenReader validates a raster held in memory or behind any io.ReaderAt (for
+// example an acquired subset from object storage).
+func OpenReader(r io.ReaderAt, size int64, name string, options map[string]any, datasetID string) (*DEM, error) {
+	f, err := geotiff.Open(r, size)
+	if err != nil {
+		return nil, Errorf("Cannot read DEM. Check that the raster is intact and its label/georeferencing is available. %v", err)
+	}
+	d, err := Inspect(f, options, name)
+	if err != nil {
+		return nil, err
+	}
+	d.Info.DatasetID = datasetID
+	return d, nil
+}
+
+// Bounds returns the raster extent in CRS units: left, bottom, right, top.
+func (d *DEM) Bounds() [4]float64 {
+	g, w, h := d.GT, float64(d.File.Width), float64(d.File.Height)
+	xs := []float64{g[0], g[0] + w*g[1], g[0] + h*g[2], g[0] + w*g[1] + h*g[2]}
+	ys := []float64{g[3], g[3] + w*g[4], g[3] + h*g[5], g[3] + w*g[4] + h*g[5]}
+	return [4]float64{math.Min(math.Min(xs[0], xs[1]), math.Min(xs[2], xs[3])), math.Min(math.Min(ys[0], ys[1]), math.Min(ys[2], ys[3])),
+		math.Max(math.Max(xs[0], xs[1]), math.Max(xs[2], xs[3])), math.Max(math.Max(ys[0], ys[1]), math.Max(ys[2], ys[3]))}
+}
+
 // ToElevationM converts a raw sample to metres above the reference sphere.
 func (d *DEM) ToElevationM(raw float64) float64 {
 	v := raw*d.Info.Scale + d.Info.Offset

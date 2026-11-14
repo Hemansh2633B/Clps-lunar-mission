@@ -137,24 +137,39 @@ func (r Request) get(key string, def any) any {
 	return def
 }
 
-// Build produces the terrain for a request body (real or synthetic). Real mode
-// never falls back to synthetic data.
-func Build(s *Settings, body Request) (*Terrain, error) {
+// Opener yields the DEM a real-mode request should read.
+type Opener func() (*DEM, error)
+
+// Build produces the terrain for a request body (real or synthetic). Inputs are
+// validated before the DEM is opened. Real mode never falls back to synthetic data.
+func Build(open Opener, body Request) (*Terrain, error) {
 	switch mode := body.get("mode", "real"); mode {
 	case "synthetic":
 		return SyntheticTerrain(body["latitude"], body["longitude"], body["radius_km"], body.get("quality", "medium"))
 	case "real":
-		return ExtractTerrain(s, body["latitude"], body["longitude"], body["radius_km"], body.get("quality", "medium"))
+		lat, lon, radius, q, err := ValidateLocation(body["latitude"], body["longitude"], body["radius_km"], body.get("quality", "medium"))
+		if err != nil {
+			return nil, err
+		}
+		d, err := open()
+		if err != nil {
+			return nil, err
+		}
+		defer d.Close()
+		return d.Extract(lat, lon, radius, q)
 	default:
 		return nil, Errorf("Mode must be real or synthetic.")
 	}
 }
 
 // ExtractHorizon builds the terrain for a request and ray-marches its horizon.
-func ExtractHorizon(s *Settings, body Request) (*Horizon, error) {
-	t, err := Build(s, body)
+func ExtractHorizon(open Opener, body Request) (*Horizon, error) {
+	t, err := Build(open, body)
 	if err != nil {
 		return nil, err
 	}
 	return HorizonFromGrid(t, body.get("az_step_deg", 2.0), body.get("eye_height_m", 2.0))
 }
+
+// SettingsOpener opens the single configured DEM.
+func SettingsOpener(s *Settings) Opener { return func() (*DEM, error) { return OpenDEM(s) } }
