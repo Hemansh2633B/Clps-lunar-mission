@@ -3,7 +3,7 @@ import type { TerrainData, TerrainQuality } from './types';
 export const QUALITY_GRIDS: Record<TerrainQuality, number> = { low: 129, medium: 257, high: 513 };
 export const SYNTHETIC_WARNING = 'SYNTHETIC TERRAIN — NOT REAL LUNAR DATA';
 
-/** Built-in offline demo matching backend/synthetic.py. Never used for real mode. */
+/** Built-in offline demo matching the native backend (terrain.SyntheticTerrain in backend/terrain/model.go). Never used for real mode. */
 export function syntheticTerrain(latitude: number, longitude: number, radiusKm: number, quality: TerrainQuality = 'medium'): TerrainData {
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) throw new Error('Latitude must be between -90 and +90 degrees.');
   if (!Number.isFinite(longitude) || longitude < -180 || longitude > 360) throw new Error('Longitude must be in -180…180 or 0…360 degrees.');

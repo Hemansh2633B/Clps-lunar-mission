@@ -6,6 +6,7 @@ import { brotliDecompressSync } from 'node:zlib';
 import { join } from 'node:path';
 
 const BASE = process.env.BASE_URL || 'http://localhost:5173/';
+const SCALE = Number(process.env.CHANDRA_E2E_TIMEOUT_SCALE) || 1;
 const OUT = 'screenshots';
 // Screenshots are artifacts, not assertions: on headless SwiftShader the
 // compositor can stall a capture even while the app is healthy. Best-effort
@@ -37,7 +38,10 @@ const browser = CI_BROWSER
       env: { ...process.env, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH || '/tmp/al2023/lib', FONTCONFIG_PATH: '/tmp/fonts' },
     });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
-page.setDefaultTimeout(45000);
+// CHANDRA_E2E_TIMEOUT_SCALE stretches every wait for software-rendered browsers (no GPU), where
+// the first frames after starting playback or opening a 3D view can take a minute to composite.
+// It changes patience only, never an assertion; screenshots keep their own short timeouts.
+page.setDefaultTimeout(45000 * SCALE);
 const consoleErrors = [];
 const pageErrors = [];
 page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
@@ -75,7 +79,7 @@ const buildTerrain = async ({ mode, quality, radius } = {}) => {
   if (radius != null) await page.getByLabel('Radius km', { exact: true }).fill(String(radius));
   const expected = quality === 'low' ? 129 : quality === 'high' ? 513 : 257;
   await page.getByRole('button', { name: /Build terrain/ }).click();
-  await page.waitForFunction((n) => window.__CHANDRA_TERRAIN__?.gridSize === n && !document.querySelector('.terrain-loading'), expected, { timeout: 30000 });
+  await page.waitForFunction((n) => window.__CHANDRA_TERRAIN__?.gridSize === n && !document.querySelector('.terrain-loading'), expected, { timeout: 30000 * SCALE });
   await page.waitForTimeout(250);
 };
 
@@ -125,7 +129,7 @@ try {
   await shot(page, '02-apollo11');
 
   await page.locator('.site-item', { hasText: "Chang'e 4" }).click();
-  await page.waitForSelector('text=NEVER', { timeout: 20000 }); // wait for the mission summary, not a fixed delay
+  await page.waitForSelector('text=NEVER', { timeout: 20000 * SCALE }); // wait for the mission summary, not a fixed delay
   assert(await page.locator('text=NEVER').count() > 0, 'far side reports NEVER');
   await shot(page, '03-farside');
 
@@ -164,7 +168,7 @@ try {
 
   // Export is intentionally blocked while the mission window is computing (never
   // stale), so wait for the active scenario to resolve before exporting.
-  await page.waitForSelector('text=How this score is computed', { timeout: 30000 });
+  await page.waitForSelector('text=How this score is computed', { timeout: 30000 * SCALE });
   const [download] = await Promise.all([
     page.waitForEvent('download'),
     (async () => {
@@ -181,7 +185,7 @@ try {
 
   // Terrain Lab: ported prototype capabilities + integrated DEM workflow.
   await page.keyboard.press('t');
-  await page.waitForFunction(() => window.__CHANDRA_TERRAIN__ && window.__CHANDRA_TERRAIN__.gridSize === 257, null, { timeout: 30000 });
+  await page.waitForFunction(() => window.__CHANDRA_TERRAIN__ && window.__CHANDRA_TERRAIN__.gridSize === 257, null, { timeout: 30000 * SCALE });
   await page.waitForTimeout(800);
   const initialTerrain = await terrainState();
   assert(initialTerrain.mode === 'synthetic', 'terrain lab starts in labeled synthetic mode');
@@ -203,7 +207,7 @@ try {
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.72, box.y + box.height * 0.57, { steps: 6 });
   await page.mouse.up();
-  await page.waitForFunction((before) => JSON.stringify(window.__CHANDRA_TERRAIN__?.camera) !== before, JSON.stringify(initialTerrain.camera), { timeout: 5000 });
+  await page.waitForFunction((before) => JSON.stringify(window.__CHANDRA_TERRAIN__?.camera) !== before, JSON.stringify(initialTerrain.camera), { timeout: 5000 * SCALE });
   assert(JSON.stringify((await terrainState()).camera) !== JSON.stringify(initialTerrain.camera), 'drag orbits camera');
   await page.getByRole('button', { name: /Reset view/ }).click();
   await page.waitForTimeout(300);
@@ -212,11 +216,11 @@ try {
   await canvas.focus();
   const beforeKey = await terrainState();
   await page.keyboard.press('ArrowRight');
-  await page.waitForFunction((before) => JSON.stringify(window.__CHANDRA_TERRAIN__?.camera) !== before, JSON.stringify(beforeKey.camera), { timeout: 5000 });
+  await page.waitForFunction((before) => JSON.stringify(window.__CHANDRA_TERRAIN__?.camera) !== before, JSON.stringify(beforeKey.camera), { timeout: 5000 * SCALE });
   assert(JSON.stringify((await terrainState()).camera) !== JSON.stringify(beforeKey.camera), 'arrow key orbits focused viewport');
   await page.keyboard.press('Home');
   await page.getByRole('button', { name: 'Top', exact: true }).click();
-  await page.waitForFunction(() => { const c = window.__CHANDRA_TERRAIN__?.camera; return c && c[1] > Math.abs(c[0]) * 5; }, null, { timeout: 5000 });
+  await page.waitForFunction(() => { const c = window.__CHANDRA_TERRAIN__?.camera; return c && c[1] > Math.abs(c[0]) * 5; }, null, { timeout: 5000 * SCALE });
   const top = await terrainState();
   assert(top.camera[1] > Math.abs(top.camera[0]) * 5, 'top-down preset');
   await page.getByRole('button', { name: 'Oblique', exact: true }).click();
@@ -268,7 +272,7 @@ try {
   await page.getByLabel('Azimuth bin').selectOption('10');
   await page.getByLabel('Eye height m').fill('5');
   await page.getByRole('button', { name: /Compute 360° horizon/ }).click();
-  await page.waitForFunction(() => window.__CHANDRA_TERRAIN__?.horizon?.bins === 36, null, { timeout: 30000 });
+  await page.waitForFunction(() => window.__CHANDRA_TERRAIN__?.horizon?.bins === 36, null, { timeout: 30000 * SCALE });
   const hz = await terrainState();
   assert(hz.horizon.coverage === 100, 'complete synthetic disk has full ray coverage after edge inset');
   assert(hz.horizon.importBlocked === null, 'synthetic demo import is allowed but labeled');
@@ -286,7 +290,7 @@ try {
 
   // Real mode never silently falls back when no DEM is configured.
   await page.keyboard.press('t');
-  await page.waitForFunction(() => window.__CHANDRA_TERRAIN__?.gridSize === 257, null, { timeout: 30000 });
+  await page.waitForFunction(() => window.__CHANDRA_TERRAIN__?.gridSize === 257, null, { timeout: 30000 * SCALE });
   await page.getByLabel('Source', { exact: true }).selectOption('real');
   await page.getByRole('button', { name: /Build terrain/ }).click();
   await page.waitForSelector('text=No DEM configured');
@@ -297,7 +301,7 @@ try {
 
   // Mobile layout: no horizontal overflow, viewport still usable.
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.waitForFunction(() => { const c = document.querySelector('.terrain-viewport canvas'); return c && c.getBoundingClientRect().width <= 391; }, null, { timeout: 5000 });
+  await page.waitForFunction(() => { const c = document.querySelector('.terrain-viewport canvas'); return c && c.getBoundingClientRect().width <= 391; }, null, { timeout: 5000 * SCALE });
   await page.waitForTimeout(400);
   await page.screenshot({ animations: 'disabled', path: `${OUT}/08-terrain-mobile.png`, fullPage: true });
   const overflow = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth, wide: [...document.querySelectorAll('*')].filter((el) => el.getBoundingClientRect().right > window.innerWidth + 1).slice(0, 8).map((el) => `${el.tagName}.${el.className} ${Math.round(el.getBoundingClientRect().right)}`) }));
@@ -314,7 +318,7 @@ try {
   const planetState = () => page.evaluate(() => window.__CHANDRA_PLANET__);
   const fleetState = () => page.evaluate(() => window.__CHANDRA_FLEET__);
   await page.keyboard.press('o');
-  await page.waitForFunction(() => window.__CHANDRA_PLANET__ && window.__CHANDRA_PLANET__.sites > 0, null, { timeout: 30000 });
+  await page.waitForFunction(() => window.__CHANDRA_PLANET__ && window.__CHANDRA_PLANET__.sites > 0, null, { timeout: 30000 * SCALE });
   await page.waitForTimeout(1400); // let the Moon texture decode
   assert(await page.locator('.planet-viewport canvas').isVisible(), 'planet viewport renders');
   assert((await planetState()).sites >= 10, 'planet shows the site catalog markers');
@@ -325,22 +329,22 @@ try {
   const beforeLapse = await planetState();
   await page.getByLabel('Time-lapse speed').selectOption('4'); // 7 days / s
   await page.locator('.timelapse-bar button').first().click();
-  await page.waitForFunction(() => window.__CHANDRA_PLANET__?.playing === true, null, { timeout: 5000 });
+  await page.waitForFunction(() => window.__CHANDRA_PLANET__?.playing === true, null, { timeout: 5000 * SCALE });
   await page.waitForTimeout(1300);
   const duringLapse = await planetState();
   assert(duringLapse.timeMs > beforeLapse.timeMs, 'time-lapse advances the clock');
   assert(Math.abs(duringLapse.subsolar[1] - beforeLapse.subsolar[1]) > 5 || Math.abs(duringLapse.subsolar[0] - beforeLapse.subsolar[0]) > 1, 'sub-solar point moves during time-lapse');
   await page.locator('.timelapse-bar button').first().click(); // pause
-  await page.waitForFunction(() => window.__CHANDRA_PLANET__?.playing === false, null, { timeout: 5000 });
+  await page.waitForFunction(() => window.__CHANDRA_PLANET__?.playing === false, null, { timeout: 5000 * SCALE });
   // Camera presets reposition the camera.
   const camBefore = (await planetState()).camera;
   await page.getByRole('button', { name: 'South pole', exact: true }).click();
-  await page.waitForFunction((before) => JSON.stringify(window.__CHANDRA_PLANET__?.camera) !== before, JSON.stringify(camBefore), { timeout: 5000 });
+  await page.waitForFunction((before) => JSON.stringify(window.__CHANDRA_PLANET__?.camera) !== before, JSON.stringify(camBefore), { timeout: 5000 * SCALE });
   assert((await planetState()).camera[1] < -2, 'south-pole preset looks up at the pole');
 
   // Fleet hangar tab.
   await page.getByRole('tab', { name: /Fleet hangar/ }).click();
-  await page.waitForFunction(() => window.__CHANDRA_FLEET__ && window.__CHANDRA_FLEET__.parts > 1, null, { timeout: 30000 });
+  await page.waitForFunction(() => window.__CHANDRA_FLEET__ && window.__CHANDRA_FLEET__.parts > 1, null, { timeout: 30000 * SCALE });
   await page.waitForTimeout(700);
   assert((await fleetState()).vehicle === 'starship-stack', 'fleet defaults to the Starship stack');
   assert(await page.locator('.fleet-viewport canvas').isVisible(), 'fleet viewport renders');
@@ -350,21 +354,21 @@ try {
 
   // Stage separation slider moves the upper stage.
   await setRange(page.locator('.fleet-controls input[type="range"]'), 0.8);
-  await page.waitForFunction(() => window.__CHANDRA_FLEET__?.separation > 0.5, null, { timeout: 5000 });
+  await page.waitForFunction(() => window.__CHANDRA_FLEET__?.separation > 0.5, null, { timeout: 5000 * SCALE });
   assert((await fleetState()).separation > 0.5, 'stage separation slider works');
   // Engine plume toggle.
   await page.getByRole('button', { name: /Ignite engines/ }).click();
-  await page.waitForFunction(() => window.__CHANDRA_FLEET__?.plume === true, null, { timeout: 5000 });
+  await page.waitForFunction(() => window.__CHANDRA_FLEET__?.plume === true, null, { timeout: 5000 * SCALE });
   assert((await fleetState()).plume === true, 'engine plume ignites');
 
   // Switch to the HLS lunar lander, then the CLPS lander.
   await page.getByRole('button', { name: 'STARSHIP HLS', exact: true }).click();
-  await page.waitForFunction(() => window.__CHANDRA_FLEET__?.vehicle === 'starship-hls', null, { timeout: 10000 });
+  await page.waitForFunction(() => window.__CHANDRA_FLEET__?.vehicle === 'starship-hls', null, { timeout: 10000 * SCALE });
   await page.waitForTimeout(600);
   assert((await fleetState()).vehicle === 'starship-hls', 'HLS lander loads');
   await shot(page, '11-fleet-hls');
   await page.getByRole('button', { name: 'CLPS LANDER', exact: true }).click();
-  await page.waitForFunction(() => window.__CHANDRA_FLEET__?.vehicle === 'clps-lander', null, { timeout: 10000 });
+  await page.waitForFunction(() => window.__CHANDRA_FLEET__?.vehicle === 'clps-lander', null, { timeout: 10000 * SCALE });
   assert((await fleetState()).vehicle === 'clps-lander', 'CLPS lander loads');
 
   // Hover a part for a KSP-style callout (scan a few points to guarantee a hit).
@@ -413,7 +417,7 @@ try {
   await startDate.dispatchEvent('change');
   await startTime.fill('00:00');
   await startTime.dispatchEvent('change');
-  await page.waitForSelector('text=How this score is computed', { timeout: 30000 });
+  await page.waitForSelector('text=How this score is computed', { timeout: 30000 * SCALE });
   assert(await startDate.inputValue() === '2027-03-01', 'UTC date field retains the chosen value');
   assert(await startTime.inputValue() === '00:00', 'UTC time field retains the chosen value');
   assert(await page.locator('text=SAMPLING').count() > 0, 'sampling disclosure strip present');
@@ -422,13 +426,13 @@ try {
   // a browser running in a different local timezone (Asia/Kolkata, UTC+5:30).
   const tzContext = await browser.newContext({ timezoneId: 'Asia/Kolkata', viewport: { width: 1600, height: 1000 } });
   const tzPage = await tzContext.newPage();
-  tzPage.setDefaultTimeout(45000);
+  tzPage.setDefaultTimeout(45000 * SCALE);
   await tzPage.addInitScript(() => localStorage.setItem('chandra-onboarded-v1', '1'));
   await tzPage.goto(BASE, { waitUntil: 'load' });
   await tzPage.waitForSelector('.app-header .display');
   await tzPage.getByLabel('Mission start date (UTC)').fill('2027-03-01');
   await tzPage.getByLabel('Mission start time (UTC)').fill('00:00');
-  await tzPage.waitForSelector('text=How this score is computed', { timeout: 30000 });
+  await tzPage.waitForSelector('text=How this score is computed', { timeout: 30000 * SCALE });
   const mainSlip = (await page.locator('text=slip →').innerText()).trim();
   const tzSlip = (await tzPage.locator('text=slip →').innerText()).trim();
   assert(mainSlip === tzSlip && mainSlip.includes('2027-03-01'), `UTC start is timezone-independent (${mainSlip} vs ${tzSlip})`);

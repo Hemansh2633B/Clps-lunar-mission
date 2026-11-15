@@ -1,7 +1,7 @@
 // Real-DEM integration smoke test. Requires:
-//   .venv/bin/python scripts/fetch-lola-verification-fixture.py
+//   npm run fixture:lola
 //   npm run build
-//   .venv/bin/python -m backend.server --dem-config data/verification/lola_verification_config.json --port 8001
+//   npm run dev:api -- --dem-config data/verification/lola_verification_config.json --port 8001
 // The fixture is a gap-filled third-party LOLA downsample for SOFTWARE verification only.
 import { chromium as pw } from 'playwright';
 import sparticuz from '@sparticuz/chromium';

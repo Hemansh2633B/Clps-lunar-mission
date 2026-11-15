@@ -6,6 +6,173 @@ validation, and passed from skipped — a skipped SPICE test is never reported
 as a passed validation. See `docs/scientific-method.md` for the method and its
 limits, and `docs/known-issues.md` for open engineering findings.
 
+## v1.12.0 native backend and lunar data release — executed evidence
+
+Executed on branch `arena/0f3b6dab-clps-lunar-mission` from the merged v1.11
+base `9b77277`. `APP_VERSION` is **1.12.0**; `REPORT_SCHEMA_VERSION` is
+**2.1.0** (additive; scientific-method §13.11). Environment: Linux x86_64 with
+2 CPU cores, Node 22.22.3, Go 1.24.11 (and Go 1.23.9 for the compatibility
+row), headless Chromium 153 from `@sparticuz/chromium` with **software
+rendering** (no GPU), Playwright 1.64.1, Vercel CLI 65.16.0.
+
+**No live deployment has been made, and no NASA, JPL or LROC service was
+contacted by the application or its tests.** Those hosts are not reachable from
+this environment. Everything below is local or GitHub Actions. What that leaves
+unverified is listed under [Not verified in v1.12](#not-verified-in-v112).
+
+| Gate | Command | Executed result |
+|---|---|---|
+| Typecheck / build | `npm run typecheck && npm run build` | clean; React / Three / ephemeris / Data Hub are separate chunks |
+| Unit suites | `npm test` | **368 passed, 35 files** (adds polar projection, Horizons comparison and Data Hub catalogue suites) |
+| Native backend | `npm run test:go` (gofmt, `go vet`, `go test ./...`) | gofmt and vet clean; **10 packages ok — 77 tests and 30 subtests passed, 2 skipped**. The two skips are the opt-in live tests (`TestLiveHorizons`, `TestLiveLOLA`), which need `CHANDRA_LIVE_TESTS=1` and network access. Go 1.24.11 |
+| Go 1.23 compatibility | `go vet ./... && go test ./...` with Go 1.23.9, `GOTOOLCHAIN=local` | 10 packages ok (the module declares `go 1.23`) |
+| Geometry | `npm run test:geometry` | passed |
+| TS ↔ Go horizon parity | `npm run test:parity` | passed |
+| SPICE evidence tool | `pytest tools/spice-evidence -q -rs` | **22 passed, 4 skipped** — the 4 kernel-gated tests are skips, not passes; kernels were not fetched in this run. The frame constants and `tests/data/frame-reference.json` are unchanged from v1.11 |
+| Vercel configuration | `npm run vercel:check` | passed: framework pin, single function, rewrite order, CSP matches the catalogue's imagery hosts, `.vercelignore` keeps all 112 files the build needs |
+| Vercel build output | `vercel build` in a copy of the repository **with `.vercelignore` applied** (140 files), then `node scripts/vercel-check.mjs --built` | build completed; the built function (`provided.al2023`, x86_64, 1024 MB, 60 s, 9.0 MB) was executed through a local Lambda-runtime emulator and answered health, config (`deployment: vercel`, storage `local`, `persistent: false`), synthetic terrain, real-mode refusal, horizon, sources, metadata, JSON 404 and verify through the generated rewrites |
+| Data-feature browser E2E | `npm run build && npm run test:datahub` | **19 checks passed** (138 s) on the final tree; see below |
+| Mission / Terrain / Space browser E2E | `CHANDRA_E2E_TIMEOUT_SCALE=6 npm run test:browser` | passed (307 s) on the final tree |
+| Real-DEM software fixture smoke | API on `:8001` with the fixture; `npm run test:real-dem` | passed (23 s) on the final build, against the native Go API |
+| Story briefing E2E | `CHANDRA_E2E_TIMEOUT_SCALE=8 npm run test:story` | **personas A–E passed** (about 26 min); see the note on what changed afterwards |
+| Scientific-export E2E | `CHANDRA_E2E_TIMEOUT_SCALE=8 npm run test:exports` | **personas A–E passed, 1550 s**; Persona A now also asserts schema `2.1.0` and the `dataProvenance` block |
+| Live Vercel deployment | — | **NOT DONE** |
+| GitHub Actions, commit `f443627` | push run 43727245450 and pull-request run 43727313112 | **all jobs passed.** Quality (typecheck, build, unit, geometry, Go, parity, Vercel configuration). Vercel build output: `vercel build` and the function executed, on a clean runner. Browser E2E with Playwright's Chromium **at default patience**: mission suite 69 s, story A–E 91 s, exports A–E 142 s, data-feature suite 16 s. SPICE validation with fetched kernels (pull-request run; skipped by design on the branch push). `f443627` is the commit before this evidence was written into the documentation; later commits change documentation only |
+| Manual screen-reader protocol | NVDA / VoiceOver | **NOT EXECUTED**, and the protocol does not yet cover the Data Hub |
+
+### What the data-feature suite checks
+
+`scripts/datahub-browser-test.mjs` builds and starts the real API binary,
+serves a GDAL-written raster from a loopback "PGDA" with HTTP range support,
+replays recorded Horizons responses from a loopback "JPL", and intercepts the
+two imagery hosts in the browser. Its 19 checks:
+
+- **Polar Map.** Pointer coordinates read 0° at the top, 90°E on the right,
+  180° at the bottom and 270°E on the left; site markers respond at positions
+  computed independently from their published coordinates; zooming keeps
+  coordinates registered; nothing is requested from an imagery host until a
+  remote layer is chosen; the whole map is in view at 1600×1000. (That the
+  bundled *image* has this orientation is the Go test in §15.2, not this
+  suite.)
+- **Imagery layers.** Moon Trek tile URLs follow the documented template; tiles
+  land within 0.6 px of their projected corners; *Live*, *Partly loaded* and
+  *Unavailable — showing bundled imagery* states; a view outside a layer's
+  coverage requests nothing and says so; the LROC WMS GetMap request carries
+  the right layer, projection and bounding box; external viewer links open in
+  a new tab without opener access; coordinates copy.
+- **Data Hub.** All 20 sources and 10 CSA references listed; search and
+  filters; *Not confirmed* shown for unknown fields; CSA entries have no data
+  actions; a catalogue entry hands its layer to the Polar Map.
+- **Horizons verification.** The recorded reference evaluates offline (Sun
+  0.0085°, Earth 0.0025° maximum separation); a live query through the API
+  agrees, shows its provenance and request URL, is cached on repeat, and
+  downloads a report; an upstream failure is explained without comparing
+  anything and without leaking internal detail.
+- **LOLA acquisition.** A plan reports the native window (292 × 292 of
+  512 × 512 pixels) using range requests only; the download never fetches the
+  whole raster; the dataset is selected, its metadata shown, real-mode terrain
+  and a horizon computed from it.
+- **Mobile.** Terrain Lab, hub tabs, verification tables and the map fit a
+  390 px viewport with nothing cut off.
+- **Static-only hosting.** With no API, the catalogue, the recorded
+  verification and the synthetic demo work, and each live feature says why it
+  cannot.
+- **Production Content-Security-Policy.** The page is served with the headers
+  from `vercel.json`. Under that policy the worker-computed analysis, WebGL and
+  both imagery providers work with no violation, and an image from any other
+  host is refused (a negative control showing the policy is really enforced).
+
+### Native engine against the recorded GDAL / PROJ reference
+
+From `go test -v` in this run (scientific-method §14 explains each line):
+
+- Reader: 10 valid GDAL-written layouts decode identically; 5 invalid rasters
+  are rejected with the Python backend's messages; transverse Mercator is
+  refused by design.
+- Projection: 7 definitions × 8 points agree with PROJ 9.5.1 to 1e-6 m forward
+  and 1e-9° inverse.
+- Extraction: in all 14 cases (10 synthetic, 4 on the real LOLA fixture) the
+  native grid equals GDAL run with its exact transformer to 0.0000 m, with
+  identical NoData masks.
+- Against the v1.11 backend's default GDAL settings the largest cell
+  differences are 7.94 m (synthetic rough DEM), 2.09 m (real fixture, Malapert,
+  20 km) and at most 0.06 m in the other three real cases — equal in each case
+  to the difference between GDAL-exact and GDAL-default.
+- API: 111 recorded v1.11 request/response pairs replay through the Go router.
+- Basemap orientation: mean crater-floor brightness 4.3 under the documented
+  orientation against 23.5, 37.5 and 49.0 under the three alternatives.
+
+### Defects found by this verification and fixed before release
+
+Recorded in [known-issues.md](known-issues.md) with the tests that now guard
+them: `.vercelignore` removing `src/data`; temporary storage reported as
+persistent on Vercel; a LOLA subset stitchable from two versions of a source
+file; a spoofable rate-limit key and unbounded limiter table; upstream
+transport errors leaking URLs; the function depending on an optional platform
+variable; per-tile screen-reader announcements; and the v1.11 Polar Map
+orientation error itself.
+
+### Honesty notes
+
+- **Software rendering needed longer timeouts.** Without a GPU, starting
+  timeline playback blocks rendering for a long time once per page. With
+  default patience the mission browser suite failed twice at its 30 s Terrain
+  Lab wait; measured, the lab became ready after 57 s on this tree and after
+  **62 s on the unmodified v1.11 base commit** on the same machine, so the
+  cause is the environment, not this release. `CHANDRA_E2E_TIMEOUT_SCALE`
+  multiplies waits in the mission, story and export suites; it is unset in CI
+  and changes no assertion. One run of the mission suite at default patience
+  did pass earlier in the same session. On GitHub's runners, which also have no
+  GPU but use Playwright's Chromium, all suites passed at default patience in
+  minutes, so the stall belongs to the fallback browser build used here.
+- **The local story and export runs are not clean runs by this project's own
+  rule.** Two reasons. First, after they passed, the working tree changed in:
+  two text strings in the Data Hub's verification panel; the order of two
+  state updates after a LOLA download in the Terrain Lab dataset panel;
+  `public/assets/PROVENANCE.md`; Go backend hardening (storage reporting,
+  rate-limit key, range-read consistency); and test scripts. Neither suite
+  opens the Data Hub or performs an acquisition. Second, documentation and
+  backend files were edited while they ran, and the dev server pushed
+  stylesheet hot-updates in response (the Tailwind plugin treats project files
+  as stylesheet inputs). A stylesheet hot-update neither reloads the page nor
+  resets application state, but earlier releases counted only runs with no
+  concurrent edits. **The clean evidence for these two suites is the GitHub
+  Actions runs on the pushed commit**, where no editing is possible and both
+  passed at default patience. The mission, data-feature and real-DEM suites
+  and every non-browser gate ran locally on the final tree; the data-feature
+  and real-DEM suites do not use the dev server.
+- **Changes to the older suites, none loosening an assertion:** the story and
+  export suites now locate the toast by `[role="status"][data-testid="toast"]`
+  because the page has further status regions; the export suite reads the
+  expected application version from `package.json` instead of a literal
+  `1.11.0`; waits can be scaled by the environment variable above.
+- **Screenshots.** `screenshots/00–13` and `v112-a…g` were regenerated in this
+  run. The story (`15–22`) and export (`v110-*`, `v111-*`) captures are
+  best-effort, timed out under software rendering, and are unchanged from
+  v1.11. `v112-f` shows the Terrain Lab labelled *synthetic* after an
+  acquisition: that is correct, because the raster the test "acquires" is a
+  synthetic fixture and carries that tag.
+- **Horizons fixtures are transcriptions.** The responses were retrieved with a
+  page-fetch tool and transcribed; values are Horizons', bytes are not
+  guaranteed identical (`backend/horizons/testdata/README.md`).
+- **The real-LOLA fixture** is the same third-party gap-filled downsample as
+  in v1.11: software-path evidence only. Tests that need it skip where it is
+  absent, which includes ordinary CI.
+- **Rust was not built.** The Go/Rust comparison in the architecture document
+  is an assessment, not a measurement.
+
+### Not verified in v1.12
+
+- A live Vercel deployment: build on Vercel's builders (including its own Go
+  toolchain download), the function on real infrastructure, the CDN headers,
+  Deployment Protection behaviour.
+- Real responses from NASA Moon Trek, the LROC WMS, JPL Horizons and NASA PGDA
+  as consumed by this application.
+- Vercel Blob against the real service.
+- Anything on hardware with a GPU, on Firefox or Safari, or with a screen
+  reader.
+- The mission-level effect of the terrain differences in §14.4.
+
 ## v1.11.0 integrity release — executed evidence
 
 Executed on branch `arena/df057ecf-clps-lunar-mission` from the merged v1.10
@@ -74,16 +241,17 @@ report format do not change.
 |---|---|---|
 | TypeScript typecheck | `npm run typecheck` | clean |
 | Production build | `npm run build` | clean; React / Three / ephemeris split into separate chunks |
-| Engine + SPICE-reference validation + frame allowlist + transition stress + event-aware energy + analysis status + sampling/battery + catalogue + presets + explanations + UTC + workflow + simulation client + export + DEM-profile + vehicle/geo + story chapter/progress/narrative + v1.11 identity/session/coarse-resolution unit tests | `npm test` | **328 passed** (Vitest, 32 files) |
-| Backend / DEM / horizon / downloader / API errors / lunar-frame module | `npm run test:python` | **92 passed, 4 skipped** ordinary (kernel-gated tests skipped, not passed); with fetched kernels + spiceypy the full suite is **96 passed** and the frame suite **26 passed** (v1.11 executed evidence above). |
+| Engine + SPICE-reference validation + frame allowlist + transition stress + event-aware energy + analysis status + sampling/battery + catalogue + presets + explanations + UTC + workflow + simulation client + export + DEM-profile + vehicle/geo + story chapter/progress/narrative + identity/session/coarse-resolution + v1.12 polar projection, Horizons comparison and Data Hub unit tests | `npm test` | **368 passed** (Vitest, 35 files) |
+| Native backend: GeoTIFF reader, projections, DEM validation, extraction, horizon, frames, Horizons client, LOLA acquisition, storage, catalogue, HTTP API | `npm run test:go` | **77 tests + 30 subtests passed, 2 opt-in live tests skipped** (v1.12 executed evidence above). Replaces the v1.11 Python suite (92 passed, 4 skipped at removal), whose behaviour is preserved as the recorded reference in `tests/golden/`. |
+| SPICE evidence tool (optional, Python) | `pytest tools/spice-evidence -q -rs` | **22 passed, 4 skipped** without kernels; the CI `spice-validation` job fetches kernels and runs the gated tests for real |
+| Vercel configuration and built function | `npm run vercel:check` / `-- --built` | passed locally (v1.12 executed evidence above); not a live deployment |
 | Geometry checks | `npm run test:geometry` | passed: curvature, pole coordinates, Sun directions, exact landing origin, shadow casting, NoData topology, synthetic demo, horizon ray-marching |
-| Horizon parity | `npm run test:parity` | passed: TypeScript and Python ray-marchers agree on elevations, coverage, edge inset, obstacle ranges |
+| Horizon parity | `npm run test:parity` | passed: TypeScript and native Go ray-marchers agree on elevations, coverage, edge inset, obstacle ranges |
 | Mission + Terrain Lab + Space views browser E2E | `npm run test:browser` | passed: catalog, Apollo/far-side, comparison, educator, custom site, modal keyboard guard/focus, export (blocked while computing), playback; Terrain Lab orbit drag, keyboard orbit, top/oblique presets, inspection pin, exaggeration, shadow pixel brightening, Sun extremes, all grid qualities, radius, horizon CSV/import, real-mode no-DEM safeguard, 390 px mobile layout; **Space views**: planet markers/labels, time-lapse clock + sub-solar sweep, south-pole preset, fleet stack/HLS/CLPS switching, stage separation, engine plume, hover part callout, view close; **v1.7 features**: first-run onboarding offers demo / real-DEM choice and dismisses cleanly; guided six-step workflow opens, shows six steps and advances; chart text alternatives (panorama/timeline/polar-map `role="img"`) and a labelled keyboard time scrubber; **2024 Regions** tab shows exactly nine region-approximate regions; explicit **UTC date + time** mission-start fields drive recompute; persistent provenance indicator; heuristic score breakdown + "not an RF link budget" disclosure |
-| Real-DEM browser smoke | `npm run test:real-dem` | **passed in v1.11** against the fetched third-party software fixture (gap-filled downsample; software path only, not science validation). Earlier releases without the fixture reported it as not run. |
-| THE 14-DAY WINDOW story E2E (v1.9 personas A–E) | `npm run test:story` | passed — **re-run green under v1.11** (all five personas) |
-| Scientific-export E2E (v1.11 personas A–E) | `npm run test:exports` | passed — see the v1.11 section above (567 s clean re-run; Persona C adds oversized-session rejection) |
-
-Python warnings are Rasterio `Affine` `*` vs `@` PendingDeprecationWarnings from the installed wheel; they do not indicate a CHANDRA failure.
+| Real-DEM browser smoke | `npm run test:real-dem` | **passed in v1.12** against the native Go API and the fetched third-party software fixture (gap-filled downsample; software path only, not science validation). |
+| THE 14-DAY WINDOW story E2E (v1.9 personas A–E) | `npm run test:story` | passed — **all five personas under v1.12** (see the v1.12 notes on timeouts and ordering) |
+| Scientific-export E2E (personas A–E) | `npm run test:exports` | passed under v1.12 (1550 s under software rendering; Persona A adds schema 2.1.0 and `dataProvenance`) |
+| Data-feature E2E (v1.12) | `npm run test:datahub` | passed: 19 checks (Polar Map, imagery layers, Data Hub, Horizons verification, LOLA acquisition, mobile, static-only hosting, production CSP) |
 
 ## Repository restructure & rebrand — executed evidence (2026-11-08)
 

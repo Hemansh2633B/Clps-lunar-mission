@@ -20,6 +20,97 @@ export interface TerrainSource {
   height?: number;
   synthetic: boolean;
   warning?: string;
+  /** Native backend (API 1.1+): which stored dataset answered, and its acquisition provenance. */
+  dataset_id?: string;
+  provenance?: Record<string, unknown>;
+}
+
+/** How the native engine resampled the source raster (API 1.1+). */
+export interface TerrainProcessing {
+  engine: string;
+  resampling: string;
+  kernel: string;
+  kernel_scale: [number, number];
+  transform: string;
+  dataset_id?: string;
+}
+
+export interface StorageInfo { kind: string; persistent: boolean; }
+
+export interface FrameClassificationInfo {
+  recognized: boolean;
+  transform: string | null;
+  identifier: string | null;
+  realization: string | null;
+  note: string;
+}
+
+export interface DatasetEntry {
+  id: string;
+  kind: 'configured' | 'acquired';
+  ready: boolean;
+  source: TerrainSource | null;
+  error: string | null;
+  frame?: FrameClassificationInfo;
+}
+
+export interface AcquisitionProduct { id: string; url: string; product_page: string; }
+
+export interface DatasetsResponse {
+  datasets: DatasetEntry[];
+  storage: StorageInfo;
+  acquisition: { enabled: boolean; products: AcquisitionProduct[]; max_subset_pixels: number };
+}
+
+export interface DatasetMetadata {
+  dataset_id: string;
+  source: TerrainSource;
+  raster: {
+    width: number; height: number; bits_per_sample: number; sample_format: string; compression: string | number;
+    predictor: number; layout: string; nodata: number | 'nan' | null; overviews: number; gdal_tags?: Record<string, string> | null;
+  };
+  georeferencing: {
+    geotransform: number[];
+    bounds: { left: number; bottom: number; right: number; top: number };
+    unit: string; projection: string; geographic: boolean;
+    footprint: { corner: string; x: number; y: number; latitude?: number; longitude?: number }[];
+  };
+  frame: FrameClassificationInfo;
+  eligibility: { frame_recognized: boolean; synthetic: boolean; quantitative_candidate: boolean; note: string; notes: string[] };
+  validated_frame_interval_utc: [string, string];
+}
+
+export interface AcquirePlan {
+  latitude: number;
+  longitude: number;
+  analysis_radius_km: number;
+  /** left, top, width, height in source pixels. */
+  source_pixel_window: [number, number, number, number];
+  pixels: number;
+  estimated_download_bytes: number;
+  source_blocks: number;
+  source_width: number;
+  source_height: number;
+  native_resolution: number;
+  native_resolution_unit: string;
+}
+
+export interface AcquireResponse {
+  dry_run: boolean;
+  plan: AcquirePlan;
+  product: AcquisitionProduct;
+  dataset?: DatasetEntry;
+  sha256?: string;
+  bytes?: number;
+  storage?: StorageInfo;
+}
+
+export interface BackendCapabilities { datasets: boolean; sources: boolean; metadata: boolean; acquire: boolean; horizons: boolean; }
+
+export interface SourcesResponse {
+  schema_version: string;
+  catalogue_date: string;
+  runtime: { deployment: string; engine: string; horizons_enabled: boolean; acquisition_enabled: boolean; storage: StorageInfo };
 }
 
 export interface TerrainData {
@@ -42,6 +133,7 @@ export interface TerrainData {
     coverage_percent: number;
   };
   source: TerrainSource;
+  processing?: TerrainProcessing;
 }
 
 export interface TerrainConfig {
@@ -55,6 +147,12 @@ export interface TerrainConfig {
   synthetic_warning: string;
   render_coordinates: string;
   geometry_model: string;
+  /** Native backend (API 1.1+). Absent on the v1.11 contract. */
+  engine?: string;
+  api_version?: string;
+  deployment?: string;
+  capabilities?: BackendCapabilities;
+  storage?: StorageInfo;
 }
 
 export interface TerrainExample {
@@ -86,6 +184,8 @@ export interface HorizonMask {
   source: TerrainSource;
   model: string;
   frame_note: string;
+  /** Native backend (API 1.1+): resampling provenance. */
+  processing?: TerrainProcessing;
 }
 
 export interface SurfaceInspection {

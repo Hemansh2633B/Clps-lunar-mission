@@ -1,5 +1,5 @@
 // Dumps the astronomy-engine IAU 2015 Moon frame (IAU->J2000, row-major) on a
-// monthly grid. Consumed by scripts/generate-frame-constants.py so the shipped
+// monthly grid. Consumed by tools/spice-evidence/generate_frame_constants.py so the shipped
 // ME->IAU correction targets the app's ACTUAL ephemeris frame.
 import * as A from 'astronomy-engine';
 import { moonBodyFrame } from '../src/engine/ephemeris';

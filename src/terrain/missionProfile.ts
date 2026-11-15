@@ -48,6 +48,7 @@ export function terrainProfileFromHorizon(mask: HorizonMask): TerrainProfile {
   }
 
   const kindLabel = mask.synthetic ? 'Synthetic demo horizon' : 'DEM-derived horizon';
+  const provenance = describeSourceProvenance(mask);
   return {
     label: `${kindLabel} · ${mask.source.filename}`,
     kind: 'dem',
@@ -72,6 +73,7 @@ export function terrainProfileFromHorizon(mask: HorizonMask): TerrainProfile {
     azimuthOffsetDeg,
     analysisScale: 'local',
     effectiveResolutionM: mask.grid_spacing_m,
+    ...(provenance ? { sourceProvenance: provenance } : {}),
   };
 }
 
@@ -94,4 +96,32 @@ export function horizonImportBlocked(mask: HorizonMask): string | null {
     return 'One or more rays found no valid terrain sample. The mask cannot be used as a complete mission horizon.';
   }
   return null;
+}
+
+/**
+ * One-line, human-readable account of where a horizon's DEM came from, built
+ * only from fields the backend actually reported (dataset id, acquisition
+ * provenance, resampling). Returns undefined when nothing was reported — the
+ * absence of provenance is never papered over with a guess.
+ */
+export function describeSourceProvenance(mask: HorizonMask): string | undefined {
+  if (mask.synthetic) return undefined;
+  const parts: string[] = [];
+  const src = mask.source;
+  if (src.dataset_id) parts.push(`dataset ${src.dataset_id}`);
+  const prov = src.provenance ?? {};
+  const text = (v: unknown) => (typeof v === 'string' && v.length > 0 && v.length <= 300 ? v : null);
+  const sub = (typeof prov.subset_provenance === 'object' && prov.subset_provenance !== null ? prov.subset_provenance : {}) as Record<string, unknown>;
+  const productId = text(prov.product_id) ?? text(sub.product_id);
+  const sourceUrl = text(prov.source_url) ?? text(sub.source_url);
+  const version = text(prov.product_version) ?? text(sub.product_version);
+  const checksum = text(prov.source_checksum) ?? text(sub.subset_sha256) ?? text(sub.sha256);
+  const retrieved = text(sub.retrieved_utc) ?? text(sub.downloaded_utc) ?? text(sub.created_utc);
+  if (productId) parts.push(`product ${productId}`);
+  if (version) parts.push(`version ${version}`);
+  if (sourceUrl) parts.push(`source ${sourceUrl}`);
+  if (retrieved) parts.push(`retrieved ${retrieved}`);
+  if (checksum) parts.push(`checksum ${checksum}`);
+  if (mask.processing) parts.push(`resampled by ${mask.processing.engine} (${mask.processing.resampling}, ${mask.processing.transform})`);
+  return parts.length > 0 ? parts.join(' · ').slice(0, 900) : undefined;
 }

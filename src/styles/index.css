@@ -257,7 +257,14 @@ input[type="range"].earth::-webkit-slider-thumb { background: var(--lagoon); }
 /* The header's backdrop-filter creates a stacking context; without an explicit
    z-index the ticker/workspace paint OVER its Export dropdown. Keep the header
    above page content but below the story panel (45), modals and toasts. */
-.app-header { position: relative; z-index: 30; }
+.app-header { position: relative; z-index: 30; flex-wrap: wrap; row-gap: 8px; }
+/* Header tools are never clipped. As the window narrows they compact in steps (key hints,
+   then the engine pill, then the text labels — every button keeps an aria-label and a title)
+   and, whatever the fonts measure, anything that still does not fit wraps to a second row. */
+.header-tools { display: flex; align-items: center; gap: 8px; margin-left: 12px; flex: 0 1 auto; min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 1760px) { .app-header .kbd { display: none; } }
+@media (max-width: 1560px) { .engine-pill { display: none; } }
+@media (max-width: 1340px) { .app-header .tool-label { display: none; } }
 .ticker-track { display: flex; width: max-content; gap: 32px; padding: 7px 0; animation: ticker 48s linear infinite; }
 .ticker-track span { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; color: var(--ink-soft); white-space: nowrap; }
 @keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
@@ -278,22 +285,19 @@ input[type="range"].earth::-webkit-slider-thumb { background: var(--lagoon); }
   .lower-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 1100px) {
-  .engine-pill { display: none; }
   .clock-strip { grid-template-columns: repeat(2, 1fr); }
   .clock-strip .cluster:nth-child(3) { border-left: 0; }
   .clock-strip .cluster:nth-child(n+3) { border-top: 1px solid var(--line); }
-}
-@media (max-width: 700px) {
-  .engine-pill { display: none; }
 }
 @media (max-width: 900px) {
   body { overflow: auto; }
   .app-shell { height: auto; min-height: 100vh; max-width: 100vw; overflow-x: hidden; }
   .app-header { height: auto !important; flex-wrap: wrap; gap: 8px !important; padding: 8px 10px !important; }
   .app-header > div:first-child { flex: 1 1 auto; }
-  .app-header .header-tools { order: 3; flex: 1 1 100%; margin-left: 0 !important; flex-wrap: wrap; }
+  .app-header .header-tools { order: 3; flex: 1 1 100%; margin-left: 0; justify-content: flex-start; }
   .app-header .header-clock { display: none; }
-  .workspace { grid-template-columns: 1fr; overflow: visible; }
+  /* minmax(0, …): a wide table inside a panel scrolls in its own box instead of widening the page. */
+  .workspace { grid-template-columns: minmax(0, 1fr); overflow: visible; }
   .workspace.compare .center-stack { grid-column: auto; }
   .workspace.compare .telemetry-rail { display: block; }
   .site-rail, .telemetry-rail, .center-stack { overflow: visible; }
@@ -497,3 +501,70 @@ input[type="range"].earth::-webkit-slider-thumb { background: var(--lagoon); }
 @media (prefers-reduced-motion: reduce) {
   .story-spotlight { transition: none; }
 }
+
+/* ---- v1.12 Polar Map: imagery layer row (above the map so it stays in view with it) ---- */
+.polar-layer-row { padding: 5px 12px; border-bottom: 1px solid var(--border); font-size: 10px; color: var(--dim); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.polar-layer-row label { display: flex; align-items: center; gap: 6px; flex: 1 1 200px; min-width: 0; }
+.polar-layer-row select.input { flex: 1 1 150px; min-width: 0; height: 26px; font-size: 10.5px; padding: 0 24px 0 6px; background-position: calc(100% - 14px) 11px, calc(100% - 9px) 11px; }
+
+/* ============================================================
+   Lunar Data Hub — source catalogue, verification workspace
+   ============================================================ */
+.workspace.datahub .center-stack { grid-column: 2 / 4; }
+.workspace.datahub .telemetry-rail { display: none; }
+.data-hub { min-width: 0; }
+.hub-tabs { display: flex; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel-2); flex-wrap: wrap; }
+.hub-body { flex: 1; min-height: 0; overflow: auto; background: var(--paper); }
+.hub-section { padding: 14px; display: flex; flex-direction: column; gap: 12px; max-width: 1500px; }
+.hub-callout { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: var(--paper-2); border: 1px solid var(--line-strong); border-left: 3px solid var(--navy); font-size: 12px; line-height: 1.5; color: var(--ink); }
+.hub-callout.warn { border-left-color: var(--amber); background: #fdf0d5; }
+.hub-callout svg { flex: 0 0 auto; margin-top: 2px; color: var(--navy); }
+.hub-filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.hub-search { display: flex; align-items: center; gap: 6px; flex: 1 1 240px; min-width: 200px; max-width: 380px; }
+/* A deliberately wide table scrolls sideways inside its own focusable region, never the page. */
+.hscroll { overflow-x: auto; }
+.hscroll:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+.hub-search .input { flex: 1; min-width: 0; }
+.hub-chips { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 12px; align-items: start; }
+.hub-card { background: var(--panel); border: 1px solid var(--line-strong); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.hub-card-head { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.hub-card-head h3 { margin: 0; font-family: var(--font-display); font-size: 15px; font-weight: 600; color: var(--ink); line-height: 1.25; display: inline-flex; gap: 6px; align-items: center; }
+.hub-provider { font-size: 11px; color: var(--brass); letter-spacing: .02em; }
+.hub-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; margin: 0; }
+.hub-fields dt { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim); }
+.hub-fields dd { margin: 1px 0 0; font-size: 11.5px; color: var(--ink); overflow-wrap: anywhere; line-height: 1.35; }
+.hub-fields dd.unknown { color: var(--dim); font-style: italic; }
+.hub-text { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ink-soft); overflow-wrap: anywhere; }
+.hub-meta { margin: 0; font-size: 10.5px; line-height: 1.45; color: var(--dim); overflow-wrap: anywhere; }
+.hub-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; border-top: 1px dashed var(--line); padding-top: 8px; }
+.hub-actions a.btn { text-decoration: none; }
+.hub-empty { padding: 28px; text-align: center; color: var(--muted); font-size: 12px; border: 1px dashed var(--line-strong); display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.hub-form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.hub-alert { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; padding: 9px 11px; background: #fbe9e7; border: 1px solid #e0a99f; color: #8f2a22; font-size: 12px; line-height: 1.5; }
+.hub-alert[data-kind="offline"], .hub-alert[data-kind="disabled"], .hub-alert[data-kind="limited"] { background: #fdf0d5; border-color: #d9b877; color: var(--brass); }
+.hub-list { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.6; color: var(--ink-soft); }
+.data-hub a { color: var(--navy); }
+.data-hub .table td, .data-hub .table th { white-space: nowrap; }
+@media (max-width: 900px) {
+  .workspace.datahub .center-stack { grid-column: auto; order: -1; }
+  .hub-section { padding: 10px; }
+}
+@media (max-width: 600px) {
+  .hub-fields { grid-template-columns: 1fr; }
+}
+
+/* Terrain Lab — dataset / acquisition panel */
+.lab-note { margin: 4px 0 0; font-size: 10.5px; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
+.lab-note.warn { color: #8f2a22; }
+.lab-note.ok { color: var(--emerald); }
+.lab-note svg { display: inline; vertical-align: -1px; }
+.lab-meta { margin: 6px 0 0; display: grid; gap: 4px; }
+.lab-meta-row { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 6px; font-size: 10.5px; line-height: 1.4; }
+.lab-meta-row dt { color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-size: 9px; padding-top: 1px; }
+.lab-meta-row dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.lab-model { margin-top: 10px; padding: 7px 9px; border: 1px solid var(--line-strong); background: var(--paper-2); font-size: 10.5px; line-height: 1.45; color: var(--ink-soft); }
+.lab-model[data-level="eligible"] { border-left: 3px solid var(--emerald); }
+.lab-model[data-level="demo"], .lab-model[data-level="partial"] { border-left: 3px solid var(--amber); }
+.lab-model[data-level="blocked"] { border-left: 3px solid var(--crimson); }
+.lab-model-head { display: flex; gap: 5px; align-items: center; color: var(--ink); margin-bottom: 2px; }

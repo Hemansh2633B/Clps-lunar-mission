@@ -29,6 +29,8 @@ import { brotliDecompressSync } from 'node:zlib';
 import { join } from 'node:path';
 
 const BASE = process.env.BASE_URL || 'http://localhost:5173/';
+// package.json is the single source of truth for the application version (src/version.ts).
+const APP_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 const OUT = 'screenshots';
 mkdirSync(OUT, { recursive: true });
 const CI_BROWSER = process.env.CHANDRA_BROWSER_CI === '1';
@@ -67,7 +69,9 @@ async function newPage({ viewport = { width: 1600, height: 1000 } } = {}) {
     window.sessionStorage.setItem('chandra-export-seeded', '1');
   });
   const page = await ctx.newPage();
-  page.setDefaultTimeout(45000);
+  // CHANDRA_E2E_TIMEOUT_SCALE stretches the default action timeout for software-rendered
+  // browsers (no GPU). It changes patience only, never an assertion.
+  page.setDefaultTimeout(45000 * (Number(process.env.CHANDRA_E2E_TIMEOUT_SCALE) || 1));
   page.on('pageerror', (e) => allErrors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') allConsole.push(m.text()); });
   return page;
@@ -119,7 +123,8 @@ function parseCSV(text) {
   const header = split(lines[0]);
   return { header, rows: lines.slice(1).map((l) => { const cells = split(l); return Object.fromEntries(header.map((h, i) => [h, cells[i] ?? ''])); }) };
 }
-const toastText = (page) => page.locator('[role="status"]').last().innerText().catch(() => '');
+// The toast is one of several status regions since v1.12 (map layer state, copy confirmation).
+const toastText = (page) => page.locator('[role="status"][data-testid="toast"]').innerText().catch(() => '');
 const getSession = (page) => page.evaluate(() => { try { return JSON.parse(window.localStorage.getItem('chandra-story-session-v1')); } catch { return null; } });
 
 /** Network-boundary DEM stub (identical contract to the story suite). */
@@ -190,8 +195,8 @@ try {
     await selectSite(page, 'de Gerlache Rim 2');
     await resolved(page);
     const report = JSON.parse((await exportViaMenu(page, 'json')).body);
-    assert(report.applicationVersion === '1.11.0', 'A: report carries the application version');
-    assert(report.reportSchemaVersion === '2.0.0' && report.reportSchemaVersion !== report.applicationVersion, 'A: independent report schema version');
+    assert(/^\d+\.\d+\.\d+$/.test(APP_VERSION) && report.applicationVersion === APP_VERSION, `A: report carries the application version (${APP_VERSION})`);
+    assert(report.reportSchemaVersion === '2.1.0' && report.reportSchemaVersion !== report.applicationVersion && report.dataProvenance?.ephemerisVerification?.catalogueId === 'jpl-horizons', 'A: independent report schema version + data provenance block');
     assert(/^[0-9a-f]{64}$/.test(report.analysisFingerprint), 'A: SHA-256 analysis fingerprint');
     assert(report.timeReference === 'UTC' && report.reproducibility.siteProvenance.siteId === 'de-gerlache-rim-2', 'A: UTC + site identity');
     assert(report.effectiveConfig && report.requestedConfig && report.configWasClamped === false, 'A: effective config recorded');

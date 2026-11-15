@@ -1,9 +1,124 @@
 # Known issues
 
+Open limitations first, then defects found and closed, most recent release
+first. Executed gate results live in [verification.md](verification.md).
+
+## Open in v1.12.0
+
+These are things a user or reviewer could reasonably assume work, or were
+checked, and that are not — or are not yet shown to be.
+
+### Not exercised against the real services
+
+- **NASA Moon Trek and LROC WMS imagery.** Layer definitions come from the
+  services' capabilities documents. Tile placement was tested with synthetic
+  tiles served in place of the real hosts, because those hosts were not
+  reachable from the development environment. No real tile has been seen in
+  the application. If a service's behaviour differs from its capabilities
+  document, the layer will show *Unavailable* or misplaced imagery.
+- **Live JPL Horizons queries through the API.** The request builder and
+  parser are tested against responses retrieved separately and transcribed
+  into fixtures (not byte-exact copies), and against a loopback server.
+- **Live LOLA acquisition from NASA PGDA.** Tested against a loopback server
+  serving a GDAL-written raster with HTTP range support. The five product URLs
+  and the assumption that the PGDA server honours range requests come from the
+  product page and the v1.11 downloader, not from a download performed here.
+- **Vercel Blob storage.** The adapter implements the protocol of the official
+  SDK and was tested against a local fake only.
+
+The opt-in tests `CHANDRA_LIVE_TESTS=1 npm run test:go` exercise Horizons and
+PGDA for real from a machine with network access; they have not been run.
+
+### Scientific scope
+
+- **v1.12 terrain grids are not numerically identical to v1.11's.** The native
+  engine transforms coordinates exactly where the v1.11 backend used GDAL's
+  approximate transformer. Individual cells differ by up to a few metres on
+  rough terrain (scientific-method §14.4). The effect on mission-level results
+  has not been separately quantified.
+- **The native reader is narrower than GDAL.** PDS `.IMG`, JPEG/LERC/ZSTD
+  compression, multi-band rasters, internal masks and non-spherical or
+  unlisted projections are refused. Convert with GDAL first.
+- **The Horizons comparison covers one site and three weeks** (Shackleton rim,
+  December 2026). Agreement elsewhere is expected, not demonstrated.
+- **Local horizon only.** Acquiring a LOLA subset does not make the horizon
+  regional; subsets cover at most the 20 km analysis radius.
+- **Catalogue blanks are real.** Many reference-frame, vertical-datum, version
+  and usage-terms fields read *Not confirmed* because the provider pages
+  retrieved did not state them. They were not filled in.
+
+### Engineering
+
+- **Rendering can stall in one headless browser build.** In the development
+  sandbox's fallback browser (`@sparticuz/chromium`, software rendering, 2 CPU
+  cores), starting timeline playback blocked rendering for one to three
+  minutes, once per page. It reproduces identically on the v1.11 base commit,
+  so it is not a v1.12 regression, and it did not occur on GitHub's runners
+  with Playwright's Chromium, where the same suites pass at default patience.
+  It affects responsiveness, not results. The cause was not found and it was
+  not investigated on hardware with a GPU. `CHANDRA_E2E_TIMEOUT_SCALE` exists
+  for running the browser suites in such an environment.
+- **Rate limits are per function instance.** On a serverless platform they
+  are a courtesy limit, not a quota.
+- **Planner layout on short viewports.** At 1440×900 and 1366×768 the centre
+  column is short enough that the Polar Map needs scrolling to be seen whole;
+  1600×1000, 1920×1080 and phone widths fit.
+- **Story-suite screenshots were not refreshed.** `screenshots/15-…22-*.png`
+  are best-effort captures that timed out under software rendering in this
+  release's run; the committed images are from v1.11. The suite's assertions
+  ran and passed.
+
+## Closed in v1.12.0
+
+### Polar Map drew markers mirrored against its imagery — CLOSED
+
+v1.11 and earlier drew the 0° meridian pointing down while the bundled LROC
+mosaic has it pointing up, so site markers, the lighting overlay and the Earth
+direction were mirrored north–south relative to the picture underneath.
+Coordinates, visibility, power and exports were never affected. Fixed by a
+single projection module used for imagery, graticule and markers; the
+orientation is established from the image by an executable test
+(scientific-method §15.2). `public/assets/PROVENANCE.md` recorded the wrong
+orientation and is corrected.
+
+### Export described the ephemeris as "JPL DE402/DE421-class" — CLOSED
+
+`ephemeris.model` in the JSON report read `astronomy-engine (JPL DE402/DE421-class
+ephemeris)`, which implies a JPL numerical ephemeris. The engine is
+astronomy-engine's analytic models. The field now says so
+(scientific-method §13.11). Computed values are unchanged.
+
+### Defects found by this release's own verification
+
+Each of these was introduced and caught within v1.12 development, before
+release; they are listed because the tests that caught them remain.
+
+- **`.vercelignore` would have removed `src/data`.** An unanchored `data`
+  pattern matches at every depth. A local `vercel build` does not apply the
+  ignore file, so only a real deployment would have failed. Patterns are now
+  root-anchored and `npm run vercel:check` verifies that nothing the build
+  needs is excluded.
+- **Temporary storage was reported as persistent on Vercel.** Without a Blob
+  store the function writes to a temporary directory, but `/api/config` said
+  `persistent: true`, so the interface would have told users their acquired
+  DEM persists. Fixed and covered for every storage configuration.
+- **A LOLA subset could be stitched from two versions of a source file** if the
+  remote object changed mid-download. Every range response is now checked
+  against the size and ETag of the object the header came from.
+- **The rate limiter trusted `X-Forwarded-For` everywhere**, so on a standalone
+  server one client could pose as many and grow the limiter's table without
+  bound. The header is now believed only on Vercel, and the table is bounded.
+- **Upstream transport errors leaked the request URL** in Horizons and LOLA
+  error messages. They are now reduced to a short reason.
+- **The Vercel function relied on the optional `VERCEL` system variable** to
+  choose a writable data directory. It now declares its platform itself.
+- **Map layer tile counts were announced once per tile** to screen readers;
+  only state changes are announced now.
+
+## Closed in v1.11.0
+
 Engineering findings from the independent v1.10 review. The three priority-0
-integrity findings below are **closed in v1.11.0** with tests-first regressions.
-Remaining limitations are recorded honestly; they are not silently deferred.
-Executed gate results live in [verification.md](verification.md).
+integrity findings below were closed with tests-first regressions.
 
 ## Closed in v1.11.0
 
@@ -92,7 +207,7 @@ must read the disclosure. The warning is persistent in the UI but comparison
 CSV carries it inside the existing `warnings` column (no new column, schema
 unchanged).
 
-## Remaining limitations (not P0 regressions)
+## Standing limitations (all releases)
 
 - **Local horizon only.** Regional curvature / per-epoch frames remain
   researched, not implemented (scientific-method §12.5).
@@ -100,13 +215,17 @@ unchanged).
   or radiation survival. These disclosures are mandatory everywhere.
 - **Manual screen-reader execution is outstanding.** The protocol and expected
   results are in [accessibility-manual-protocol.md](accessibility-manual-protocol.md);
-  no NVDA/VoiceOver pass is claimed.
+  no NVDA/VoiceOver pass is claimed. The v1.12 Data Hub, verification tables
+  and map layer controls have not been added to that protocol.
 - **Real-DEM fixture is optional and third-party.** The gap-filled downsample
   exercises software loading/cropping/horizon paths only; it is not a science
   product. The optional workflow is not a required check. Execution status is
   recorded per run in verification.md.
 - **Repository owner actions remain outstanding.** Rename to `chandra`,
-  description, and branch protection with the three exact CI checks; see
-  [ci-governance.md](ci-governance.md). This environment cannot enable them.
-- **Static demo deploy is considered, not shipped.** Base-path asset fixes and a
-  no-backend static preview are proposed in [product-design.md](product-design.md).
+  description, and branch protection with the exact CI check names (four jobs
+  since v1.12); see [ci-governance.md](ci-governance.md). This environment
+  cannot enable them.
+- **Project-subpath static hosting is unverified.** The console is built for
+  the site root, which is how Vercel serves it. Hosting under a sub-path
+  (GitHub Pages project site) still needs the base-path asset fixes in
+  [product-design.md](product-design.md).

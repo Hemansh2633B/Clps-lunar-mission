@@ -11,6 +11,7 @@ import { HeaderBar } from './components/HeaderBar';
 import { SiteCatalog } from './components/SiteCatalog';
 import { HorizonPanorama, type PanoramaOptions } from './components/HorizonPanorama';
 import { PolarMap, type MapLayers } from './components/PolarMap';
+import type { DataHubTab } from './components/DataHub';
 import { SiteBrief } from './components/SiteBrief';
 import { TelemetryPanel } from './components/TelemetryPanel';
 import { TimelineScrubber } from './components/TimelineScrubber';
@@ -19,6 +20,7 @@ import { ProvenanceIndicator } from './components/ProvenanceIndicator';
 const TerrainLab = lazy(() => import('./components/TerrainLab').then((m) => ({ default: m.TerrainLab })));
 import type { TerrainSiteInput } from './components/TerrainLab';
 const SpaceView = lazy(() => import('./components/SpaceView').then((m) => ({ default: m.SpaceView })));
+const DataHub = lazy(() => import('./components/DataHub').then((m) => ({ default: m.DataHub })));
 import { EducatorOverlay } from './components/EducatorOverlay';
 import { Onboarding } from './components/Onboarding';
 import { WorkflowGuide } from './components/WorkflowGuide';
@@ -82,6 +84,10 @@ export default function App() {
   const [compareMode, setCompareMode] = useState(bootWs?.compareMode ?? false);
   const [terrainView, setTerrainView] = useState(bootWs?.terrainView ?? false);
   const [spaceView, setSpaceView] = useState(bootWs?.spaceView ?? false);
+  // The Data Hub is a session-local view (not part of the persisted workspace): it is
+  // mutually exclusive with the other views and every view switch below closes it.
+  const [dataView, setDataView] = useState(false);
+  const [hubTab, setHubTab] = useState<DataHubTab>('sources');
   const [scenarios, setScenarios] = useState<Scenario[]>(bootWs?.scenarios ?? []);
   const [panorama, setPanorama] = useState<PanoramaOptions>({ showTracks: true, showTerrain: true, sector: 'full' });
   const [mapLayers, setMapLayers] = useState<MapLayers>({ grid: true, lighting: true, earthVector: true });
@@ -128,7 +134,7 @@ export default function App() {
   }, []);
   const startDemo = useCallback(() => {
     markOnboarded(); setOnboardingOpen(false);
-    setTerrainView(false); setSpaceView(false); setCompareMode(false);
+    setDataView(false); setTerrainView(false); setSpaceView(false); setCompareMode(false);
     setSelectedId('connecting-ridge');
     setBaselineMs(Date.parse('2026-09-01T00:00:00Z'));
     setSlipDays(0);
@@ -138,7 +144,7 @@ export default function App() {
   }, [notify]);
   const startRealDem = useCallback(() => {
     markOnboarded(); setOnboardingOpen(false);
-    setSpaceView(false); setCompareMode(false); setTerrainView(true);
+    setDataView(false); setSpaceView(false); setCompareMode(false); setTerrainView(true);
     notify('Terrain Lab opened — configure a compatible lunar DEM (MOON_ME/PA · DE421, or IAU 2015). Real mode never silently substitutes synthetic data.');
   }, [notify]);
 
@@ -179,9 +185,10 @@ export default function App() {
       else if (e.key === ']') setTimeMs((t) => clamp(t + DAY_MS, win.startMs, win.endMs));
       else if (e.key === 'ArrowLeft') setTimeMs((t) => clamp(t - HOUR_MS, win.startMs, win.endMs));
       else if (e.key === 'ArrowRight') setTimeMs((t) => clamp(t + HOUR_MS, win.startMs, win.endMs));
-      else if (e.key.toLowerCase() === 'c') { setTerrainView(false); setSpaceView(false); setCompareMode((v) => !v); }
-      else if (e.key.toLowerCase() === 't') { setSpaceView(false); setTerrainView((v) => !v); }
-      else if (e.key.toLowerCase() === 'o') { setTerrainView(false); setCompareMode(false); setSpaceView((v) => !v); }
+      else if (e.key.toLowerCase() === 'c') { setDataView(false); setTerrainView(false); setSpaceView(false); setCompareMode((v) => !v); }
+      else if (e.key.toLowerCase() === 't') { setDataView(false); setSpaceView(false); setTerrainView((v) => !v); }
+      else if (e.key.toLowerCase() === 'o') { setDataView(false); setTerrainView(false); setCompareMode(false); setSpaceView((v) => !v); }
+      else if (e.key.toLowerCase() === 'd') { setTerrainView(false); setSpaceView(false); setCompareMode(false); setDataView((v) => !v); }
       else if (e.key.toLowerCase() === 'e') setMode((m) => (m === 'planner' ? 'educator' : 'planner'));
       else if (e.key.toLowerCase() === 'g') setGuideOpen((v) => !v);
       else if (e.key.toLowerCase() === 'p') pinCurrent();
@@ -231,6 +238,7 @@ export default function App() {
     setTourStep(0);
     setTimeMs(s.startMs + 2 * DAY_MS);
     setViewDays(s.durationDays > 14 ? 90 : 30);
+    setDataView(false);
     setTerrainView(s.id === 'terrain-lab');
     notify(`Loaded scenario: ${s.title}`);
   }, [notify]);
@@ -319,7 +327,7 @@ export default function App() {
     setSites([...LANDING_SITES, ...w.customSites]);
     setSelectedId(w.selectedId); setBaselineMs(w.baselineMs); setSlipDays(w.slipDays);
     setConfig(w.config); setViewDays(w.viewDays); setTimeMs(w.timeMs); setMode(w.mode);
-    setCompareMode(w.compareMode); setTerrainView(w.terrainView); setSpaceView(w.spaceView);
+    setCompareMode(w.compareMode); setTerrainView(w.terrainView); setSpaceView(w.spaceView); setDataView(false);
     setScenarios(w.scenarios); setPlaying(w.playing); setSpeed(w.speed);
   }, []);
 
@@ -410,7 +418,7 @@ export default function App() {
     loadTrainingMission,
     restoreMission,
     ensureView: (view) => {
-      setTerrainView(false); setSpaceView(false);
+      setDataView(false); setTerrainView(false); setSpaceView(false);
       if (view === 'planner') setCompareMode(false);
       else setCompareMode(true);
     },
@@ -418,7 +426,7 @@ export default function App() {
     openSettings: () => setSettingsOpen(true),
     openGlossary: (term) => { setGlossaryFocus(term); setGuideOpen(true); },
     openGuide: () => setGuideOpen(true),
-    openTerrainLab: () => { setSpaceView(false); setCompareMode(false); setTerrainView(true); },
+    openTerrainLab: () => { setDataView(false); setSpaceView(false); setCompareMode(false); setTerrainView(true); },
     pinCurrent,
     exportReport: () => handleExport('json'),
     notify,
@@ -492,9 +500,10 @@ export default function App() {
     <div className="app-shell">
       <HeaderBar
         timeMs={timeMs} mode={mode} onMode={setMode} compareMode={compareMode}
-        onCompare={() => { setTerrainView(false); setSpaceView(false); setCompareMode((v) => !v); }}
-        terrainActive={terrainView} onTerrain={() => { setSpaceView(false); setTerrainView((v) => !v); }}
-        spaceActive={spaceView} onSpace={() => { setTerrainView(false); setCompareMode(false); setSpaceView((v) => !v); }}
+        onCompare={() => { setDataView(false); setTerrainView(false); setSpaceView(false); setCompareMode((v) => !v); }}
+        terrainActive={terrainView} onTerrain={() => { setDataView(false); setSpaceView(false); setTerrainView((v) => !v); }}
+        spaceActive={spaceView} onSpace={() => { setDataView(false); setTerrainView(false); setCompareMode(false); setSpaceView((v) => !v); }}
+        dataActive={dataView} onData={() => { setTerrainView(false); setSpaceView(false); setCompareMode(false); setDataView((v) => !v); }}
         onGuide={() => setGuideOpen(true)}
         onHelp={() => setOnboardingOpen(true)}
         onSettings={() => setSettingsOpen(true)} onShortcuts={() => setShortcutsOpen(true)}
@@ -513,14 +522,20 @@ export default function App() {
           <button className="btn sm ghost" style={{ color: '#1f7a52', marginLeft: 'auto' }} onClick={() => setGuideOpen(true)}><BookOpen size={12} /> Open guided stories</button>
         </div>
       )}
-      <div className={`workspace ${compareMode && !terrainView && !spaceView ? 'compare' : ''} ${terrainView ? 'terrain' : ''} ${spaceView ? 'orbital' : ''}`}>
+      <div className={`workspace ${compareMode && !terrainView && !spaceView ? 'compare' : ''} ${terrainView ? 'terrain' : ''} ${spaceView ? 'orbital' : ''} ${dataView ? 'datahub' : ''}`}>
         <aside className="site-rail" data-tour="catalog">
           <SiteCatalog sites={sites} selectedId={site.id} onSelect={setSelectedId}
             onCustom={() => { setCustomInitial(undefined); setCustomOpen(true); }}
             onHorizonTable={() => setHorizonOpen(true)} onPin={pinCurrent} compareMode={compareMode} />
         </aside>
         <main className="center-stack">
-          {spaceView ? (
+          {dataView ? (
+            <Suspense fallback={<div className="panel" style={{ flex: 1, display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>Loading Data Hub…</div>}>
+              <DataHub site={site} timeMs={timeMs} tab={hubTab} onTab={setHubTab} notify={notify}
+                onShowLayer={(id) => { setMapLayers((l) => ({ ...l, basemap: id })); setDataView(false); notify('Imagery layer selected on the Polar Map.'); }}
+                onOpenTerrain={() => { setDataView(false); setTerrainView(true); }} />
+            </Suspense>
+          ) : spaceView ? (
             <Suspense fallback={<div className="panel" style={{ flex: 1, display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>Loading 3D space views…</div>}>
               <SpaceView sites={sites} selectedId={site.id} onSelect={setSelectedId} timeMs={timeMs} onTime={setTimeMs} mode={mode} />
             </Suspense>
@@ -565,7 +580,7 @@ export default function App() {
           <TelemetryPanel site={site} current={current} sim={missionSim.data} events={events} timeMs={timeMs} mode={mode} config={config} onSettings={() => setSettingsOpen(true)} loading={missionSim.loading} error={missionSim.error} progress={missionSim.progress} visibilityBlocked={instantBlocked} />
         </aside>
       </div>
-      {!spaceView && (
+      {!spaceView && !dataView && (
         <TimelineScrubber
           sim={activeSim.data} loading={activeSim.loading} window={win} timeMs={timeMs} onTime={setTimeMs}
           baselineMs={baselineMs} onBaseline={setBaselineMs} slipDays={slipDays} onSlip={setSlipDays} durationDays={config.durationDays}
@@ -581,7 +596,7 @@ export default function App() {
         <ProvenanceIndicator site={site} summary={missionSim.data?.summary} compact />
         <span>LOS · geometric center-of-disk, no refraction, not an RF link budget</span>
         <span>{activeSim.loading ? 'computing…' : activeSim.error ? 'simulation error' : activeSim.data ? `${activeSim.data.sampling.sampleCount.toLocaleString()} samples · eff ${activeSim.data.sampling.effectiveStepMinutes.toFixed(1)} min · ${activeSim.data.computeMs.toFixed(0)} ms` : 'idle'}</span>
-        <span style={{ marginLeft: 'auto' }}>Space play · [ ] days · C compare · T terrain · O space · E educator · G guide · ? help</span>
+        <span style={{ marginLeft: 'auto' }}>Space play · [ ] days · C compare · T terrain · O space · D data · E educator · G guide · ? help</span>
       </footer>
 
       {customOpen && <CustomSiteModal onClose={() => setCustomOpen(false)} onCreate={createCustom} initial={customInitial} />}
@@ -595,7 +610,7 @@ export default function App() {
         glossaryFocus={glossaryFocus}
         story={{ status: story.progress?.status ?? 'none', chapter: story.progress?.chapter ?? 0, onStart: story.start, onReplay: story.replay }} />
       {toast && (
-        <div role="status" aria-live="polite" aria-atomic="true" className="fade-in" style={{ position: 'fixed', bottom: 44, left: '50%', transform: 'translateX(-50%)', maxWidth: 'min(560px, calc(100vw - 24px))', background: 'var(--paper-2)', border: '1px solid var(--ink)', borderRadius: 0, padding: '8px 14px', fontSize: 12, zIndex: 80, boxShadow: '4px 4px 0 rgba(28,36,48,.2)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div role="status" aria-live="polite" aria-atomic="true" data-testid="toast" className="fade-in" style={{ position: 'fixed', bottom: 44, left: '50%', transform: 'translateX(-50%)', maxWidth: 'min(560px, calc(100vw - 24px))', background: 'var(--paper-2)', border: '1px solid var(--ink)', borderRadius: 0, padding: '8px 14px', fontSize: 12, zIndex: 80, boxShadow: '4px 4px 0 rgba(28,36,48,.2)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span>{toast}</span>
           <button className="btn sm ghost" onClick={() => setToast(null)} aria-label="Dismiss notice">Dismiss</button>
         </div>

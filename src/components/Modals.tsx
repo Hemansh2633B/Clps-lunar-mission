@@ -188,6 +188,7 @@ export function ShortcutsModal({ onClose, onReopenWelcome }: { onClose: () => vo
     ['← / →', 'Step −1 / +1 hour'],
     ['C', 'Toggle comparison mode'],
     ['T', 'Toggle Terrain Lab (3D DEM inspector)'],
+    ['D', 'Toggle Data Hub (sources, provenance, JPL Horizons verification)'],
     ['O', 'Toggle Space views (planet time-lapse + fleet hangar)'],
     ['E', 'Toggle educator / planner mode'],
     ['G', 'Open field guide'],

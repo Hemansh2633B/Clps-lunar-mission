@@ -1,4 +1,6 @@
-import { Crosshair, Mountain, Pin, Table2 } from 'lucide-react';
+import { useState } from 'react';
+import { Copy, Crosshair, ExternalLink, Mountain, Pin, Table2 } from 'lucide-react';
+import { EXTERNAL_VIEWERS, coordinateText } from '../data/catalogue';
 import type { AnalysisAssessment, EvaluatedSample, LandingSite } from '../types/mission';
 import { demFooterStatus } from '../utils/a11y';
 import { formatCoord } from '../engine/constants';
@@ -67,11 +69,45 @@ export function SiteBrief({ site, current, onHorizonTable, onPin, visibilityBloc
           <button className="btn sm" onClick={onHorizonTable}><Table2 size={12} /> Horizon table</button>
           <button className="btn sm primary" onClick={onPin}><Pin size={12} /> Pin scenario</button>
         </div>
+        <ExternalViewers latitude={site.latitude} longitude={site.longitude} />
         <div role="note" aria-label="Terrain data status" style={{ fontSize: 9, color: footerColor, lineHeight: 1.5 }}>
           {footer.text}
           {site.terrain.kind === 'dem' && !site.terrain.synthetic ? ` Azimuth sampling half-width ±${site.terrain.uncertaintyDeg.toFixed(2)}°; ${site.terrain.accuracyNote ?? 'vertical accuracy unverified.'}` : ''}
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * Jump to NASA's own viewers for this location. Neither QuickMap nor Moon Trek
+ * documents a stable deep-link format, so the links open the tool itself and the
+ * coordinates are copied for pasting into its search box — no guessed URL scheme.
+ */
+function ExternalViewers({ latitude, longitude }: { latitude: number; longitude: number }) {
+  const [copied, setCopied] = useState<'ok' | 'failed' | null>(null);
+  const text = coordinateText(latitude, longitude);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(`${latitude.toFixed(4)}, ${(((longitude + 180) % 360 + 360) % 360 - 180).toFixed(4)}`);
+      setCopied('ok');
+    } catch {
+      setCopied('failed');
+    }
+    window.setTimeout(() => setCopied(null), 2500);
+  };
+  return (
+    <div data-testid="external-viewers" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', fontSize: 10 }}>
+      <span style={{ color: 'var(--dim)' }}>Inspect in</span>
+      {Object.values(EXTERNAL_VIEWERS).map((v) => (
+        <a key={v.url} className="btn sm ghost" href={v.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }} title={`Opens ${v.label} in a new tab. Paste the copied coordinates into its search box.`}>
+          {v.label} <ExternalLink size={10} />
+        </a>
+      ))}
+      <button className="btn sm ghost" onClick={() => void copy()} title={text} aria-label={`Copy site coordinates: ${text}`}><Copy size={10} /> Copy lat, lon</button>
+      <span role="status" style={{ color: copied === 'failed' ? 'var(--crimson)' : 'var(--nominal)' }}>
+        {copied === 'ok' ? 'Copied' : copied === 'failed' ? `Copy blocked — ${text}` : ''}
+      </span>
+    </div>
   );
 }

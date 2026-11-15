@@ -320,6 +320,14 @@ Performance budget (proposal, to be measured before claiming):
 
 ## 6. Static demo deploy consideration
 
+> **v1.12 update.** Root-path hosting is now supported and tested: the
+> repository deploys to Vercel as a static console plus one Go function
+> ([deployment/vercel.md](deployment/vercel.md)), and the data-feature browser
+> suite runs the built console with no API behind it, under the production
+> Content-Security-Policy. The base-path blockers below still apply to hosting
+> under a project sub-path (GitHub Pages project site), which remains
+> unverified. "Python backend" below reads "API" since v1.12.
+
 A static demo is feasible because the frontend runs without the Python backend:
 Terrain Lab then offers the labeled synthetic demo and real mode reports an
 actionable no-DEM error. Recommended first deploy: GitHub Pages project site or
