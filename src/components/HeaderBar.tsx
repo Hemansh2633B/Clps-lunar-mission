@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, Box, Columns2, Download, Keyboard, Settings2, GraduationCap, Gauge, Orbit, HelpCircle } from 'lucide-react';
+import { BookOpen, Box, Columns2, Database, Download, Keyboard, Settings2, GraduationCap, Gauge, Orbit, HelpCircle } from 'lucide-react';
 import type { AppMode } from '../types/mission';
 import { mjd, wrap180 } from '../engine/constants';
 import { APP_VERSION } from '../version';
@@ -14,6 +14,8 @@ interface Props {
   onTerrain: () => void;
   spaceActive: boolean;
   onSpace: () => void;
+  dataActive: boolean;
+  onData: () => void;
   onGuide: () => void;
   onHelp: () => void;
   onSettings: () => void;
@@ -27,7 +29,7 @@ interface Props {
 const fmtLat = (v: number) => `${Math.abs(v).toFixed(2)}°${v >= 0 ? 'N' : 'S'}`;
 const fmtLon = (v: number) => { const w = wrap180(v); return `${Math.abs(w).toFixed(2)}°${w >= 0 ? 'E' : 'W'}`; };
 
-export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrainActive, onTerrain, spaceActive, onSpace, onGuide, onHelp, onSettings, onShortcuts, onExport, playing, subSolar, subEarth }: Props) {
+export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrainActive, onTerrain, spaceActive, onSpace, dataActive, onData, onGuide, onHelp, onSettings, onShortcuts, onExport, playing, subSolar, subEarth }: Props) {
   const [exportOpen, setExportOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -57,15 +59,16 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
 
         <div style={{ flex: 1 }} />
 
-        <div className="header-tools" style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 12, flex: '0 0 auto' }}>
+        <div className="header-tools">
           <div className="modeswitch" role="radiogroup" aria-label="Operator mode">
             <button type="button" role="radio" aria-checked={mode === 'planner'} onClick={() => onMode('planner')}><Gauge size={13} /> FLIGHT OPS</button>
             <button type="button" role="radio" aria-checked={mode === 'educator'} onClick={() => onMode('educator')}><GraduationCap size={13} /> EDUCATOR</button>
           </div>
-          <button className={`btn ${spaceActive ? 'active' : ''}`} onClick={onSpace} title="Space views — planet time-lapse and fleet hangar" aria-label="Space views"><Orbit size={14} /> Space <span className="kbd">O</span></button>
-          <button className={`btn ${terrainActive ? 'active' : ''}`} onClick={onTerrain} title="Terrain analysis — 3D lab and real DEM workflow" aria-label="Terrain analysis"><Box size={14} /> Terrain <span className="kbd">T</span></button>
-          <button className={`btn ${compareMode && !terrainActive && !spaceActive ? 'active' : ''}`} onClick={onCompare} data-tour="compare" title="Comparison — pinned scenarios, confidence-tiered ranking" aria-label="Comparison"><Columns2 size={14} /> Compare <span className="kbd">C</span></button>
-          <button className="btn" onClick={onGuide} title="Field Guide — guided stories and searchable glossary" aria-label="Field Guide"><BookOpen size={14} /> Guide <span className="kbd">G</span></button>
+          <button className={`btn ${spaceActive ? 'active' : ''}`} onClick={onSpace} title="Space views — planet time-lapse and fleet hangar" aria-label="Space views"><Orbit size={14} /> <span className="tool-label">Space</span> <span className="kbd">O</span></button>
+          <button className={`btn ${terrainActive ? 'active' : ''}`} onClick={onTerrain} title="Terrain analysis — 3D lab and real DEM workflow" aria-label="Terrain analysis"><Box size={14} /> <span className="tool-label">Terrain</span> <span className="kbd">T</span></button>
+          <button className={`btn ${compareMode && !terrainActive && !spaceActive && !dataActive ? 'active' : ''}`} onClick={onCompare} data-tour="compare" title="Comparison — pinned scenarios, confidence-tiered ranking" aria-label="Comparison"><Columns2 size={14} /> <span className="tool-label">Compare</span> <span className="kbd">C</span></button>
+          <button className={`btn ${dataActive ? 'active' : ''}`} onClick={onData} aria-pressed={dataActive} title="Lunar Data Hub — sources, provenance, JPL Horizons verification" aria-label="Data Hub"><Database size={14} /> <span className="tool-label">Data</span> <span className="kbd">D</span></button>
+          <button className="btn" onClick={onGuide} title="Field Guide — guided stories and searchable glossary" aria-label="Field Guide"><BookOpen size={14} /> <span className="tool-label">Guide</span> <span className="kbd">G</span></button>
           <div ref={ref} data-tour="export" style={{ position: 'relative' }}>
             <button className="btn primary" onClick={() => setExportOpen((v) => !v)}><Download size={14} /> Export</button>
             {exportOpen && (
@@ -85,7 +88,7 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
           </div>
           <button className="btn icon" title="Welcome guide — what CHANDRA does and how to start" aria-label="Open welcome guide" onClick={onHelp}><HelpCircle size={15} /></button>
           <button className="btn icon" title="Mission parameters" aria-label="Mission parameters" data-tour="settings" onClick={onSettings}><Settings2 size={15} /></button>
-          <button className="btn icon" title="Keyboard shortcuts (?)" onClick={onShortcuts}><Keyboard size={15} /></button>
+          <button className="btn icon" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={onShortcuts}><Keyboard size={15} /></button>
         </div>
       </header>
       <div className="clock-strip header-clock">

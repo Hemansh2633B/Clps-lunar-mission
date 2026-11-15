@@ -81,7 +81,10 @@ async function newPage({ onboarded = true, story = null, viewport = { width: 160
     window.sessionStorage.setItem('chandra-test-seeded', '1');
   }, { onboardedFlag: onboarded, storyJson: story ? JSON.stringify(story) : null });
   const page = await ctx.newPage();
-  page.setDefaultTimeout(45000);
+  // CHANDRA_E2E_TIMEOUT_SCALE stretches the default action timeout for software-rendered
+  // browsers (no GPU), where the first playback frame can take minutes to composite.
+  // It changes patience only, never an assertion.
+  page.setDefaultTimeout(45000 * (Number(process.env.CHANDRA_E2E_TIMEOUT_SCALE) || 1));
   page.on('pageerror', (e) => allErrors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') allConsole.push(m.text()); });
   return page;
@@ -314,7 +317,7 @@ try {
     await page.locator('.story-objective').getByRole('button', { name: 'Export mission report (.json)' }).click();
     await page.waitForTimeout(1200);
     assert(downloads.length === 2, 'B: blocked analysis never downloads');
-    assert(await page.locator('[role="status"]').innerText().then((t) => /Export blocked/.test(t)).catch(() => false), 'B: refusal explained');
+    assert(await page.locator('[role="status"][data-testid="toast"]').innerText().then((t) => /Export blocked/.test(t)).catch(() => false), 'B: refusal explained');
     await objectiveUnmet(page);
     assert(await page.locator('.story-nav button', { hasText: 'Finish briefing' }).isDisabled(), 'B: cannot finish on refused/CSV exports');
     await shot(page, '18-story-export-blocked');
@@ -511,7 +514,7 @@ try {
     await page.locator('.story-objective').getByRole('button', { name: 'Export mission report (.json)' }).click();
     await page.waitForTimeout(1200);
     assert(!downloaded, 'D: blocked analysis never downloads');
-    assert(await page.locator('[role="status"]').innerText().then((t) => /Export blocked/.test(t)).catch(() => false), 'D: export guard explains the refusal');
+    assert(await page.locator('[role="status"][data-testid="toast"]').innerText().then((t) => /Export blocked/.test(t)).catch(() => false), 'D: export guard explains the refusal');
     await objectiveUnmet(page);
     assert(await page.locator('.story-nav button', { hasText: 'Finish briefing' }).isDisabled(), 'D: cannot finish via a refused export');
 

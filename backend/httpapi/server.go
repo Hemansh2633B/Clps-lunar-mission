@@ -203,7 +203,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if rt.limit > 0 && s.o.RateLimit {
-		if wait := s.throttle(clientKey(r)+" "+path, rt.limit); wait > 0 {
+		if wait := s.throttle(s.clientKey(r)+" "+path, rt.limit); wait > 0 {
 			w.Header().Set("Retry-After", fmt.Sprint(int(wait.Seconds())+1))
 			s.fail(w, http.StatusTooManyRequests, "Too many requests. Please wait a moment and retry.")
 			return
@@ -252,9 +252,15 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, http.StatusOK, body)
 }
 
-func clientKey(r *http.Request) string {
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		return strings.TrimSpace(strings.Split(fwd, ",")[0])
+// clientKey identifies the caller for rate limiting. X-Forwarded-For is only
+// believed on Vercel, where the platform overwrites it with the client address;
+// anywhere else the header is caller-controlled and would let one client pose
+// as many, so the socket address is used instead.
+func (s *server) clientKey(r *http.Request) string {
+	if s.o.Deployment == "vercel" {
+		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+			return strings.TrimSpace(strings.Split(fwd, ",")[0])
+		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -263,16 +269,24 @@ func clientKey(r *http.Request) string {
 	return host
 }
 
+// maxRateWindows bounds the limiter's bookkeeping. Expired windows are pruned
+// first; if live ones alone exceed the bound the table is cleared, which briefly
+// forgets counts rather than letting memory grow with the number of callers.
+const maxRateWindows = 4096
+
 // throttle is a fixed one-minute window per client and route (per instance).
 func (s *server) throttle(key string, limit int) time.Duration {
 	now := s.o.Now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.windows) > 4096 {
+	if len(s.windows) >= maxRateWindows {
 		for k, w := range s.windows {
-			if now.Sub(w.start) > time.Minute {
+			if now.Sub(w.start) >= time.Minute {
 				delete(s.windows, k)
 			}
+		}
+		if len(s.windows) >= maxRateWindows {
+			s.windows = map[string]*rateWindow{}
 		}
 	}
 	w := s.windows[key]
@@ -721,7 +735,12 @@ func FromEnv(getenv func(string) string, projectRoot string) (Options, error) {
 	if onVercel {
 		defaultDir, deployment = filepath.Join(os.TempDir(), "chandra-data"), "vercel"
 	}
-	o := Options{Settings: settings, Store: store.FromEnv(getenv, defaultDir), ProjectRoot: projectRoot, Deployment: deployment,
+	st := store.FromEnv(getenv, defaultDir)
+	if local, ok := st.(*store.Local); ok && onVercel {
+		// Every writable path of a function instance is temporary, whatever directory was chosen.
+		local.Ephemeral = true
+	}
+	o := Options{Settings: settings, Store: st, ProjectRoot: projectRoot, Deployment: deployment,
 		HorizonsEnabled: getenv("CHANDRA_HORIZONS") != "off", AcquireEnabled: getenv("CHANDRA_ACQUIRE") != "off",
 		RateLimit: getenv("CHANDRA_RATE_LIMIT") != "off"}
 	client := &horizons.Client{MinInterval: 600 * time.Millisecond}

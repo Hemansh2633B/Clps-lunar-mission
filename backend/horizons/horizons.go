@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -461,12 +462,14 @@ func (t *HTTPTransport) Get(ctx context.Context, requestURL string) (string, err
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", &UpstreamError{"JPL Horizons is unreachable: " + err.Error()}
+		// Never echo the transport error: it repeats the whole request URL and can
+		// expose resolver or proxy addresses of the host. A short reason is enough.
+		return "", &UpstreamError{"JPL Horizons could not be reached (" + transportReason(ctx, err) + ")."}
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse+1))
 	if err != nil {
-		return "", &UpstreamError{"JPL Horizons response could not be read: " + err.Error()}
+		return "", &UpstreamError{"JPL Horizons response could not be read (" + transportReason(ctx, err) + ")."}
 	}
 	if len(raw) > maxResponse {
 		return "", &UpstreamError{"Horizons response is larger than expected."}
@@ -475,6 +478,19 @@ func (t *HTTPTransport) Get(ctx context.Context, requestURL string) (string, err
 		return "", &UpstreamError{fmt.Sprintf("JPL Horizons returned HTTP %d.", resp.StatusCode)}
 	}
 	return string(raw), nil
+}
+
+// transportReason reduces a transport error to a short, non-identifying phrase.
+func transportReason(ctx context.Context, err error) string {
+	var netErr net.Error
+	switch {
+	case ctx.Err() != nil || errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()):
+		return "timed out"
+	case strings.Contains(err.Error(), "unexpected redirect"):
+		return "unexpected redirect"
+	default:
+		return "network error"
+	}
 }
 
 // AllowedBase reports whether a base URL may be contacted: the official JPL

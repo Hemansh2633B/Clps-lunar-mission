@@ -18,6 +18,7 @@
     "test:real-dem": "node scripts/real-dem-browser-test.mjs",
     "test:story": "node scripts/story-browser-test.mjs",
     "test:exports": "node scripts/export-browser-test.mjs",
+    "test:datahub": "node scripts/datahub-browser-test.mjs",
     "bench:identity": "tsx scripts/identity-benchmark.ts",
     "test:go": "node scripts/go-test.mjs",
     "lola:subset": "node scripts/go-run.mjs chandra-lola",

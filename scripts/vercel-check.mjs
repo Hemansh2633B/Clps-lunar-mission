@@ -43,8 +43,42 @@ for (const p of ['/', '/terrain', '/data-hub/sources', '/index.html']) assert.ok
 for (const p of ['/api', '/api/', '/api/health', '/api/unknown/deep', '/assets/missing.js']) assert.ok(!spa.test(p), `${p} must never be rewritten to index.html`);
 const csp = config.headers.flatMap((h) => h.headers).find((h) => h.key === 'Content-Security-Policy')?.value ?? '';
 assert.ok(/default-src 'self'/.test(csp) && !/unsafe-eval/.test(csp) && /object-src 'none'/.test(csp), 'a restrictive CSP is required');
+// Every remote imagery layer in the catalogue must be allowed by img-src, and nothing else may be:
+// a layer added without its host would load in development (no CSP there) and fail only when deployed.
+const catalogue = JSON.parse(readFileSync('backend/catalog/catalogue.json', 'utf8'));
+const layerHosts = new Set(catalogue.sources.filter((s) => s.layer && s.layer.type !== 'bundled')
+  .map((s) => new URL(s.layer.url_template ?? s.layer.endpoint).origin));
+assert.ok(layerHosts.size >= 2, 'the catalogue should describe at least two remote imagery hosts');
+const imgSrc = (/img-src ([^;]*)/.exec(csp)?.[1] ?? '').split(/\s+/).filter(Boolean);
+for (const origin of layerHosts) assert.ok(imgSrc.includes(origin), `CSP img-src must allow the catalogue imagery host ${origin}`);
+for (const token of imgSrc.filter((t) => /^https?:/.test(t))) assert.ok(layerHosts.has(token), `CSP img-src allows ${token}, which no catalogue layer uses`);
+assert.ok(/connect-src 'self'(;|$)/.test(csp), 'the console may only call its own origin');
 for (const text of [JSON.stringify(config), entry]) assert.ok(!/BLOB_READ_WRITE_TOKEN\s*[:=]\s*["'][^"']+/.test(text), 'no credential may be committed');
-ok('framework pinned, single Go function, API rewrite precedes the SPA fallback, no secrets, restrictive CSP');
+
+// .vercelignore removes files BEFORE the build runs on Vercel, which a local `vercel build`
+// does not reproduce. Check that it cannot remove anything the build needs. Only three
+// pattern shapes are accepted, so that this check understands every line of the file.
+const ignoreRules = readFileSync('.vercelignore', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#')).map((pattern) => {
+  if (/^\/[\w.-]+$/.test(pattern)) return { pattern, test: (f) => f === pattern.slice(1) || f.startsWith(`${pattern.slice(1)}/`) };
+  if (/^\*[\w.-]+$/.test(pattern)) return { pattern, test: (f) => f.split('/').pop().endsWith(pattern.slice(1)) };
+  if (/^\.[\w-]+\*$/.test(pattern)) return { pattern, test: (f) => f.split('/').some((part) => part.startsWith(pattern.slice(0, -1))) };
+  throw new assert.AssertionError({ message: `.vercelignore pattern "${pattern}" is not root-anchored ("/name"), a suffix glob ("*.ext") or a dot-prefix glob (".name*"). A bare directory name matches at every depth and can remove source directories.` });
+});
+const tracked = spawnSync('git', ['ls-files', '-co', '--exclude-standard'], { encoding: 'utf8', maxBuffer: 64 << 20 });
+if (tracked.status === 0 && tracked.stdout.trim()) {
+  const files = tracked.stdout.split('\n').filter(Boolean);
+  const needed = files.filter((f) => /^(src|public|api|backend|cmd)\//.test(f) && !f.endsWith('_test.go') && !/\/testdata\//.test(f))
+    .concat(['index.html', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'go.mod', 'vercel.json']);
+  assert.ok(needed.length > 100, 'expected the repository file list');
+  for (const f of needed) {
+    const hit = ignoreRules.find((r) => r.test(f));
+    assert.ok(!hit, `.vercelignore pattern "${hit?.pattern}" would remove ${f}, which the Vercel build needs`);
+  }
+  ok(`.vercelignore keeps all ${needed.length} files the build needs (${ignoreRules.length} anchored rules)`);
+} else {
+  ok(`.vercelignore rules are anchored (${ignoreRules.length}); file-level check skipped outside a Git checkout`);
+}
+ok(`framework pinned, single Go function, API rewrite precedes the SPA fallback, no secrets, restrictive CSP (imagery hosts: ${[...layerHosts].join(', ')})`);
 
 if (!args.has('--built') && !args.has('--build')) {
   console.log('Static Vercel checks passed. Run with --build (network) or --built to validate and execute the built function.');
@@ -140,7 +174,9 @@ const emulator = http.createServer((req, res) => {
 });
 await new Promise((r) => emulator.listen(0, '127.0.0.1', r));
 const child = spawn(bootstrap, [], {
-  env: { PATH: process.env.PATH, HOME: process.env.HOME ?? '/tmp', VERCEL: '1', CHANDRA_RATE_LIMIT: 'off', CHANDRA_HORIZONS: 'off',
+  // VERCEL is deliberately absent: the function must identify itself as a Vercel
+  // deployment even when the project does not expose system variables at runtime.
+  env: { PATH: process.env.PATH, HOME: process.env.HOME ?? '/tmp', CHANDRA_RATE_LIMIT: 'off', CHANDRA_HORIZONS: 'off',
     AWS_LAMBDA_RUNTIME_API: `127.0.0.1:${emulator.address().port}`, AWS_LAMBDA_FUNCTION_NAME: 'chandra', _HANDLER: 'bootstrap' },
   stdio: ['ignore', 'inherit', 'inherit'], cwd: path.dirname(bootstrap),
 });
@@ -171,6 +207,7 @@ try {
   const cfg = await invoke('GET', '/api/config');
   assert.equal(cfg.json.deployment, 'vercel');
   assert.equal(cfg.json.dem_ready, false, 'no DEM ships with the deployment');
+  assert.deepEqual(cfg.json.storage, { kind: 'local', persistent: false }, 'without a Blob store the function must report its storage as temporary');
   assert.equal(cfg.json.storage.kind, 'local');
   const terrain = await invoke('POST', '/api/terrain', { latitude: -89.5, longitude: 45, radius_km: 2, quality: 'low', mode: 'synthetic' });
   assert.equal(terrain.status, 200);

@@ -265,6 +265,67 @@ func TestReadBudgetIsEnforced(t *testing.T) {
 	}
 }
 
+// A source object that is replaced while it is being read must never yield a
+// subset stitched from two versions. Whatever the request at which the server
+// starts answering from a different object (new ETag, or new size), the
+// acquisition has to fail, and say why.
+func TestSourceChangingMidDownloadIsRejected(t *testing.T) {
+	data, err := os.ReadFile(roughDEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type outcome struct {
+		requests int
+		err      error
+	}
+	run := func(mode string, flipAfter int) outcome {
+		var mu sync.Mutex
+		served := 0
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			served++
+			flipped := served > flipAfter
+			mu.Unlock()
+			body, tag := data, `"v1"`
+			if flipped && mode == "etag" {
+				tag = `"v2"`
+			}
+			if flipped && mode == "size" {
+				body = append(append([]byte{}, data...), 0, 0, 0, 0)
+			}
+			w.Header().Set("ETag", tag)
+			http.ServeContent(w, r, "dem.tif", time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), bytes.NewReader(body))
+		}))
+		defer srv.Close()
+		product := Product{ID: "test-synthetic", URL: srv.URL + "/data/LDEM_TEST.TIF", ProductPage: "https://example.invalid/product", Assumptions: synthOptions()}
+		_, err := Acquire(context.Background(), Options{Product: product, AllowLoopback: true}, -89.5, 45.0, 2.0, false)
+		mu.Lock()
+		defer mu.Unlock()
+		return outcome{served, err}
+	}
+	clean := run("etag", 1<<30)
+	if clean.err != nil || clean.requests < 3 {
+		t.Fatalf("an unchanged source must download in at least three requests: %d requests, %v", clean.requests, clean.err)
+	}
+	for _, mode := range []string{"etag", "size"} {
+		for flipAfter := 1; flipAfter < clean.requests; flipAfter++ {
+			got := run(mode, flipAfter)
+			if got.err == nil {
+				t.Fatalf("%s changed after request %d of %d and the subset was still accepted", mode, flipAfter, clean.requests)
+			}
+			if _, ok := got.err.(*terrain.Error); !ok || !strings.Contains(got.err.Error(), "changed") {
+				t.Fatalf("%s changed after request %d: want a user-facing \"changed\" error, got %T %v", mode, flipAfter, got.err, got.err)
+			}
+			if strings.Contains(got.err.Error(), "127.0.0.1") {
+				t.Fatalf("error names the source address: %v", got.err)
+			}
+		}
+		if got := run(mode, clean.requests); got.err != nil {
+			t.Fatalf("%s changing only after the download finished must not fail it: %v", mode, got.err)
+		}
+	}
+}
+
 func TestInvalidRequestsFailBeforeAnyNetworkUse(t *testing.T) {
 	srv := newRangeServer(t, roughDEM)
 	for _, c := range [][3]any{{-91.0, 45.0, 2.0}, {-89.5, 400.0, 2.0}, {-89.5, 45.0, 50.0}, {"x", 45.0, 2.0}, {true, 45.0, 2.0}} {
@@ -306,4 +367,22 @@ func fmtSscanf(s string, a, b *int) (int, error) {
 		*a, *b, n = x, y, 2
 	}
 	return n, nil
+}
+
+// Transport failures must not echo the request URL or host/resolver details.
+func TestTransportErrorsAreNotLeaked(t *testing.T) {
+	product := Product{ID: "test-synthetic", URL: "http://127.0.0.1:1/data/LDEM_TEST.TIF", ProductPage: "https://example.invalid/product", Assumptions: synthOptions()}
+	_, err := Acquire(context.Background(), Options{Product: product, AllowLoopback: true}, -89.5, 45.0, 2.0, true)
+	if err == nil {
+		t.Fatal("expected an error for an unreachable source")
+	}
+	msg := err.Error()
+	for _, leak := range []string{"127.0.0.1", "http://", "dial", "LDEM_TEST", "connect:"} {
+		if strings.Contains(msg, leak) {
+			t.Fatalf("error leaks %q: %s", leak, msg)
+		}
+	}
+	if msg != "NASA DEM server is unreachable (network error). Nothing was downloaded." {
+		t.Fatalf("unexpected message: %s", msg)
+	}
 }

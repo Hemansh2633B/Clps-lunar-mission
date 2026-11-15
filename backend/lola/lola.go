@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -108,6 +109,18 @@ type RangeReader struct {
 	order  []int64
 }
 
+// transportReason reduces a transport error to a short, non-identifying phrase.
+func transportReason(ctx context.Context, err error) string {
+	var netErr net.Error
+	if ctx.Err() != nil || errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()) {
+		return "timed out"
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+		return "connection closed early"
+	}
+	return "network error"
+}
+
 func (r *RangeReader) fetch(off, n int64) ([]byte, error) {
 	if off < 0 || n <= 0 || off+n > r.Size {
 		return nil, fmt.Errorf("range %d+%d is outside the %d-byte source", off, n, r.Size)
@@ -123,17 +136,28 @@ func (r *RangeReader) fetch(off, n int64) ([]byte, error) {
 	req.Header.Set("User-Agent", "CHANDRA-lunar-mission-planner (bounded LOLA subset)")
 	resp, err := r.Client.Do(req)
 	if err != nil {
-		return nil, err
+		// The transport error repeats the full URL and may name resolver or proxy
+		// addresses of the host; a short reason is all a client needs.
+		return nil, errors.New("the NASA DEM server could not be reached (" + transportReason(r.Ctx, err) + ")")
 	}
 	defer resp.Body.Close()
 	r.Requests++
 	want := fmt.Sprintf("bytes %d-%d/", off, off+n-1)
-	if resp.StatusCode != http.StatusPartialContent || !strings.HasPrefix(resp.Header.Get("Content-Range"), want) {
+	cr := resp.Header.Get("Content-Range")
+	if resp.StatusCode != http.StatusPartialContent || !strings.HasPrefix(cr, want) {
 		return nil, fmt.Errorf("server did not honour range %d-%d (HTTP %d)", off, off+n-1, resp.StatusCode)
+	}
+	// Every range must come from the same object the header was read from: a
+	// subset stitched from two versions of a file would be silently wrong.
+	if total := strings.TrimPrefix(cr, want); total != "*" && total != strconv.FormatInt(r.Size, 10) {
+		return nil, errors.New("the source file changed size during the download; nothing was kept, retry")
+	}
+	if tag := resp.Header.Get("ETag"); r.ETag != "" && tag != "" && tag != r.ETag {
+		return nil, errors.New("the source file changed during the download; nothing was kept, retry")
 	}
 	buf := make([]byte, n)
 	if _, err := io.ReadFull(resp.Body, buf); err != nil {
-		return nil, fmt.Errorf("short range read: %w", err)
+		return nil, errors.New("short range read (" + transportReason(r.Ctx, err) + ")")
 	}
 	r.Fetched += n
 	return buf, nil
@@ -225,7 +249,7 @@ func OpenRemote(ctx context.Context, o Options) (*terrain.DEM, *RangeReader, err
 	probe.Header.Set("Range", "bytes=0-15")
 	resp, err := client.Do(probe)
 	if err != nil {
-		return nil, nil, terrain.Errorf("NASA DEM server is unreachable: %v", err)
+		return nil, nil, terrain.Errorf("NASA DEM server is unreachable (%s). Nothing was downloaded.", transportReason(ctx, err))
 	}
 	defer resp.Body.Close()
 	cr := resp.Header.Get("Content-Range")

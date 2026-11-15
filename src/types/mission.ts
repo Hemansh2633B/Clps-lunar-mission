@@ -45,6 +45,8 @@ export interface TerrainProfile {
   verticalUncertaintyM?: number;
   effectiveResolutionM?: number;
   productVersion?: string;
+  /** Where the DEM came from (dataset id, source product/URL, subset checksum, resampling). Descriptive only. */
+  sourceProvenance?: string;
 }
 
 /** How the mission window was sampled (reproducibility + convergence disclosure). */

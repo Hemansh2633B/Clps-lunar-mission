@@ -30,6 +30,8 @@ import { MISSION_LIMITS, sanitizeConfig, type NumericConfigKey } from '../engine
 import { simulationKey } from '../engine/simulation';
 import { energyResolutionDisclosure, ENERGY_RESOLUTION_COARSE } from '../engine/analysisStatus';
 import { APP_VERSION, REPORT_SCHEMA_VERSION, REPORT_SCHEMA_POLICY } from '../version';
+import { CATALOGUE } from '../data/catalogue';
+import { RECORDED_HORIZONS } from '../verification/recordedMeta';
 import { analysisFingerprint, shortFingerprint } from './analysisId';
 
 export { REPORT_SCHEMA_VERSION };
@@ -199,6 +201,44 @@ function provenanceRow(sim: SimulationResult, fingerprint: string): Record<strin
   };
 }
 
+/**
+ * Where the inputs of a report came from (report schema 2.1.0). Purely
+ * descriptive: nothing here changes a computed value. It cites the Data Hub
+ * catalogue so a reader can trace every source, and it is explicit that the
+ * Horizons reference is an independent check that is NOT an input to the report.
+ */
+export function dataProvenance(site: LandingSite) {
+  const t = site.terrain;
+  const measured = t.kind === 'dem' && !t.synthetic;
+  return {
+    catalogue: { schemaVersion: CATALOGUE.schema_version, date: CATALOGUE.catalogue_date, note: 'Source catalogue shipped with this build (Data Hub).' },
+    ephemerisEngine: { catalogueId: 'astronomy-engine', role: 'simulation engine for every Sun/Earth direction in this report' },
+    ephemerisVerification: {
+      catalogueId: 'jpl-horizons',
+      service: 'NASA/JPL Horizons API',
+      ephemeris: RECORDED_HORIZONS.ephemeris,
+      siteFrame: RECORDED_HORIZONS.frame,
+      role: 'independent check of sky geometry; never an input to this report',
+      recordedReference: {
+        recordedUtc: RECORDED_HORIZONS.recordedUtc, siteId: RECORDED_HORIZONS.siteId,
+        firstUtc: RECORDED_HORIZONS.firstUtc, lastUtc: RECORDED_HORIZONS.lastUtc, samplesPerTarget: RECORDED_HORIZONS.samplesPerTarget,
+      },
+      coversThisSite: site.id === RECORDED_HORIZONS.siteId,
+      note: 'The recorded reference covers one site and window. This report was not itself checked against Horizons; run a live check in the Data Hub for this site and epoch. Horizons has no terrain model and cannot verify terrain visibility.',
+    },
+    terrainSource: {
+      nature: measured ? 'measured-dem' : t.synthetic ? 'synthetic-demo' : t.kind === 'dem' ? 'dem' : 'illustrative',
+      file: t.sourceFile ?? null,
+      referenceFrame: t.sourceFrame ?? null,
+      acquisition: t.sourceProvenance ?? null,
+      note: measured
+        ? 'Horizon derived from a measured DEM by the CHANDRA terrain engine; see terrain.disclosure for frame handling.'
+        : 'Not a measured lunar DEM: results are illustrative and must not be read as terrain-accurate.',
+    },
+    displayImagery: 'Map imagery (bundled LROC WAC mosaic, NASA Moon Trek tiles, LROC WMS) is display-only and is never an analysis input.',
+  };
+}
+
 export async function missionReportJSON(site: LandingSite, config: MissionConfig, sim: SimulationResult | null, current: EvaluatedSample): Promise<string> {
   const t = site.terrain;
   const conf = sim?.summary?.dataConfidence ?? terrainDataConfidence(site);
@@ -228,13 +268,13 @@ export async function missionReportJSON(site: LandingSite, config: MissionConfig
       maxSamplingGapMinutes: sim.sampling.maxGapMinutes,
     } : null,
     ephemeris: {
-      model: 'astronomy-engine (JPL DE402/DE421-class ephemeris)',
+      model: 'astronomy-engine analytic models (truncated VSOP87 series and NOVAS C 3.1-derived routines; Moon from a Montenbruck & Pfleger series after Brown\'s lunar theory; upstream design accuracy ±1 arcminute); not a JPL DE numerical ephemeris',
       moonRotation: 'IAU 2015 (RotationAxis + Libration)',
       frame: EPHEMERIS_FRAME,
       lightTimeCorrected: true,
       stellarAberration: true,
       refraction: 'none (airless body)',
-      independentValidation: 'SPICE DE421 + moon_pa_de421 + pck00008; see tests/data/frame-reference.json',
+      independentValidation: 'SPICE DE421 + moon_pa_de421 + pck00008 (tests/data/frame-reference.json); NASA/JPL Horizons DE441 recorded comparison (src/verification/recordedHorizons.json)',
     },
     siteProvenance: {
       siteId: site.id,
@@ -322,6 +362,7 @@ export async function missionReportJSON(site: LandingSite, config: MissionConfig
     energyHistory: sim?.energyHistory ?? null,
     energyHistoryMethod: 'Rows are the event-aware integrator\'s own accepted adaptive-Simpson sub-interval boundaries (same generation integral, efficiencies, SOC bounds and depletion interpolation as the summary). generated_w is the interval average, not an instantaneous value. No intermediate interpolation.',
     horizonProfile: site.terrain,
+    dataProvenance: dataProvenance(site),
     reproducibility,
   }, null, 2);
 }

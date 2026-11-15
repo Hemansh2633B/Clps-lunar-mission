@@ -3,8 +3,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Box, Crosshair, Download, Layers, Mountain, Play, RotateCcw, Sun, AlertTriangle, MapPin } from 'lucide-react';
 import type { AppMode, LandingSite } from '../types/mission';
-import type { HorizonMask, SurfaceInspection, SunPosition, TerrainConfig, TerrainData, TerrainExample, TerrainMode, TerrainQuality } from '../terrain/types';
+import type { DatasetsResponse, HorizonMask, SurfaceInspection, SunPosition, TerrainConfig, TerrainData, TerrainExample, TerrainMode, TerrainQuality } from '../terrain/types';
 import { terrainApi } from '../terrain/api';
+import { CONFIGURED_DATASET, datasetParam, pickDataset } from '../terrain/datasets';
+import { TerrainDataPanel } from './TerrainDataPanel';
 import { syntheticTerrain, SYNTHETIC_WARNING } from '../terrain/synthetic';
 import { horizonFromGrid } from '../terrain/horizon';
 import { createTerrain, disposeTerrain, setExaggeration, createAnnotations, disposeAnnotations, interpolateSample, type TerrainMesh } from '../terrain/terrainMesh';
@@ -55,6 +57,8 @@ declare global {
   interface Window {
     __CHANDRA_TERRAIN__?: {
       mode: string; gridSize: number; triangles: number; landingPosition: number[] | null;
+      /** API mode of the displayed model and the dataset it was read from (null: synthetic generator or the configured DEM). */
+      requestMode: string | null; datasetId: string | null;
       exaggeration: number; shadows: boolean; sun: SunPosition | null; sunDirection: number[]; camera: number[];
       shadowMapSize: number[]; calls: number;
       horizon: { bins: number; coverage: number; importBlocked: string | null } | null;
@@ -91,9 +95,14 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
   const [azStep, setAzStep] = useState(2);
   const [eyeHeight, setEyeHeight] = useState(2);
   const [autoReal, setAutoReal] = useState(false);
+  const [datasets, setDatasets] = useState<DatasetsResponse | null>(null);
+  const [datasetsError, setDatasetsError] = useState<string | null>(null);
+  const [datasetId, setDatasetId] = useState(CONFIGURED_DATASET);
+  const datasetIdRef = useRef(CONFIGURED_DATASET);
   const buildSeqRef = useRef(0);
 
   dataRef.current = data;
+  datasetIdRef.current = datasetId;
   exaggerationRef.current = exaggeration;
   shadowsRef.current = shadows;
 
@@ -351,12 +360,33 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
           const ex = await terrainApi.examples();
           if (active && ex.examples?.length) setExamples(ex.examples);
         } catch { /* keep defaults */ }
+        // Dataset listing is part of the native API (1.1+); a v1.11 backend simply has none.
+        if (config.capabilities?.datasets) {
+          try {
+            const list = await terrainApi.datasets();
+            if (!active) return;
+            setDatasets(list);
+            const ready = pickDataset(list, CONFIGURED_DATASET);
+            if (ready) setDatasetId(ready.id);
+          } catch (err) {
+            if (active) setDatasetsError(err instanceof Error ? err.message : String(err));
+          }
+        }
       })
       .catch(() => { if (active) setBackendOnline(false); });
     return () => { active = false; };
   }, []);
 
-  const build = useCallback(async (override?: Partial<typeof form>) => {
+  const refreshDatasets = useCallback(async () => {
+    try {
+      setDatasets(await terrainApi.datasets());
+      setDatasetsError(null);
+    } catch (err) {
+      setDatasetsError(err instanceof Error ? err.message : String(err));
+    }
+  }, []);
+
+  const build = useCallback(async (override?: Partial<typeof form>, datasetOverride?: string) => {
     const f = { ...form, ...override };
     const seq = ++buildSeqRef.current;
     setLoading(true);
@@ -367,7 +397,7 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
         result = syntheticTerrain(f.latitude, f.longitude, f.radius, f.quality);
       } else {
         if (!backendOnline) throw new Error('Real lunar DEM requires the local backend. Run npm run dev:api (or npm run dev:full), then retry. Real mode never falls back to synthetic data.');
-        result = await terrainApi.terrain({ latitude: f.latitude, longitude: f.longitude, radius_km: f.radius, quality: f.quality, mode: 'real' });
+        result = await terrainApi.terrain({ latitude: f.latitude, longitude: f.longitude, radius_km: f.radius, quality: f.quality, mode: 'real', dataset_id: datasetParam(datasetOverride ?? datasetIdRef.current) });
       }
       if (seq !== buildSeqRef.current) return; // a newer request won
       setData(result);
@@ -399,7 +429,8 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
     try {
       const quality: TerrainQuality = data.grid.size <= 129 ? 'low' : data.grid.size <= 257 ? 'medium' : 'high';
       const mask = data.mode === 'real' && backendOnline
-        ? await terrainApi.horizon({ latitude: data.latitude, longitude: data.longitude, radius_km: data.radius_km, quality, mode: 'real', az_step_deg: azStep, eye_height_m: eyeHeight })
+        // The horizon must come from the SAME dataset as the terrain on screen.
+        ? await terrainApi.horizon({ latitude: data.latitude, longitude: data.longitude, radius_km: data.radius_km, quality, mode: 'real', az_step_deg: azStep, eye_height_m: eyeHeight, dataset_id: datasetParam(data.source.dataset_id ?? datasetIdRef.current) })
         : horizonFromGrid(data, azStep, eyeHeight);
       setHorizon(mask);
     } catch (err) {
@@ -440,6 +471,8 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
     const center = n ? Math.floor(n / 2) * n + Math.floor(n / 2) : 0;
     window.__CHANDRA_TERRAIN__ = {
       mode: d?.synthetic ? 'synthetic' : 'real',
+      requestMode: d?.mode ?? null,
+      datasetId: d?.source?.dataset_id ?? null,
       gridSize: n,
       triangles: ctx?.mesh ? ctx.mesh.geometry.index!.count / 3 : 0,
       landingPosition: ctx?.mesh ? Array.from(ctx.mesh.geometry.attributes.position.array.slice(center * 3, center * 3 + 3)) as number[] : null,
@@ -466,12 +499,14 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
         : null;
   const eyeError = !Number.isFinite(eyeHeight) || eyeHeight < 0 || eyeHeight > 50 ? 'Eye height must be 0–50 m.' : null;
 
+  const acquiredCount = datasets?.datasets.filter((d) => d.kind === 'acquired' && d.ready).length ?? 0;
+
   return (
     <section className="panel terrain-lab" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <div className="panel-header">
         <span className="panel-title"><Box size={13} /> Terrain Lab · 3D DEM inspector</span>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className={`chip ${backendOnline ? 'nominal' : 'solar'}`}>{backendOnline ? (backend?.dem_ready ? 'DEM ready' : 'API online · no DEM') : 'API offline · demo only'}</span>
+          <span className={`chip ${backendOnline ? 'nominal' : 'solar'}`} data-testid="terrain-backend-chip">{backendOnline ? (backend?.dem_ready ? 'DEM ready' : acquiredCount > 0 ? `API online · ${acquiredCount} acquired` : 'API online · no DEM') : 'API offline · demo only'}</span>
           <span className={`chip ${data?.synthetic ? 'solar' : 'earth'}`}>{data ? (data.synthetic ? 'Synthetic demo' : 'Real DEM') : 'No model'}</span>
         </div>
       </div>
@@ -504,6 +539,10 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
 
       <div className="terrain-lab-body">
         <aside className="terrain-lab-controls">
+          <TerrainDataPanel online={backendOnline} datasets={datasets} datasetsError={datasetsError} datasetId={datasetId}
+            onSelect={setDatasetId} onRefresh={refreshDatasets} data={data} busy={loading}
+            location={{ latitude: form.latitude, longitude: form.longitude, radius: form.radius }} locationError={formError}
+            onAcquired={(id) => { setDatasetId(id); void build({ mode: 'real' }, id); notify('LOLA subset stored — building real terrain from it.'); }} />
           <div>
             <div className="panel-title" style={{ marginBottom: 6 }}>Example locations</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

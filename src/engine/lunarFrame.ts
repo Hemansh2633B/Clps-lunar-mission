@@ -9,7 +9,7 @@ import {
  *
  * The ephemeris (`ephemeris.ts`) uses the IAU 2015 Moon rotation. NASA LOLA
  * south-polar DEMs are MOON_ME (DE421). These are distinct body-fixed realizations.
- * SPICE verification (backend/lunar_frame.py, scripts/generate-frame-constants.py)
+ * SPICE verification (tools/spice-evidence/lunar_frame.py, generate_frame_constants.py)
  * shows the IAU 2015 frame is close to MOON_ME (mean offset ~0.0017 deg) and that a
  * constant rotation removes the mean bias with a verified residual <= 0.0039 deg
  * over 2020-2035. That residual is disclosed as a frame-model uncertainty.
@@ -151,6 +151,10 @@ export interface ConvertedSite {
 export function convertSite(latitude: number, longitude: number, transform: FrameTransform | null): ConvertedSite {
   const R = rotationFor(transform);
   if (!R) return { latitude, longitude, azimuthOffsetDeg: 0 };
+  return convertWith(latitude, longitude, R);
+}
+
+function convertWith(latitude: number, longitude: number, R: readonly number[]): ConvertedSite {
   const lat = (latitude * Math.PI) / 180;
   const lon = (longitude * Math.PI) / 180;
   const cl = Math.cos(lat), sl = Math.sin(lat), co = Math.cos(lon), so = Math.sin(lon);
@@ -168,6 +172,20 @@ export function convertSite(latitude: number, longitude: number, transform: Fram
   const eastIau = [-Math.sin(lon2r), Math.cos(lon2r), 0];
   const azOffset = (Math.atan2(dot(northProj, eastIau), dot(northProj, northIau)) * 180) / Math.PI;
   return { latitude: lat2, longitude: lon2, azimuthOffsetDeg: azOffset };
+}
+
+/**
+ * Inverse of {@link convertSite}: express an IAU 2015 site in a source frame
+ * (MOON_ME / MOON_PA) using the transpose of the same SPICE-verified constant
+ * rotation. `azimuthOffsetDeg` is added to IAU-frame azimuths to obtain
+ * source-frame azimuths. Used to place a CHANDRA site in JPL Horizons' MEAN_ME
+ * frame for independent verification; the disclosed residual applies unchanged.
+ */
+export function convertSiteInverse(latitude: number, longitude: number, transform: FrameTransform | null): ConvertedSite {
+  const R = rotationFor(transform);
+  if (!R) return { latitude, longitude, azimuthOffsetDeg: 0 };
+  const T = [R[0], R[3], R[6], R[1], R[4], R[7], R[2], R[5], R[8]];
+  return convertWith(latitude, longitude, T);
 }
 
 /** Rotate a whole azimuthal horizon mask (deg elevations sampled every resolutionDeg). */

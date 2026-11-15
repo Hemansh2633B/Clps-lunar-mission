@@ -33,3 +33,7 @@ data/acquired/
 
 # Vercel CLI project link and local build output
 .vercel/
+
+# Browser-suite failure captures are diagnostics, never evidence
+screenshots/98-*-failure.png
+screenshots/99-*-failure.png

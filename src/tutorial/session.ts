@@ -180,7 +180,7 @@ function validTerrain(t: unknown): t is TerrainProfile {
   });
   if (!featuresOk) return false;
   // Optional metadata: types + sane ranges (undefined allowed, null is not app-authored).
-  if (!optStr(o.sourceFrame) || !optStr(o.sourceFile) || !optStr(o.frameNote) || !optStr(o.accuracyNote) || !optStr(o.productVersion)) return false;
+  if (!optStr(o.sourceFrame) || !optStr(o.sourceFile) || !optStr(o.frameNote) || !optStr(o.accuracyNote) || !optStr(o.productVersion) || !optStr(o.sourceProvenance)) return false;
   if (o.synthetic !== undefined && typeof o.synthetic !== 'boolean') return false;
   if (o.frameVerified !== undefined && typeof o.frameVerified !== 'boolean') return false;
   if (o.frameTransform !== undefined && o.frameTransform !== null && (!str(o.frameTransform) || !FRAME_TRANSFORMS.has(o.frameTransform))) return false;

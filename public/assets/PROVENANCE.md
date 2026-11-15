@@ -3,7 +3,8 @@
 ## lroc-south-pole.jpg
 - **Product:** LROC WAC South Pole Mosaic, Polar Stereographic, 400 m/pixel.
 - **Credit:** NASA / Goddard Space Flight Center / Arizona State University (LROC Science Operations Center).
-- **Extent:** 80°S to the south pole. 0° meridian points down in the source image; 90°E points right.
+- **Extent:** 80°S to the south pole. **The 0° meridian points up and 90°E points right** — the standard south polar stereographic orientation, shared by NASA Moon Trek's south-pole tiles.
+- **Orientation correction (v1.12):** earlier versions of this record said the 0° meridian points *down*. That was wrong, and the Polar Map drew its markers, lighting overlay and Earth direction accordingly — mirrored north–south against this image. The file carries no georeferencing, so the orientation is established from the image itself and kept as an executable test (`backend/catalog/orientation_test.go`): floors of permanently shadowed craters are dark in the mosaic, and only "0° up, 90°E right" puts seven published crater centres on dark floors. See `docs/scientific-method.md` §15.2.
 - **Source page:** https://lroc.im-ldi.com/image_tags/Permanently%20Shadowed%20Regions (file `SP_Mosaic.400m.grid1.png`).
 - **Processing:** cropped to the projected disk, resized to 1200×1200, converted to JPEG for delivery. The original annotated grid lines were removed by cropping to the disk; the application draws its own graticule.
 - **Use:** scientific / educational visualization. This is imagery, not a digital elevation model. The app’s dynamic lighting overlay is geometric and does not represent measured terrain shadows.

@@ -114,11 +114,16 @@ func (m *Memory) Delete(_ context.Context, key string) error {
 
 // ---------------------------------------------------------------- local
 
-// Local stores objects as files under one root directory.
-type Local struct{ Root string }
+// Local stores objects as files under one root directory. Ephemeral marks a
+// root that does not outlive the process's host — a serverless instance's
+// temporary directory — so that clients are never told such data persists.
+type Local struct {
+	Root      string
+	Ephemeral bool
+}
 
 func (l *Local) Kind() string     { return "local" }
-func (l *Local) Persistent() bool { return true }
+func (l *Local) Persistent() bool { return !l.Ephemeral }
 
 func (l *Local) path(key string) (string, error) {
 	if err := checkKey(key); err != nil {

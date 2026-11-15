@@ -74,7 +74,7 @@ export function timelineDescription(summary: MissionSummary | null, analysis: An
 
 /** Canvas-map description addendum when the Earth vector must not imply LOS. */
 export function polarMapDescription(siteName: string, latitude: number, longitude: number, blocked: boolean): string {
-  const base = `Stereographic map of the lunar south pole. Selected site ${siteName} at ${latitude.toFixed(2)} degrees latitude, ${longitude.toFixed(1)} degrees longitude. Choose a named site from the catalogue, or click the map to drop a custom site.`;
+  const base = `Stereographic map of the lunar south pole, 0 degrees longitude (the Earth-facing meridian) at the top and 90 degrees east on the right. Selected site ${siteName} at ${latitude.toFixed(2)} degrees latitude, ${longitude.toFixed(1)} degrees longitude. Choose a named site from the catalogue, or click the map to drop a custom site.`;
   return blocked
     ? `${base} The Earth direction vector shows sky azimuth only — line-of-sight status is unverified at this epoch.`
     : base;

@@ -1,12 +1,19 @@
 # Keep deployments small: the Go function embeds what it needs; rasters never ship.
-node_modules
-dist
-data
-screenshots
-tests
-docs
-tools
-artifacts
+#
+# Directory patterns are anchored to the repository root with a leading slash.
+# An unanchored name matches at every depth (gitignore rules): a bare "data"
+# would also remove src/data and break the build. scripts/vercel-check.mjs
+# enforces this and checks that nothing the build needs is excluded.
+/node_modules
+/dist
+/data
+/screenshots
+/tests
+/docs
+/tools
+/artifacts
+/.scratch
 *.tif
 *.tiff
+*_test.go
 .venv*

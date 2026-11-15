@@ -293,6 +293,97 @@ func TestRateLimitIsPerClientAndRoute(t *testing.T) {
 	}
 }
 
+// A caller must not be able to dodge its limit, or grow the limiter without
+// bound, by inventing X-Forwarded-For values. The header is trusted only on
+// Vercel, where the platform sets it.
+func TestRateLimitIgnoresSpoofedForwardedFor(t *testing.T) {
+	now := time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC)
+	body := `{"latitude":-89.5,"longitude":45,"radius_km":1,"mode":"synthetic","quality":"low","az_step_deg":15}`
+	post := func(h http.Handler, forwarded string) int {
+		req := httptest.NewRequest("POST", "/api/horizon", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Forwarded-For", forwarded)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	count := func(deployment string) (limited int, tracked int) {
+		h := New(Options{Logger: quiet(), RateLimit: true, Deployment: deployment, Now: func() time.Time { return now }})
+		for i := 0; i < 95; i++ {
+			if post(h, fmt.Sprintf("203.0.113.%d", i)) == 429 {
+				limited++
+			}
+		}
+		return limited, len(h.(*server).windows)
+	}
+	if limited, tracked := count("local"); limited != 5 || tracked != 1 {
+		t.Fatalf("standalone server: a rotating X-Forwarded-For must count as one client (throttled %d, tracked %d)", limited, tracked)
+	}
+	if limited, tracked := count("vercel"); limited != 0 || tracked != 95 {
+		t.Fatalf("on Vercel the platform-set header identifies distinct clients (throttled %d, tracked %d)", limited, tracked)
+	}
+}
+
+func TestRateLimitTableIsBounded(t *testing.T) {
+	now := time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC)
+	s := New(Options{Logger: quiet(), RateLimit: true, Now: func() time.Time { return now }}).(*server)
+	for i := 0; i < 3*maxRateWindows; i++ {
+		s.throttle(fmt.Sprintf("client-%d /api/horizon", i), 90)
+		if len(s.windows) > maxRateWindows {
+			t.Fatalf("limiter table grew to %d entries after %d distinct clients", len(s.windows), i+1)
+		}
+	}
+	// Expired windows are pruned in preference to clearing live ones: fill the table to one
+	// short of the bound with windows that will have expired, keep one live client, then
+	// push it over the bound.
+	s.windows = map[string]*rateWindow{}
+	for i := 0; i < maxRateWindows-2; i++ {
+		s.throttle(fmt.Sprintf("old-%d", i), 90)
+	}
+	now = now.Add(30 * time.Second)
+	s.throttle("recent", 90)
+	s.throttle("recent", 90)
+	now = now.Add(31 * time.Second)
+	s.throttle("filler", 90)   // table is now exactly at the bound
+	s.throttle("newcomer", 90) // triggers the prune
+	if got := s.windows["recent"]; got == nil || got.count != 2 || len(s.windows) != 3 {
+		t.Fatalf("pruning should drop expired windows and keep live counts: %d entries, recent=%+v", len(s.windows), got)
+	}
+}
+
+// What the API says about storage decides what the interface tells the user
+// about an acquired dataset's lifetime, so it must be true on each platform.
+func TestStorageDurabilityIsReportedTruthfully(t *testing.T) {
+	root := t.TempDir()
+	cases := []struct {
+		name       string
+		env        map[string]string
+		kind       string
+		persistent bool
+	}{
+		{"local server", map[string]string{}, "local", true},
+		{"Vercel without a Blob store", map[string]string{"VERCEL": "1"}, "local", false},
+		{"Vercel with an explicit data directory", map[string]string{"VERCEL": "1", "CHANDRA_DATA_DIR": filepath.Join(root, "chosen")}, "local", false},
+		{"Vercel with a Blob store", map[string]string{"VERCEL": "1", "BLOB_READ_WRITE_TOKEN": "vercel_blob_rw_test_token"}, "vercel-blob", true},
+		{"memory store", map[string]string{"CHANDRA_STORE": "memory"}, "memory", false},
+	}
+	for _, c := range cases {
+		opts, err := FromEnv(func(k string) string { return c.env[k] }, root)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		opts.Logger = quiet()
+		rec, got := call(New(opts), "GET", "/api/config", nil, "")
+		storage, _ := got["storage"].(map[string]any)
+		if rec.Code != 200 || storage["kind"] != c.kind || storage["persistent"] != c.persistent {
+			t.Fatalf("%s: storage %v, want kind %q persistent %v", c.name, storage, c.kind, c.persistent)
+		}
+		if strings.Contains(rec.Body.String(), "vercel_blob_rw_test_token") {
+			t.Fatalf("%s: the Blob token leaked into /api/config", c.name)
+		}
+	}
+}
+
 func TestSourcesAndDatasetsAndMetadata(t *testing.T) {
 	h := New(Options{Settings: planeSettings(), Logger: quiet(), AcquireEnabled: true, HorizonsEnabled: true})
 	rec, got := call(h, "GET", "/api/sources", nil, "")

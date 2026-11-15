@@ -103,7 +103,7 @@ jobs:
   # Browser E2E against a live dev server + native terrain API (no DEM configured, so the
   # real-mode no-DEM safeguard is exercised). Uses Playwright's portable Chromium.
   browser:
-    name: Browser E2E (mission · terrain · space · onboarding)
+    name: Browser E2E (mission · terrain · space · onboarding · data hub)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -146,6 +146,15 @@ jobs:
           CHANDRA_BROWSER_CI: '1'
           BASE_URL: http://localhost:5173/
         run: npm run test:exports
+      # Self-contained: builds dist/, starts its own native API against loopback fixture servers
+      # (recorded JPL Horizons responses, a range-capable synthetic COG) and intercepts the NASA
+      # imagery hosts in the browser. No live NASA/JPL traffic.
+      - name: Production build for the data-feature E2E
+        run: npm run build
+      - name: Run data-feature E2E (Polar Map orientation and layers, Data Hub, Horizons verification, LOLA acquisition)
+        env:
+          CHANDRA_BROWSER_CI: '1'
+        run: npm run test:datahub
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
