@@ -49,14 +49,15 @@ PGDA for real from a machine with network access; they have not been run.
 
 ### Engineering
 
-- **First playback frame can stall for minutes under software rendering.** In
-  a headless browser without a GPU (SwiftShader, 2 CPU cores), starting
-  timeline playback after applying a mission preset blocked rendering for
-  roughly three minutes, once per page. Reproduced identically on the v1.11
-  base commit, so it is not a v1.12 regression; it was not observed to affect
-  results, only responsiveness. Not investigated on hardware with a GPU. The
-  story and export browser suites need `CHANDRA_E2E_TIMEOUT_SCALE` in such an
-  environment because of it.
+- **Rendering can stall in one headless browser build.** In the development
+  sandbox's fallback browser (`@sparticuz/chromium`, software rendering, 2 CPU
+  cores), starting timeline playback blocked rendering for one to three
+  minutes, once per page. It reproduces identically on the v1.11 base commit,
+  so it is not a v1.12 regression, and it did not occur on GitHub's runners
+  with Playwright's Chromium, where the same suites pass at default patience.
+  It affects responsiveness, not results. The cause was not found and it was
+  not investigated on hardware with a GPU. `CHANDRA_E2E_TIMEOUT_SCALE` exists
+  for running the browser suites in such an environment.
 - **Rate limits are per function instance.** On a serverless platform they
   are a courtesy limit, not a quota.
 - **Planner layout on short viewports.** At 1440×900 and 1366×768 the centre

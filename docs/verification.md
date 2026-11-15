@@ -17,8 +17,8 @@ rendering** (no GPU), Playwright 1.64.1, Vercel CLI 65.16.0.
 
 **No live deployment has been made, and no NASA, JPL or LROC service was
 contacted by the application or its tests.** Those hosts are not reachable from
-this environment. Everything below is local. What that leaves unverified is
-listed under [Not verified in v1.12](#not-verified-in-v112).
+this environment. Everything below is local or GitHub Actions. What that leaves
+unverified is listed under [Not verified in v1.12](#not-verified-in-v112).
 
 | Gate | Command | Executed result |
 |---|---|---|
@@ -37,7 +37,7 @@ listed under [Not verified in v1.12](#not-verified-in-v112).
 | Story briefing E2E | `CHANDRA_E2E_TIMEOUT_SCALE=8 npm run test:story` | **personas A–E passed** (about 26 min); see the note on what changed afterwards |
 | Scientific-export E2E | `CHANDRA_E2E_TIMEOUT_SCALE=8 npm run test:exports` | **personas A–E passed, 1550 s**; Persona A now also asserts schema `2.1.0` and the `dataProvenance` block |
 | Live Vercel deployment | — | **NOT DONE** |
-| GitHub Actions on this branch | — | not yet run when this was written; the workflow runs on push |
+| GitHub Actions, commit `f443627` | push run 43727245450 and pull-request run 43727313112 | **all jobs passed.** Quality (typecheck, build, unit, geometry, Go, parity, Vercel configuration). Vercel build output: `vercel build` and the function executed, on a clean runner. Browser E2E with Playwright's Chromium **at default patience**: mission suite 69 s, story A–E 91 s, exports A–E 142 s, data-feature suite 16 s. SPICE validation with fetched kernels (pull-request run; skipped by design on the branch push). `f443627` is the commit before this evidence was written into the documentation; later commits change documentation only |
 | Manual screen-reader protocol | NVDA / VoiceOver | **NOT EXECUTED**, and the protocol does not yet cover the Data Hub |
 
 ### What the data-feature suite checks
@@ -122,7 +122,9 @@ orientation error itself.
   cause is the environment, not this release. `CHANDRA_E2E_TIMEOUT_SCALE`
   multiplies waits in the mission, story and export suites; it is unset in CI
   and changes no assertion. One run of the mission suite at default patience
-  did pass earlier in the same session.
+  did pass earlier in the same session. On GitHub's runners, which also have no
+  GPU but use Playwright's Chromium, all suites passed at default patience in
+  minutes, so the stall belongs to the fallback browser build used here.
 - **Two older suites ran before the last small edits.** After the story and
   export suites passed, the working tree changed in: two text strings in the
   Data Hub's verification panel; the order of two state updates after a LOLA
@@ -130,8 +132,8 @@ orientation error itself.
   backend hardening (storage reporting, rate-limit key, range-read
   consistency); and test scripts. Neither suite opens the Data Hub or performs
   an acquisition. The mission, data-feature and real-DEM suites and every
-  non-browser gate ran on the final tree. The GitHub Actions run on the pushed
-  commit is the check of all suites on one commit.
+  non-browser gate ran on the final tree. The GitHub Actions runs on the pushed
+  commit are the check of all suites on one commit, and passed.
 - **Changes to the older suites, none loosening an assertion:** the story and
   export suites now locate the toast by `[role="status"][data-testid="toast"]`
   because the page has further status regions; the export suite reads the

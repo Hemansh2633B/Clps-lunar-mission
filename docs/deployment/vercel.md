@@ -164,7 +164,7 @@ exists is local evidence that the deployable artifact is correct:
 | Checked locally | How |
 |---|---|
 | Configuration, rewrite order, CSP against the catalogue, `.vercelignore` | `npm run vercel:check` |
-| `vercel build` succeeds on the files Vercel would receive | Vercel CLI 65.16.0 in a copy of the repository with `.vercelignore` applied |
+| `vercel build` succeeds on the files Vercel would receive | Vercel CLI 65.16.0 in a copy of the repository with `.vercelignore` applied; and on a clean GitHub Actions runner (CI job "Vercel build output"), where the Go builder had to fetch what it needs itself |
 | The built function starts and answers through the generated routes | `scripts/vercel-check.mjs --built`: health, config, terrain, horizon, sources, metadata, JSON 404, verify, via a local Lambda-runtime emulator |
 | The function reports itself correctly | `deployment: "vercel"`, storage `local` / `persistent: false`, with the `VERCEL` variable deliberately absent |
 | The console works under the production CSP, and without an API | data-feature browser suite, static-only section |
