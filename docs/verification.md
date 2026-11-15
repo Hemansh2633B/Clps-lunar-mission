@@ -125,15 +125,22 @@ orientation error itself.
   did pass earlier in the same session. On GitHub's runners, which also have no
   GPU but use Playwright's Chromium, all suites passed at default patience in
   minutes, so the stall belongs to the fallback browser build used here.
-- **Two older suites ran before the last small edits.** After the story and
-  export suites passed, the working tree changed in: two text strings in the
-  Data Hub's verification panel; the order of two state updates after a LOLA
-  download in the Terrain Lab dataset panel; `public/assets/PROVENANCE.md`; Go
-  backend hardening (storage reporting, rate-limit key, range-read
-  consistency); and test scripts. Neither suite opens the Data Hub or performs
-  an acquisition. The mission, data-feature and real-DEM suites and every
-  non-browser gate ran on the final tree. The GitHub Actions runs on the pushed
-  commit are the check of all suites on one commit, and passed.
+- **The local story and export runs are not clean runs by this project's own
+  rule.** Two reasons. First, after they passed, the working tree changed in:
+  two text strings in the Data Hub's verification panel; the order of two
+  state updates after a LOLA download in the Terrain Lab dataset panel;
+  `public/assets/PROVENANCE.md`; Go backend hardening (storage reporting,
+  rate-limit key, range-read consistency); and test scripts. Neither suite
+  opens the Data Hub or performs an acquisition. Second, documentation and
+  backend files were edited while they ran, and the dev server pushed
+  stylesheet hot-updates in response (the Tailwind plugin treats project files
+  as stylesheet inputs). A stylesheet hot-update neither reloads the page nor
+  resets application state, but earlier releases counted only runs with no
+  concurrent edits. **The clean evidence for these two suites is the GitHub
+  Actions runs on the pushed commit**, where no editing is possible and both
+  passed at default patience. The mission, data-feature and real-DEM suites
+  and every non-browser gate ran locally on the final tree; the data-feature
+  and real-DEM suites do not use the dev server.
 - **Changes to the older suites, none loosening an assertion:** the story and
   export suites now locate the toast by `[role="status"][data-testid="toast"]`
   because the page has further status regions; the export suite reads the
