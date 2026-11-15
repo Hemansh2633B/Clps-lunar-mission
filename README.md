@@ -7,8 +7,9 @@ surface mission: when the Sun clears the local terrain, when Earth is
 geometrically visible, what a solar array generates, and whether the battery
 energy budget closes over a mission window — including the effect of a launch
 slip. It is a browser application (React + TypeScript) with a scientific
-engine that runs in a Web Worker, plus an optional Python backend for working
-with real lunar elevation models.
+engine that runs in a Web Worker, plus an optional native API (Go, standard
+library only) for working with real lunar elevation models and for checking
+the ephemeris against NASA/JPL Horizons.
 
 The project started as a NASA Space Apps Challenge concept and has since been
 rebuilt as an analysis tool with explicit data provenance. It is not a NASA
@@ -30,10 +31,28 @@ that fail validation are blocked rather than quietly degraded.
   the time-varying frame. Validated against independent SPICE computations.
 - **Local horizon analysis** — 360° terrain masks occlude Sun and Earth;
   visibility transitions are refined by bisection below the sample grid.
-- **Terrain import** — load real lunar DEMs (GeoTIFF) through the Python
-  backend, inspect them in 3D, ray-march a horizon mask, and import it into
-  the planner with samples preserved verbatim. Frame validation is an explicit
-  allowlist; unknown frames are blocked from quantitative use.
+- **Terrain import** — load real lunar DEMs (GeoTIFF) through the native API,
+  inspect them in 3D, ray-march a horizon mask, and import it into the planner
+  with samples preserved verbatim. Frame validation is an explicit allowlist;
+  unknown frames are blocked from quantitative use.
+- **LOLA terrain acquisition** — fetch a regional subset of a NASA PGDA LOLA
+  polar DEM from the Terrain Lab. The API reads only the blocks it needs by
+  HTTP range requests, shows the size before downloading, keeps the source
+  samples unchanged, and records the product, pixel window and checksum.
+- **Polar map with live imagery** — the south-pole map is drawn in the Moon
+  2000 polar stereographic projection (0° meridian up, 90°E right) and can
+  overlay NASA Moon Trek and LROC imagery on the bundled LROC mosaic. Imagery
+  is display-only and is never used as elevation; if a service is unavailable
+  the bundled mosaic stays and the map says so.
+- **Lunar Data Hub** — a catalogue of every dataset, service and reference the
+  application uses or links to, with provider, product id, frame, datum,
+  retrieval date and terms. Values that were not confirmed from the provider
+  read *Not confirmed*; nothing is filled in by guesswork. Canadian Space
+  Agency material is listed as mission reference only.
+- **Independent ephemeris check** — compare the engine's Sun and Earth
+  directions with NASA/JPL Horizons for the selected site, live through the
+  API or offline against a recorded reference. Horizons has no terrain, so
+  this checks sky geometry, not obstruction.
 - **Mission windows** — scrub time, set a UTC start and duration, drag a
   launch slip of up to 60 days, and compare baseline vs slipped windows.
 - **Power and battery** — cosine-incidence solar generation (horizontal deck
@@ -54,8 +73,9 @@ that fail validation are blocked rather than quietly degraded.
 
 ## Installation
 
-Prerequisites: Node.js 22+ and npm. Python 3.11+ is optional — only needed for
-the real-DEM backend and the Python test suite.
+Prerequisites: Node.js 22+ and npm. Go 1.23+ is optional — it is needed only
+for the native API (real DEMs, LOLA acquisition, live Horizons checks) and its
+tests. No Python is required.
 
 ```bash
 git clone https://github.com/Hemansh2633B/chandra.git
@@ -69,20 +89,24 @@ npm run dev          # http://localhost:5173
 > `https://github.com/Hemansh2633B/Clps-lunar-mission.git`. The old URL will
 > redirect after the rename.
 
-The frontend works standalone: Terrain Lab offers a clearly labeled synthetic
-demo when the backend is offline, and real mode reports an actionable error
-instead of substituting data.
+The frontend works standalone: the Data Hub catalogue and the recorded
+Horizons comparison are bundled, Terrain Lab offers a clearly labeled synthetic
+demo when the API is offline, and every live feature reports why it is
+unavailable instead of substituting data.
 
-Full stack with the DEM backend:
+Full stack with the native API:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements-dev.txt
-npm run dev:full     # Flask terrain API on :8000 + Vite on :5173
+npm run dev:full     # Go API on :8000 + Vite on :5173
 ```
 
-To use a real DEM, copy `dem_config.example.json` to `dem_config.json`, fill
-in values verified from the product label (frame, datum, units — unfilled
+The API is compiled on first use (a few seconds) and has no dependencies
+beyond the Go standard library. If `go` is not on your `PATH`, set `CHANDRA_GO`
+to the binary.
+
+To use a real DEM, either acquire a LOLA subset from the Terrain Lab's
+**Datasets** panel, or copy `dem_config.example.json` to `dem_config.json`,
+fill in values verified from the product label (frame, datum, units — unfilled
 templates are rejected), and pass `npm run dev:full -- --dem-config dem_config.json`.
 See [data/README.md](data/README.md) for supported formats and sources.
 
@@ -90,17 +114,32 @@ Production build:
 
 ```bash
 npm run build        # tsc + vite build → dist/
-npm run preview
+npm run preview      # static console only
+npm run dev:api      # or: one process serving dist/ and the API on :8000
 ```
+
+## Deployment
+
+The repository deploys to Vercel as a static console plus a single Go function
+that serves `/api/*` (`vercel.json`, `api/index.go`). No environment variable
+is required. Acquired DEMs persist only if a Vercel Blob store is connected;
+otherwise they live in the function's temporary storage and can disappear
+between requests, which the interface states.
+
+Setup, environment variables, limits and what has and has not been verified on
+a live deployment: [docs/deployment/vercel.md](docs/deployment/vercel.md).
+`npm run vercel:check` validates the configuration without credentials.
 
 ## Tests
 
 ```bash
 npm run typecheck    # tsc, strict
-npm test             # Vitest unit suites (engine, exports, session, tutorial)
+npm test             # Vitest unit suites (engine, exports, session, tutorial, map, catalogue, verification)
+npm run test:go      # Go: GeoTIFF reader, projections, terrain, API, acquisition, Horizons parsing
 npm run test:geometry  # Three.js geometry checks
-npm run test:parity    # TypeScript ↔ Python horizon ray-marcher parity
-npm run test:python    # pytest (DEM loading, crops, API, frames)
+npm run test:parity    # TypeScript ↔ Go horizon ray-marcher parity
+npm run test:all     # the four above
+npm run vercel:check # Vercel configuration (add -- --build to build and execute the function locally)
 ```
 
 Browser E2E suites need the full stack running (`npm run dev:full`) in another
@@ -112,17 +151,29 @@ npm run test:story     # interactive briefing, personas A–E
 npm run test:exports   # scientific exports, personas A–E
 ```
 
-Python tests gated on SPICE kernels skip (and report as skipped) when kernels
-are absent. The CI `spice-validation` job fetches checksummed kernel mirrors
-and runs them for real. `npm run test:real-dem` additionally requires the
-verification fixture described in [verification.md](docs/verification.md).
-An optional, manually dispatched workflow (`.github/workflows/real-dem-fixture.yml`)
-fetches that third-party software fixture and runs the smoke; it is not a
-required CI check and is not a science-product validation.
+`npm run test:datahub` (polar map layers, Data Hub, Horizons verification, LOLA
+acquisition, static-only hosting) is self-contained: it needs `npm run build`
+first, starts its own API and loopback fixture servers, and intercepts the
+imagery hosts, so it uses no external network.
 
-CI (`.github/workflows/ci.yml`) runs three jobs: quality (typecheck, build,
-unit, geometry, parity, Python), browser E2E (all three Playwright suites),
-and independent SPICE validation. See [ci-governance.md](docs/ci-governance.md).
+The Go tests compare the native terrain engine with output recorded from GDAL
+3.10.3 / PROJ 9.5.1 and from the v1.11 Python backend (`tests/golden/`); they
+do not need Python or GDAL. Tests that need the real-LOLA verification fixture
+skip, and report as skipped, when it is absent. `npm run test:real-dem`
+additionally requires that fixture, described in
+[verification.md](docs/verification.md). An optional, manually dispatched
+workflow (`.github/workflows/real-dem-fixture.yml`) fetches it and runs the
+smoke; it is not a required CI check and is not a science-product validation.
+
+The SPICE frame evidence is regenerated by an isolated optional Python tool in
+`tools/spice-evidence/`. Its kernel-gated tests skip (and report as skipped)
+when kernels are absent; the CI `spice-validation` job fetches checksummed
+kernel mirrors and runs them for real.
+
+CI (`.github/workflows/ci.yml`) runs four jobs: quality (typecheck, build,
+unit, Go, geometry, parity), Vercel build validation, browser E2E (four
+Playwright suites), and independent SPICE validation. See
+[ci-governance.md](docs/ci-governance.md).
 
 ## Architecture
 
@@ -133,24 +184,36 @@ flowchart LR
     Hook -->|Web Worker| Engine[engine: ephemeris · horizon · power · energy]
     App --> Export[export guard + builders]
     UI --> Terrain[Terrain Lab]
-    Terrain -->|/api| Backend[Flask: DEM load · crop · ray-march]
+    UI --> Hub[Data Hub · verification]
+    UI --> Map[Polar Map]
+    Terrain -->|/api| Backend[Go API: DEM read · crop · ray-march · LOLA acquisition]
+    Hub -->|/api| Backend
+    Backend -->|range reads| PGDA[(NASA PGDA)]
+    Backend -->|observer tables| JPL[(JPL Horizons)]
+    Map -->|image tiles, browser only| Imagery[(NASA Moon Trek · LROC WMS)]
 ```
 
 Window simulations run in a dedicated Web Worker with a 36-entry LRU cache;
 results are keyed to an exact canonical input identity (full-precision site,
 millisecond window and config; v1.11), and the export guard re-checks that same
-identity before any download. The SHA-256 fingerprint hashes the canonical key;
-values changed across v1.11 while the report schema stayed 2.0.0. The backend is optional and only serves
-DEM extraction and horizon computation — all mission science runs client-side.
+identity before any download. The SHA-256 fingerprint hashes the canonical key.
+The API is optional and serves terrain, provenance and an independent ephemeris
+reference only — all mission science runs client-side. It was rewritten from
+Python to Go in v1.12 so that it deploys with the console as a single function;
+why Go rather than Rust, and what replacing GDAL/PROJ with a native reader
+means, is set out in the architecture document.
 
 Component responsibilities and data flow: [docs/architecture/overview.md](docs/architecture/overview.md).
 
 ```
-├── src/            # React app: components, engine, terrain, tutorial, exports
-├── backend/        # Flask DEM API (Rasterio/GDAL, PyProj)
-├── tests/          # Vitest + pytest suites, SPICE reference data
-├── scripts/        # dev orchestration, E2E suites, parity/geometry checks
-├── docs/           # method, verification, accessibility, architecture, history
+├── src/            # React app: components, engine, terrain, map, verification, tutorial, exports
+├── backend/        # Go packages: geotiff, lunarcrs, terrain, frames, horizons, lola, store, catalog, httpapi
+├── api/            # Vercel function entry point (wraps backend/httpapi)
+├── cmd/            # chandra-api (local server), chandra-lola, chandra-fixture, chandra-horizon
+├── tests/          # Vitest suites, SPICE reference data, golden GDAL/PROJ reference
+├── tools/          # optional SPICE evidence generator (Python, not used at runtime)
+├── scripts/        # dev orchestration, E2E suites, parity/geometry/Vercel checks
+├── docs/           # method, verification, deployment, accessibility, architecture, history
 ├── data/           # local DEM drop zone (rasters git-ignored)
 └── public/assets/  # imagery with provenance records
 ```
@@ -183,25 +246,43 @@ not negotiable presentation details.
   masks are LOLA-inspired illustrations; the synthetic DEM demo is procedural.
   Only imported, frame-verified DEM data is labeled measured, and it stays
   planning-grade.
+- **Imagery is not terrain.** Map layers, including shaded-relief renderings,
+  are pictures. No height is ever read from them.
+- **The native DEM reader is narrower than GDAL.** It accepts a closed set of
+  GeoTIFF layouts and spherical lunar projections and refuses the rest. Within
+  that set it reproduces GDAL to about a millimetre when GDAL is run exactly;
+  against the v1.11 backend's default (approximate) GDAL settings, individual
+  grid cells differ by up to a few metres on rough terrain.
+- **Horizons agreement is not certification.** The recorded comparison covers
+  one site and three weeks; the engine is astronomy-engine's analytic models,
+  not a JPL numerical ephemeris.
+- **Acquired DEM metadata is assumed, then stated.** The frame and datum
+  recorded for a downloaded LOLA subset come from the product page and are
+  marked as not independently validated.
 
 Full method, validation evidence and error analysis:
 [docs/scientific-method.md](docs/scientific-method.md).
 
 ## Project status
 
-Current release: **1.11.0** (integrity release: exact analysis identity,
-pre-parse session size cap, coarse-energy disclosure). Executed evidence per
-release is recorded in [docs/verification.md](docs/verification.md); skipped and
-not-run gates are never reported as passes. The real-DEM browser test runs only
-when its fixture is present and is reported as not run otherwise. Manual
-screen-reader testing (NVDA/VoiceOver) has not been executed; the protocol and
-expected results are in
-[docs/accessibility-manual-protocol.md](docs/accessibility-manual-protocol.md).
+Current release: **1.12.0** (native Go backend deployable to Vercel, corrected
+polar map with NASA Moon Trek and LROC imagery layers, Lunar Data Hub, JPL
+Horizons verification, LOLA terrain acquisition; report schema 2.1.0).
+Executed evidence per release is recorded in
+[docs/verification.md](docs/verification.md); skipped and not-run gates are
+never reported as passes.
 
-The three v1.10 priority-0 findings (identity rounding, session size cap,
-coarse-resolution disclosure) are closed in
-[docs/known-issues.md](docs/known-issues.md). The landing/workspace product
-redesign is specified, not yet shipped, in
+What v1.12 has **not** been shown to do: run on a live Vercel deployment, or
+talk to NASA Moon Trek, the LROC WMS, JPL Horizons, NASA PGDA or Vercel Blob
+for real. Those integrations are tested against recorded responses and local
+stand-ins because the development environment could not reach the services.
+The list, with the opt-in live tests that close it, is in
+[docs/known-issues.md](docs/known-issues.md).
+
+Manual screen-reader testing (NVDA/VoiceOver) has not been executed; the
+protocol and expected results are in
+[docs/accessibility-manual-protocol.md](docs/accessibility-manual-protocol.md).
+The landing/workspace product redesign is specified, not yet shipped, in
 [docs/product-design.md](docs/product-design.md).
 
 Release history and implementation reports:

@@ -1,6 +1,6 @@
 # CI governance · CHANDRA
 
-**Last verified:** 2026-11-08 (rebrand); v1.11 metadata re-read in §7. This document records the CI contract, the
+**Last verified:** 2026-11-08 (rebrand); v1.11 metadata re-read in §7; **v1.12 changes to jobs, check names and pins in §8, which supersedes the lists in §1, §2, §5 and §7 where they differ.** This document records the CI contract, the
 verified action pins, and what the repository owner must configure. Claims
 here are limited to what was actually verified via the GitHub API.
 
@@ -151,3 +151,60 @@ the earlier 403s; this environment's token cannot perform them. Owner checklist:
    `GET /repos/Hemansh2633B/chandra/branches/main` before claiming success.
 5. Optional: choose and add a LICENSE; enable a static demo host only after the
    base-path asset fixes in `docs/product-design.md` are implemented and verified.
+
+## 8. v1.12: four jobs, new check names, Go toolchain
+
+v1.12 replaces the Python backend with a native Go one. The workflow changed
+accordingly; the lists in §1, §5 and §7 describe v1.11.
+
+**Jobs and exact check names** (for branch protection, require all four):
+
+1. `Typecheck · build · unit · geometry · native backend · parity` — adds
+   `npm run test:go` (gofmt, `go vet`, Go tests) and the static Vercel
+   configuration check; no Python.
+2. `Vercel build output (Go function executed locally)` — runs `vercel build`
+   and executes the built function through a local Lambda-runtime emulator.
+   It proves the deployable artifact, not a live deployment.
+3. `Browser E2E (mission · terrain · space · onboarding · data hub)` — the
+   three v1.11 suites plus the self-contained data-feature suite
+   (`npm run test:datahub`), which also exercises the production
+   Content-Security-Policy.
+4. `Independent SPICE validation (fetched kernels)` — unchanged in purpose; now
+   the only job that installs Python, for `tools/spice-evidence/`.
+
+**Additional action pin** (verified via `releases/latest` and the commit API on
+2026-11-14):
+
+| Action | Version | SHA |
+|---|---|---|
+| `actions/setup-go` | v7.0.0 | `b7ad1dad31e06c5925ef5d2fc7ad053ef454303e` |
+
+**Honesty rules, restated for v1.12:**
+
+- Ordinary CI contacts no NASA, JPL or LROC host. Service integrations run
+  against recorded fixtures and loopback servers. The live tests are opt-in
+  (`CHANDRA_LIVE_TESTS=1`) and never run in CI.
+- Go tests that need the real-LOLA verification fixture skip in CI and report
+  as skipped.
+- `CHANDRA_E2E_TIMEOUT_SCALE` is not set in CI: the browser suites run with
+  their default patience there.
+
+**Local suite contract** (replaces the block in §5):
+
+```
+npm run typecheck && npm run build
+npm test                  # vitest
+npm run test:go           # gofmt, go vet, go test
+npm run test:geometry
+npm run test:parity       # TypeScript ↔ Go
+npm run vercel:check      # add -- --build to build and execute the function
+npm run test:datahub      # self-contained; needs the build above
+npm run test:browser      # needs npm run dev:full on :5173/:8000
+npm run test:story
+npm run test:exports
+```
+
+**Owner checklist** (replaces item 3 of §7): require the four check names
+above. The repository rename, description and branch protection remain owner
+actions; they were not re-attempted in v1.12.
+

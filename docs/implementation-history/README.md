@@ -1,13 +1,15 @@
 # Implementation history
 
 Release reports and design records, kept as written at the time. Each file
-carries a banner marking it historical; paths and branch names inside refer
-to the pre-restructure layout (`final draft 1/`, uppercase doc filenames).
+carries a banner marking it historical; paths and branch names inside reports
+up to v1.10 refer to the pre-restructure layout (`final draft 1/`, uppercase
+doc filenames), and reports up to v1.11 describe the former Python backend.
 For current behavior read the root [README](../../README.md) and the current
 docs one level up.
 
 | File | Release | What it records |
 |---|---|---|
+| [v1.12-native-data.md](v1.12-native-data.md) | v1.12 · 2026-11 | Native Go backend, Vercel deployment, Polar Map correction and imagery layers, Lunar Data Hub, Horizons verification, LOLA acquisition |
 | [v1.11-integrity.md](v1.11-integrity.md) | v1.11 · 2026-11 | Exact analysis identity, session size cap, coarse-energy disclosure |
 | [v1.10-scientific-exports.md](v1.10-scientific-exports.md) | v1.10 · 2026-11-07 | Scientific export formats, reproducibility contract, session integrity |
 | [v1.9-reliability.md](v1.9-reliability.md) | v1.9 · 2026-11-07 | CI recovery, tutorial integrity, blocked-analysis gates |

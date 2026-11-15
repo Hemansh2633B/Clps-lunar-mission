@@ -1,52 +1,71 @@
 # Local lunar DEM files
 
-Put regional DEMs here, for example `data/lunar_south_pole_dem.tif`. Raster files and generated configuration/provenance files in this directory are ignored by version control; this README is retained.
+Put regional DEMs here, for example `data/lunar_south_pole_dem.tif`. Raster files and generated configuration/provenance files in this directory are ignored by version control; this README is retained. DEMs acquired through the Terrain Lab are stored in `data/acquired/`.
 
-**Recommended format:** single-band GeoTIFF with a valid lunar geographic or projected CRS, affine georeferencing, and correct NoData metadata. GDAL-readable PDS `.IMG` products can work when their associated labels remain available and GDAL preserves their lunar metadata. Convert unsupported products using verified source metadata before loading them. Imagery, hillshade, uncertainty, slope, and LOLA observation-count rasters are not elevation rasters.
+## Supported rasters
+
+The native terrain engine reads a deliberately closed set of formats and refuses everything else with an explicit message (see `docs/scientific-method.md` §14):
+
+- **Container:** single-band GeoTIFF or BigTIFF, strips or tiles (cloud-optimised GeoTIFFs included).
+- **Compression:** none, LZW, Deflate or PackBits. JPEG, LERC and ZSTD are not supported.
+- **Samples:** 8- to 64-bit integers or IEEE floats, with GDAL NoData and optional scale/offset.
+- **Coordinate system:** a spherical lunar CRS with a radius between 1,700 and 1,800 km and a zero reference meridian — geographic, polar stereographic, oblique stereographic, azimuthal equidistant or equirectangular.
+
+Not supported: PDS `.IMG`, multi-band rasters, rasters with internal mask IFDs, ellipsoidal or Earth CRSs (for example EPSG:4326), and any other projection. v1.11 opened some of these through GDAL; convert them first, for example:
+
+```bash
+gdal_translate -of GTiff -co COMPRESS=DEFLATE -co TILED=YES input.img output.tif
+```
+
+Imagery, hillshade, uncertainty, slope and LOLA observation-count rasters are not elevation rasters and must not be loaded as DEMs.
 
 Obtain south-pole **LDEM** products from [NASA Goddard PGDA](https://pgda.gsfc.nasa.gov/products/90), [LOLA PDS](https://pds-geosciences.wustl.edu/missions/lro/lola.htm), or regional DTMs from [LROC](https://wms.lroc.asu.edu/lroc/rdr_product_select). Keep the product label and documentation.
 
-The application accepts spherical lunar CRSs with a radius around 1,737.4 km and a zero reference meridian. It uses the radius and projection in the raster's metadata, and requires explicit vertical and body-frame information. Earth EPSG:4326, missing CRS, unsupported ellipsoids, unknown vertical units/datum, and unfilled template metadata are rejected.
+## Configuration
+
+The application uses the radius and projection in the raster's metadata, and requires explicit vertical and body-frame information. A missing CRS, unknown vertical units or datum, and unfilled template metadata are rejected.
 
 Copy `dem_config.example.json` to `dem_config.json` in the project root. Set:
 
 - `dem_path`: local raster path, relative to the project root or absolute.
 - `vertical_unit`: `m` or `km`, confirmed in the product label.
-- `value_kind`: `elevation` above a spherical datum, or `radius` from the Moon's center.
+- `value_kind`: `elevation` above a spherical datum, or `radius` from the Moon's centre.
 - `elevation_reference`: the product's documented vertical datum, written explicitly.
-- `elevation_reference_radius_m`: the verified radial reference sphere, in meters.
-- `lunar_reference_frame`: documented body-fixed frame and realization, such as MOON_ME / DE421 for the selected NASA PGDA product.
-- Optional `scale` and `offset`: overrides only when the product requires them and GDAL's band metadata does not retain them. Defaults come from the raster metadata, not an inferred NASA naming convention.
+- `elevation_reference_radius_m`: the verified radial reference sphere, in metres.
+- `lunar_reference_frame`: documented body-fixed frame and realisation, such as MOON_ME / DE421 for the NASA PGDA polar products.
+- Optional `scale` and `offset`: overrides only when the product requires them and the raster's own metadata does not carry them. Defaults come from the raster metadata, not from an inferred NASA naming convention.
 
-From the repository root, start the backend and frontend together with:
+From the repository root, start the API and the console together with:
 
 ```bash
 npm run dev:full -- --dem-config dem_config.json
 ```
 
-Or run the backend alone with `python -m backend.server --dem-config dem_config.json`
-and the frontend separately with `npm run dev`.
+Or run the API alone with `npm run dev:api -- --dem-config dem_config.json` and the console separately with `npm run dev`. Both need a Go toolchain (1.23 or newer); see the root README.
 
-For a small, actual NASA LOLA example without a full polar download:
+## A real NASA LOLA subset without a full polar download
+
+From the Terrain Lab, open **Datasets**, choose a product, a centre and a radius, review the plan (pixel window and download size), and confirm. Or from the command line:
 
 ```bash
-python -m backend.download_lola_subset --latitude -89.5 --longitude 45 --radius 5
-python -m backend.server --dem-config data/lola_example_config.json
+npm run lola:subset -- --latitude -89.5 --longitude 45 --radius 5 --dry-run   # coverage check and size, nothing downloaded
+npm run lola:subset -- --latitude -89.5 --longitude 45 --radius 5
+npm run dev:api -- --dem-config data/lola_example_config.json
 ```
 
-The downloader retains original pixel values, CRS, and NoData in a cropped GeoTIFF. It writes the assumed product datum/frame plus source URL, window, download time, checksum, and native-landing consistency check. Verify these assumptions against the product documentation before mission use. It preserves existing files; use different output filenames for additional areas.
+`--product` selects one of the five allowlisted PGDA product-90 mosaics (default `lola-ldem-80s-20mpp-adj`; `GET /api/datasets` lists them). The downloader reads only the blocks it needs by HTTP range requests, keeps the original pixel values, CRS and NoData in a cropped GeoTIFF, and writes the assumed product datum/frame plus source URL, pixel window, download time, checksum and a native-landing consistency check. **Verify those assumptions against the product documentation before mission use.** Existing files are never overwritten; use different output names for additional areas.
 
-The example subset covers one region only. A larger analysis radius or another location needs a corresponding DEM. Missing coverage is shown as a gap; real mode does not generate missing terrain. Without a DEM, select the explicitly labeled Synthetic Demo Mode.
+A subset covers one region only. A larger analysis radius or another location needs another subset. Missing coverage is shown as a gap; real mode never generates missing terrain. Without a DEM, select the explicitly labelled Synthetic Demo Mode.
 
-## Sandbox verification fixture
+## Software verification fixture
 
-`scripts/fetch-lola-verification-fixture.py` writes a small LOLA-derived 512×512 south-pole GeoTIFF plus config/provenance into `data/verification/` (ignored by Git). It is a **software verification fixture only**: a third-party bilinear downsample of NASA `LDEM_80S_20MPP_ADJ.TIF` whose invalid pixels were filled by the derivative author. It does not preserve NoData coverage and must not be used for scientific illumination studies.
+`npm run fixture:lola` writes a small LOLA-derived 512×512 south-pole GeoTIFF plus config/provenance into `data/verification/` (ignored by Git). It is a **software verification fixture only**: a third-party bilinear downsample of NASA `LDEM_80S_20MPP_ADJ.TIF` whose invalid pixels were filled by the derivative author. It does not preserve NoData coverage and must not be used for scientific illumination studies.
 
 ```bash
-.venv/bin/python scripts/fetch-lola-verification-fixture.py
+npm run fixture:lola
 npm run build
-.venv/bin/python -m backend.server --dem-config data/verification/lola_verification_config.json --port 8001
+npm run dev:api -- --dem-config data/verification/lola_verification_config.json --port 8001
 npm run test:real-dem
 ```
 
-See the root README for setup and tests, `docs/scientific-method.md` for conventions and frame handling, and `docs/verification.md` for executed evidence and fixture caveats.
+See the root README for setup and tests, `docs/scientific-method.md` for conventions, frame handling and the native engine's agreement with GDAL, and `docs/verification.md` for executed evidence and fixture caveats.
