@@ -1,5 +1,12 @@
 # CHANDRA
 
+## Hosted Website
+
+CHANDRA is available as a hosted web application. You can access the live version using the link below:
+
+**Live Website:** [CHANDRA – Lunar Mission Planning](https://chandra-jet.vercel.app/)
+
+Open the website in your browser to explore the lunar mission planning and analysis features.
 Lunar mission planning and analysis workbench.
 
 CHANDRA evaluates candidate landing sites near the lunar south pole for a
