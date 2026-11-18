@@ -71,6 +71,20 @@ that fail validation are blocked rather than quietly degraded.
   that drives the real planner, an educator mode, a glossary, and 3D Space
   views (planet time-lapse, stylized vehicle hangar).
 
+## Typical Project Workflow
+
+A typical CHANDRA session follows these steps:
+
+1. **Select a landing site:** Choose a candidate lunar south-pole region or define a custom site using coordinates.
+2. **Configure the mission:** Set the mission start time in UTC, mission duration, and launch slip.
+3. **Analyze illumination:** Examine sunlight availability and local terrain obstruction at the selected landing site.
+4. **Check Earth visibility:** Review geometric Earth visibility during the selected mission window.
+5. **Evaluate power and battery:** Examine solar energy generation, energy consumption, and battery state of charge.
+6. **Compare scenarios:** Compare up to four different landing site, date, and configuration scenarios.
+7. **Export results:** Generate JSON mission reports and CSV files for further analysis.
+
+All results should be interpreted according to the documented scientific assumptions, data provenance, and validation limitations of the project.
+
 ## Installation
 
 Prerequisites: Node.js 22+ and npm. Go 1.23+ is optional — it is needed only
