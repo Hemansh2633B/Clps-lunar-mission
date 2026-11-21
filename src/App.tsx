@@ -87,7 +87,6 @@ export default function App() {
   const [panorama, setPanorama] = useState<PanoramaOptions>({ showTracks: true, showTerrain: true, sector: 'full' });
   const [mapLayers, setMapLayers] = useState<MapLayers>({ grid: true, lighting: true, earthVector: true });
   const [customOpen, setCustomOpen] = useState(false);
-  const [customInitial, setCustomInitial] = useState<{ lat: number; lon: number } | undefined>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [horizonOpen, setHorizonOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -516,7 +515,6 @@ export default function App() {
         <aside className="site-rail" data-tour="catalog">
           <SiteCatalog sites={sites} selectedId={site.id} onSelect={setSelectedId}
             onCustom={() => { setCustomInitial(undefined); setCustomOpen(true); }}
-            onCoordinateInput={(lat, lon) => { setCustomInitial({ lat, lon }); setCustomOpen(true); }}
             onHorizonTable={() => setHorizonOpen(true)} onPin={pinCurrent} compareMode={compareMode} />
         </aside>
         <main className="center-stack">
@@ -595,7 +593,7 @@ export default function App() {
         <span>{activeSim.loading ? 'computing…' : activeSim.error ? 'simulation error' : activeSim.data ? `${activeSim.data.sampling.sampleCount.toLocaleString()} samples · eff ${activeSim.data.sampling.effectiveStepMinutes.toFixed(1)} min · ${activeSim.data.computeMs.toFixed(0)} ms` : 'idle'}</span>
       </footer>
 
-      {customOpen && <CustomSiteModal onClose={() => setCustomOpen(false)} onCreate={createCustom} initial={customInitial} />}
+      {customOpen && <CustomSiteModal onClose={() => setCustomOpen(false)} onCreate={createCustom} />}
       {settingsOpen && <SettingsModal config={config} onChange={setConfig} onClose={() => setSettingsOpen(false)} />}
       {horizonOpen && <HorizonTableModal site={site} current={current} onClose={() => setHorizonOpen(false)} onExport={() => handleExport('horizon')} visibilityBlocked={instantBlocked} />}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} onReopenWelcome={() => { setShortcutsOpen(false); setOnboardingOpen(true); }} />}
