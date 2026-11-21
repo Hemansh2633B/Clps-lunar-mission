@@ -178,7 +178,7 @@ terminal:
 
 ```bash
 npm run test:layout    # responsive shell: desktop, tablet, 390px + 320px
-npm run test:browser   # planner, Terrain Lab, Space views, mobile
+npm run test:browser   # planner, Terrain Lab, Moon 3D context, mobile
 npm run test:story     # interactive briefing, personas A–E
 npm run test:exports   # scientific exports, personas A–E
 ```
