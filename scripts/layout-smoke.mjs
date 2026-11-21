@@ -17,7 +17,12 @@ try {
   await page.locator('.workspace').waitFor();
 
   assert(await page.locator('.ticker').count() === 0, 'decorative ticker has been removed');
-  assert(await page.locator('.app-header').innerText().then((text) => text.includes('LUNAR MISSION ANALYSIS')), 'header describes the full lunar mission scope');
+  assert(await page.getByRole('button', { name: 'South pole', exact: true }).count() === 1, 'south-pole candidate filter is the default');
+  assert(await page.getByRole('button', { name: 'far-side', exact: true }).count() === 0, 'far-side catalog tab is not part of the challenge workflow');
+  assert(await page.locator('#global-lunar-coordinate-map').count() === 0, 'redundant global coordinate grid is removed; the polar map remains the primary map');
+  assert(await page.getByRole('button', { name: 'Moon 3D context' }).count() === 1, 'optional Moon 3D context remains available');
+  assert(await page.getByRole('button', { name: /Fleet hangar/i }).count() === 0, 'unrelated fleet hangar is removed');
+  assert(await page.locator('.app-header').innerText().then((text) => text.includes('SOUTH POLE LANDING NAVIGATOR')), 'header identifies the south-pole challenge scope');
   assert(await page.getByRole('radio', { name: /PLAN/i }).count() === 1, 'Plan mode is available');
   assert(await page.getByRole('radio', { name: /TEACH/i }).count() === 1, 'Teach mode is available');
 

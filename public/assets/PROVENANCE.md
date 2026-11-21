@@ -40,7 +40,4 @@ computed from the ephemeris engine (astronomy-engine + IAU 2015 Moon rotation).
   Used on the small Earth sphere, which is shown **for direction only — sizes and
   distances are not to scale** (labelled as such in the viewer).
 
-Both are decorative/educational surface textures. The vehicle models in the Fleet
-hangar (`src/three/vehicles.ts`) are **procedural, stylized massing models built
-from primitives — not engineering CAD and not flight geometry**; dimensions quoted
-in the spec panel are approximate public figures.
+Both are decorative/educational surface textures for the optional Moon 3D context view.

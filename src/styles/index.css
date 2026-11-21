@@ -347,7 +347,7 @@ input[type="range"].earth::-webkit-slider-thumb { background: var(--lagoon); }
 .space-tab.active { background: var(--ink); color: var(--paper-2); border-color: var(--ink); }
 .space-tabs-hint { margin-left: auto; font-size: 9px; letter-spacing: .12em; color: var(--brass); }
 
-.planet-view, .fleet-view { min-width: 0; }
+.planet-view { min-width: 0; }
 .planet-stage { position: relative; flex: 1 1 0; min-height: 240px; min-width: 0; background: radial-gradient(ellipse at 50% 40%, #0b0e16 0%, #05060a 75%); overflow: hidden; }
 .planet-viewport { position: absolute; inset: 0; }
 .planet-viewport canvas { display: block; width: 100%; height: 100%; max-width: 100%; }
@@ -366,38 +366,13 @@ input[type="range"].earth::-webkit-slider-thumb { background: var(--lagoon); }
 .timelapse-read .brass-text { color: var(--brass); }
 .planet-caption { padding: 8px 14px; background: #e7f5ee; border-top: 1px solid #a9d3bd; color: #14532d; font-size: 11px; line-height: 1.55; flex: 0 0 auto; }
 
-.fleet-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 1px; background: var(--line); flex: 1; min-height: 0; min-width: 0; }
-.fleet-stage { position: relative; min-height: 280px; min-width: 0; background: radial-gradient(ellipse at 50% 120%, #2a2620 0%, #12100c 70%); overflow: hidden; }
-.fleet-viewport { position: absolute; inset: 0; }
-.fleet-viewport canvas { display: block; width: 100%; height: 100%; max-width: 100%; }
-.fleet-hud-top { position: absolute; left: 12px; top: 10px; z-index: 4; display: flex; flex-direction: column; gap: 4px; max-width: calc(100% - 24px); }
-.fleet-view-tools { position: absolute; right: 10px; bottom: 8px; z-index: 4; display: flex; gap: 2px; background: rgba(20, 17, 12, .72); border: 1px solid rgba(224, 207, 174, .4); padding: 2px; }
-.fleet-view-tools .btn { min-height: 22px; font-size: 10px; color: var(--paper); background: transparent; border-color: transparent; }
-.fleet-view-tools .btn:hover { background: rgba(255, 250, 242, .15); color: #fff; }
-.fleet-tooltip { position: absolute; z-index: 5; display: flex; flex-direction: column; gap: 2px; max-width: 220px; background: rgba(20, 17, 12, .92); border: 1px solid var(--amber); padding: 6px 9px; pointer-events: none; }
-.fleet-tooltip strong { font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; color: #ffe6b8; }
-.fleet-tooltip span { font-size: 10px; color: var(--paper); line-height: 1.4; }
-.fleet-controls { background: var(--panel-2); padding: 14px; display: flex; flex-direction: column; gap: 16px; overflow: auto; min-width: 0; }
-.fleet-spec { display: flex; flex-direction: column; gap: 5px; border: 1px solid var(--line); background: var(--paper-2); padding: 10px; }
-.fleet-spec .row { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; }
-.fleet-spec .k { font-family: var(--font-mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--brass); }
-.fleet-spec .v { color: var(--ink); text-align: right; }
-.fleet-part { display: flex; flex-direction: column; gap: 1px; border: 1px solid var(--line); background: var(--paper-2); padding: 5px 8px; transition: border-color .12s; }
-.fleet-disclaimer { display: flex; gap: 7px; align-items: flex-start; font-size: 10px; line-height: 1.5; color: var(--ink-soft); border-top: 1px dashed var(--line-strong); padding-top: 10px; }
-.fleet-disclaimer svg { flex: 0 0 auto; margin-top: 1px; color: var(--brass); }
 
-@media (max-width: 1100px) {
-  .fleet-body { grid-template-columns: 1fr; }
-  .fleet-stage { order: 1; min-height: 360px; }
-  .fleet-controls { order: 2; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items: start; }
-}
 @media (max-width: 900px) {
   .workspace.orbital .center-stack { grid-column: auto; order: -1; }
   .planet-stage { min-height: 340px; }
   .space-tabs-hint { display: none; }
 }
 @media (max-width: 600px) {
-  .fleet-controls { grid-template-columns: 1fr; }
   .timelapse-read { width: 100%; }
   .planet-hud-top { max-width: calc(100% - 24px); }
   .planet-toggles { top: auto; bottom: 8px; right: 8px; }

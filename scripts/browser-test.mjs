@@ -314,9 +314,8 @@ try {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.keyboard.press('t');
 
-  // ---- v1.5 Space views: planet time-lapse + fleet hangar ----
+  // ---- Optional Moon 3D context: global Sun/Earth positions for south-polar sites ----
   const planetState = () => page.evaluate(() => window.__CHANDRA_PLANET__);
-  const fleetState = () => page.evaluate(() => window.__CHANDRA_FLEET__);
   await page.keyboard.press('o');
   await page.waitForFunction(() => window.__CHANDRA_PLANET__ && window.__CHANDRA_PLANET__.sites > 0, null, { timeout: 30000 * SCALE });
   await page.waitForTimeout(1400); // let the Moon texture decode
@@ -341,45 +340,6 @@ try {
   await page.getByRole('button', { name: 'South pole', exact: true }).click();
   await page.waitForFunction((before) => JSON.stringify(window.__CHANDRA_PLANET__?.camera) !== before, JSON.stringify(camBefore), { timeout: 5000 * SCALE });
   assert((await planetState()).camera[1] < -2, 'south-pole preset looks up at the pole');
-
-  // Fleet hangar tab.
-  await page.getByRole('tab', { name: /Fleet hangar/ }).click();
-  await page.waitForFunction(() => window.__CHANDRA_FLEET__ && window.__CHANDRA_FLEET__.parts > 1, null, { timeout: 30000 * SCALE });
-  await page.waitForTimeout(700);
-  assert((await fleetState()).vehicle === 'starship-stack', 'fleet defaults to the Starship stack');
-  assert(await page.locator('.fleet-viewport canvas').isVisible(), 'fleet viewport renders');
-  assert(await page.locator('.fleet-part').count() >= 2, 'fleet part callouts listed');
-  assert(await page.locator('.fleet-disclaimer').isVisible(), 'stylized-model disclaimer visible');
-  await shot(page, '10-fleet-stack');
-
-  // Stage separation slider moves the upper stage.
-  await setRange(page.locator('.fleet-controls input[type="range"]'), 0.8);
-  await page.waitForFunction(() => window.__CHANDRA_FLEET__?.separation > 0.5, null, { timeout: 5000 * SCALE });
-  assert((await fleetState()).separation > 0.5, 'stage separation slider works');
-  // Engine plume toggle.
-  await page.getByRole('button', { name: /Ignite engines/ }).click();
-  await page.waitForFunction(() => window.__CHANDRA_FLEET__?.plume === true, null, { timeout: 5000 * SCALE });
-  assert((await fleetState()).plume === true, 'engine plume ignites');
-
-  // Switch to the HLS lunar lander, then the CLPS lander.
-  await page.getByRole('button', { name: 'STARSHIP HLS', exact: true }).click();
-  await page.waitForFunction(() => window.__CHANDRA_FLEET__?.vehicle === 'starship-hls', null, { timeout: 10000 * SCALE });
-  await page.waitForTimeout(600);
-  assert((await fleetState()).vehicle === 'starship-hls', 'HLS lander loads');
-  await shot(page, '11-fleet-hls');
-  await page.getByRole('button', { name: 'CLPS LANDER', exact: true }).click();
-  await page.waitForFunction(() => window.__CHANDRA_FLEET__?.vehicle === 'clps-lander', null, { timeout: 10000 * SCALE });
-  assert((await fleetState()).vehicle === 'clps-lander', 'CLPS lander loads');
-
-  // Hover a part for a KSP-style callout (scan a few points to guarantee a hit).
-  const fbox = await page.locator('.fleet-viewport canvas').boundingBox();
-  let hoverHit = false;
-  for (const [fx, fy] of [[0.5, 0.45], [0.5, 0.6], [0.45, 0.5], [0.55, 0.35]]) {
-    await page.mouse.move(fbox.x + fbox.width * fx, fbox.y + fbox.height * fy);
-    await page.waitForTimeout(180);
-    if ((await fleetState()).hovered) { hoverHit = true; break; }
-  }
-  assert(hoverHit, 'hovering a vehicle part shows a callout');
 
   // Close Space views and confirm the console returns.
   await page.keyboard.press('o');
@@ -475,7 +435,7 @@ try {
   const unexpectedConsole = consoleErrors.filter((e) => !e.includes('status of 400')); // real-DEM-without-DEM 400 is an expected, tested safeguard
   assert(pageErrors.length === 0, `page errors: ${pageErrors.join(' | ')}`);
   assert(unexpectedConsole.length === 0, `console errors: ${unexpectedConsole.join(' | ')}`);
-  console.log('BROWSER TESTS PASSED · mission console + Terrain Lab + Space views (planet time-lapse, fleet hangar) · screenshots in', OUT);
+  console.log('BROWSER TESTS PASSED · south-pole mission console + Terrain Lab + Moon 3D context · screenshots in', OUT);
 } catch (err) {
   await page.screenshot({ animations: 'disabled', path: `${OUT}/99-browser-failure.png`, fullPage: true }).catch(() => {});
   console.error('BROWSER FAILURE STATE', JSON.stringify(await terrainState().catch(() => null)), 'console:', consoleErrors, 'page:', pageErrors);
