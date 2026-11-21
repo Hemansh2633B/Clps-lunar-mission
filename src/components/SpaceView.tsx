@@ -1,8 +1,6 @@
-import { useState } from 'react';
-import { Globe2, Rocket } from 'lucide-react';
+import { Globe2 } from 'lucide-react';
 import type { AppMode, LandingSite } from '../types/mission';
 import { PlanetViewer } from './PlanetViewer';
-import { FleetViewer } from './FleetViewer';
 
 interface Props {
   sites: LandingSite[];
@@ -13,24 +11,15 @@ interface Props {
   mode: AppMode;
 }
 
+/** Optional global Moon context; the main planner's local horizon remains the decision view. */
 export function SpaceView({ sites, selectedId, onSelect, timeMs, onTime, mode }: Props) {
-  const [tab, setTab] = useState<'planet' | 'fleet'>('planet');
+  const southPoleSites = sites.filter((site) => site.category === 'polar');
   return (
     <div className="space-view">
-      <div className="space-tabs" role="tablist" aria-label="3D space views">
-        <button role="tab" aria-selected={tab === 'planet'} className={`space-tab ${tab === 'planet' ? 'active' : ''}`} onClick={() => setTab('planet')}>
-          <Globe2 size={14} /> Planet · time-lapse
-        </button>
-        <button role="tab" aria-selected={tab === 'fleet'} className={`space-tab ${tab === 'fleet' ? 'active' : ''}`} onClick={() => setTab('fleet')}>
-          <Rocket size={14} /> Fleet hangar
-        </button>
-        <span className="space-tabs-hint mono">{tab === 'planet' ? 'REAL SUN / EARTH · BODY-FIXED MOON' : 'STARSHIP · HLS · CLPS — STYLIZED 3D'}</span>
+      <div className="space-tabs" role="group" aria-label="Moon context">
+        <span className="space-tabs-hint"><Globe2 size={12} /> GLOBAL SUN / EARTH CONTEXT · LOCAL HORIZON IN PLANNER</span>
       </div>
-      {tab === 'planet' ? (
-        <PlanetViewer sites={sites} selectedId={selectedId} onSelect={onSelect} timeMs={timeMs} onTime={onTime} mode={mode} />
-      ) : (
-        <FleetViewer mode={mode} />
-      )}
+      <PlanetViewer sites={southPoleSites} selectedId={selectedId} onSelect={onSelect} timeMs={timeMs} onTime={onTime} mode={mode} />
     </div>
   );
 }
