@@ -316,7 +316,6 @@ try {
 
   // ---- v1.5 Space views: planet time-lapse + fleet hangar ----
   const planetState = () => page.evaluate(() => window.__CHANDRA_PLANET__);
-  const fleetState = () => page.evaluate(() => window.__CHANDRA_FLEET__);
   await page.keyboard.press('o');
   await page.waitForFunction(() => window.__CHANDRA_PLANET__ && window.__CHANDRA_PLANET__.sites > 0, null, { timeout: 30000 * SCALE });
   await page.waitForTimeout(1400); // let the Moon texture decode
