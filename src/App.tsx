@@ -553,7 +553,7 @@ export default function App() {
                     exportBlocked: !!missionSim.data?.analysis && !missionSim.data.analysis.demoEligible,
                   }} />
               ) : (
-                <div className="workspace-toolbar" aria-label="Current mission workspace">
+                <section className="workspace-toolbar" aria-label="Current mission workspace">
                   <div className="workspace-context">
                     <span className="workspace-context-label">ANALYSIS SITE</span>
                     <strong>{site.shortName}</strong>
@@ -563,7 +563,7 @@ export default function App() {
                     <button className="btn sm" onClick={() => setWorkflowOpen(true)}><ListChecks size={12} /> Guided workflow</button>
                     <button className="btn sm ghost" onClick={story.start} data-tour="story-launch"><BookOpen size={12} /> {story.progress && story.progress.status === 'paused' ? 'Resume briefing' : story.progress && story.progress.status === 'completed' ? 'Briefing debrief' : 'Story briefing'}</button>
                   </div>
-                </div>
+                </section>
               )}
               <HorizonPanorama site={site} current={current} sim={activeSim.data} mode={mode} options={panorama} onOptions={setPanorama} visibilityBlocked={instantBlocked} />
               <div className="lower-grid">
