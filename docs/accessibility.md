@@ -189,11 +189,22 @@ continuity; the protocol document is the authoritative step list.
 - Collapsed the four-field mission clock behind a labeled, keyboard-operable
   **Mission clock** button. Opening it reveals UTC epoch, MJD, sub-solar and
   sub-Earth readouts.
-- Replaced the south-pole-only header descriptor with a lunar mission-analysis
-  descriptor and renamed the workspace modes **Plan / Teach** without changing
-  their underlying mode values.
+- Restored explicit **South Pole Landing Navigator** branding and renamed
+  the workspace modes **Plan / Teach** without changing their underlying values.
 - On narrow screens, the main analysis view is presented before the site
   catalogue and telemetry details. Desktop keeps the three-column planning desk.
 - The responsive layout smoke checks desktop, tablet and phone widths, clock
   disclosure, mobile reading order and horizontal overflow. This is automated
   browser coverage; it does not replace the unexecuted NVDA / VoiceOver protocol.
+
+
+## Challenge-focused navigation
+
+- The site selector defaults to south-polar candidates and removes the global
+  coordinate grid and far-side/reference browsing tabs from the primary flow.
+- The numeric custom-site dialog remains available; the main polar map remains
+  the primary geographic selection view.
+- The optional global Moon view is labeled as context only; the local horizon
+  panorama remains the primary Sun/Earth visibility display.
+- The vehicle hangar was removed. The Story Tutorial and its folio/spotlight
+  presentation were intentionally left unchanged.
