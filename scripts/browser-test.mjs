@@ -314,7 +314,7 @@ try {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.keyboard.press('t');
 
-  // ---- v1.5 Space views: planet time-lapse + fleet hangar ----
+  // ---- Optional Moon 3D context: global Sun/Earth positions for south-polar sites ----
   const planetState = () => page.evaluate(() => window.__CHANDRA_PLANET__);
   await page.keyboard.press('o');
   await page.waitForFunction(() => window.__CHANDRA_PLANET__ && window.__CHANDRA_PLANET__.sites > 0, null, { timeout: 30000 * SCALE });
