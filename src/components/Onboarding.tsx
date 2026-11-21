@@ -52,7 +52,7 @@ export function Onboarding({ open, onClose, onDemo, onRealDem }: Props) {
         </div>
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: 'var(--ink-soft)' }}>
-            CHANDRA is a lunar south-pole mission-planning desk. It computes <strong>when the Sun and Earth are visible</strong> from a
+            CHANDRA is a lunar mission-analysis workbench for near-side, far-side and polar sites. It computes <strong>when the Sun and Earth are visible</strong> from a
             landing site, <strong>how much solar power</strong> an array makes, and <strong>whether the battery holds up</strong> — using a real
             ephemeris and the terrain horizon. It is a planning and education tool, not a flight-certified analysis: every result is labeled
             with how trustworthy its underlying data is.
