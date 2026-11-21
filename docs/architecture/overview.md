@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes CHANDRA as implemented in v1.12. For the scientific
+This document describes CHANDRA as implemented in the far-side analysis upgrade (v1.13-era work on top of the v1.12 codebase). For the scientific
 method and its validation evidence, see
 [scientific-method.md](../scientific-method.md); for what was executed and what
 was not, see [verification.md](../verification.md); for the original (obsolete)
@@ -82,9 +82,16 @@ Three properties hold everywhere in this diagram:
 - `engine/` — the scientific core, shared by the worker and the main thread:
   - `ephemeris.ts`: Sun/Earth topocentric directions from astronomy-engine with
     the IAU 2015 Moon body-fixed rotation, light-time and aberration corrections.
-  - `horizonPhysics.ts`: terrain-mask occlusion, custom-site synthesis,
-    DEM-derived profiles.
-  - `powerComms.ts`: cosine-incidence solar power, geometric Earth LOS.
+  - `horizonPhysics.ts`: local terrain-mask occlusion, spherical-limb floor,
+    adaptive Sun/Earth transitions and their refinement/fallback diagnostics.
+  - `occultation.ts` / `vectors.ts`: finite-disk target-vs-lunar-limb overlap,
+    exact ray/sphere segment tests and frame-labelled 3-vectors.
+  - `incidence.ts`: DEM-derived local normal and solar incidence; unavailable
+    slope is not coerced to a flat measurement.
+  - `relay.ts`: deterministic circular-lunar, parametric L2 and fixed-body
+    relay-state proxies; two LOS legs remain separate and labelled geometry.
+  - `powerComms.ts`: cosine-incidence solar power, direct Earth LOS and
+    summary/window assembly (direct DTE is not replaced by relay visibility).
   - `integration.ts`: event-partitioned adaptive-Simpson energy integration
     with battery efficiencies, SOC saturation and depletion interpolation;
     records its own accepted-boundary history for export.
@@ -258,13 +265,14 @@ application, its tests and its deployment do not need it.
 
 ## Security boundaries
 
-- The API fetches data from exactly two providers, fixed in code:
-  `pgda.gsfc.nasa.gov` (range reads of five allowlisted files) and
-  `ssd.jpl.nasa.gov` (the Horizons API). A client can never supply a URL. The
-  test hooks that redirect these (`CHANDRA_LOLA_BASE_URL`,
-  `CHANDRA_HORIZONS_BASE_URL`) accept only the official hosts or a loopback
-  address. When Vercel Blob storage is configured the API also talks to the
-  Vercel Blob service, and only to it.
+- The API's default raster provider is `pgda.gsfc.nasa.gov` (five built-in
+  south-polar LOLA products); Horizons uses `ssd.jpl.nasa.gov`. A deployment
+  operator may add specific PDS Geosciences Node products through
+  `CHANDRA_LOLA_PRODUCTS_JSON`, but the manifest is host-allowlisted and its
+  metadata is validated; a browser/client can never supply a URL. Test hooks
+  (`CHANDRA_LOLA_BASE_URL`, `CHANDRA_HORIZONS_BASE_URL`) accept only the
+  official hosts or a loopback address. When Vercel Blob storage is configured
+  the API also talks to the Vercel Blob service, and only to it.
 - Request bodies are size-limited, numeric inputs are range-checked, heavy
   routes share a concurrency bound and each route has a time limit. Rate limits
   are per client and per instance; on a serverless platform they are a courtesy

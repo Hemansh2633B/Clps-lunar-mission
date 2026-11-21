@@ -17,6 +17,7 @@ The authoritative list is `httpapi.FromEnv` in `backend/httpapi/server.go` and
 | `CHANDRA_API_PORT`, `PORT` | `8000` | Port of the local server (`cmd/chandra-api`). Ignored on Vercel. |
 | `CHANDRA_HORIZONS` | on | `off` disables `POST /api/ephemeris/verify` (the route answers 503 `horizons_disabled`). The recorded comparison in the console still works. |
 | `CHANDRA_ACQUIRE` | on | `off` disables `POST /api/terrain/acquire` (503 `acquisition_disabled`). |
+| `CHANDRA_LOLA_PRODUCTS_JSON` | unset | Optional JSON array of deployment-verified NASA PGDA/PDS range-readable regional COGs. URLs are checked against the built-in host allowlist; metadata must state frame/datum/units, coverage, nominal resolution and provider. Invalid configuration fails startup. This does not ship or certify a far-side product; see [API manifest contract](../api.md). |
 | `CHANDRA_RATE_LIMIT` | on | `off` disables the per-client request limits. Intended for automated tests. |
 | `CHANDRA_STORE` | automatic | `memory` keeps acquired datasets in memory only; `local` forces the local directory even when a Blob token is present. |
 | `CHANDRA_DATA_DIR` | `data/acquired` locally; a temporary directory on Vercel | Directory for acquired datasets when the local store is used. |

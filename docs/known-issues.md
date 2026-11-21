@@ -3,6 +3,37 @@
 Open limitations first, then defects found and closed, most recent release
 first. Executed gate results live in [verification.md](verification.md).
 
+## Open in the far-side analysis upgrade
+
+- **No bundled/active global far-side DEM product.** The built-in LOLA
+  acquisition catalogue remains the five south-polar PGDA COG products. The
+  server supports operator-validated NASA PDS/PGDA range-readable products via
+  `CHANDRA_LOLA_PRODUCTS_JSON`, but no unverifiable URL is shipped as a
+  far-side product. Far-side region candidates therefore have clearly labelled
+  illustrative terrain until a measured, frame/datum/coverage-validated DEM is
+  configured and acquired. Out-of-footprint acquisition fails; it never falls
+  back to a different tile.
+- **Far-side catalogue elevations are not supplied.** For region centres with
+  no bundled authoritative elevation, 0 m is stored only as a geometry datum
+  placeholder; the UI/exports say elevation unavailable and issue a warning.
+  The placeholder is not a measurement. Use a measured DEM subset to replace it.
+- **Lunar-body limb is spherical.** The 1737.4 km mean sphere and finite angular
+  disks separate body occultation from local terrain but omit real limb
+  topography, irregular shape and regional distant terrain. Near the limb,
+  kilometre-scale relief can change apparent clearance by tenths of a degree.
+- **Relay orbits are planning proxies.** Circular lunar two-body, parametric
+  L2-plane ring and fixed-body states are deterministic geometry models, not
+  flown spacecraft ephemerides, station-kept trajectories or RF links. No link
+  budget, antenna, ground station or data-rate model exists.
+- **No new multi-region live ephemeris verification is claimed.** The existing
+  recorded Horizons/SPICE evidence covers the epochs/sites stated in
+  `verification.md`; far-side relay and limb geometry are covered by analytical
+  regression tests, not an independent mission-ephemeris comparison.
+- **Slope is local and DEM-dependent.** Horn 3×3 slope/aspect is available only
+  when the same grid used for the DEM horizon contains a valid local window.
+  NoData yields “unavailable”; the estimate is not an engineering landing
+  hazard certification.
+
 ## Open in v1.12.0
 
 These are things a user or reviewer could reasonably assume work, or were
@@ -209,8 +240,11 @@ unchanged).
 
 ## Standing limitations (all releases)
 
-- **Local horizon only.** Regional curvature / per-epoch frames remain
-  researched, not implemented (scientific-method §12.5).
+- **Local terrain horizon only.** Terrain obstruction is ray-marched only
+  within the selected DEM crop; the analytic spherical lunar limb handles
+  large-scale body occultation, but no global terrain horizon is built from
+  distant ridges or basin rims. The historical §12.5 status predates the
+  curvature-aware limb extension.
 - **Geometric Earth LOS is not RF connectivity.** Energy balance is not thermal
   or radiation survival. These disclosures are mandatory everywhere.
 - **Manual screen-reader execution is outstanding.** The protocol and expected

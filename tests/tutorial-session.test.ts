@@ -31,8 +31,9 @@ function memStorage(seed?: string) {
 describe('training session persistence', () => {
   it('round-trips the FULL workspace: pins, playback, slip, config, view, custom sites', () => {
     const custom = makeCustomSite({ name: 'My DEM', latitude: -89, longitude: 30, elevationM: 100, preset: 'flat' });
+    const farSide = makeCustomSite({ name: 'My far-side coordinate', latitude: -45, longitude: 177, elevationM: 0, preset: 'flat' });
     const s = session();
-    s.user.customSites = [custom];
+    s.user.customSites = [custom, farSide];
     s.user.scenarios.push({ id: 'user-2', siteId: custom.id, startMs: Date.parse('2026-10-01T00:00:00Z'), config: { ...DEFAULT_CONFIG, loadW: 220 } });
     const st = memStorage();
     saveSession(s, st);
@@ -44,6 +45,8 @@ describe('training session persistence', () => {
     expect(back!.user.speed).toBe(7200);
     expect(back!.user.scenarios).toHaveLength(2);
     expect(back!.user.customSites[0].id).toBe(custom.id);
+    expect(back!.user.customSites[1].category).toBe('far-side');
+    expect(back!.user.customSites[1].side).toBe('far');
   });
   it('corrupt JSON, wrong version and malformed shapes parse to null — never throw', () => {
     expect(parseSession('{oops')).toBeNull();

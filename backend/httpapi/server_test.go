@@ -413,8 +413,31 @@ func TestSourcesAndDatasetsAndMetadata(t *testing.T) {
 	if rec.Code != 200 || first["id"] != "configured" || first["ready"] != true || first["frame"].(map[string]any)["recognized"] != false {
 		t.Fatalf("datasets wrong: %v", first)
 	}
-	if len(got["acquisition"].(map[string]any)["products"].([]any)) != len(lola.Products) {
+	products := got["acquisition"].(map[string]any)["products"].([]any)
+	if len(products) != len(lola.Products) {
 		t.Fatal("acquisition products not listed")
+	}
+	var builtInProduct map[string]any
+	for _, raw := range products {
+		p := raw.(map[string]any)
+		if p["id"] == lola.LDEM80S20M.ID {
+			builtInProduct = p
+		}
+	}
+	if builtInProduct == nil || builtInProduct["nominal_resolution_m"] != "20" || !strings.Contains(builtInProduct["coverage_note"].(string), "does not provide global or far-side coverage") {
+		t.Fatalf("product resolution/coverage metadata missing or misleading: %v", builtInProduct)
+	}
+	configured := lola.Product{
+		ID: "test-global", URL: "https://pds-geosciences.wustl.edu/lunar/test.tif",
+		ProductPage: "https://pds-geosciences.wustl.edu/lunar/test/", Provider: "NASA PDS test manifest",
+		CoverageNote: "Operator-verified test footprint", NominalResolutionM: 118, Configured: true,
+		Assumptions: map[string]any{"vertical_unit": "m", "value_kind": "elevation", "elevation_reference": "fixture", "elevation_reference_radius_m": 1737400.0, "lunar_reference_frame": "MOON_ME (JPL DE421)"},
+	}
+	hConfigured := New(Options{Settings: planeSettings(), Logger: quiet(), ProductCatalogue: map[string]lola.Product{configured.ID: configured}})
+	_, configuredResponse := call(hConfigured, "GET", "/api/datasets", nil, "")
+	configuredProducts := configuredResponse["acquisition"].(map[string]any)["products"].([]any)
+	if len(configuredProducts) != 1 || configuredProducts[0].(map[string]any)["id"] != configured.ID || configuredProducts[0].(map[string]any)["nominal_resolution_m"] != "118" {
+		t.Fatalf("operator-configured product was not exposed from its validated catalogue: %v", configuredProducts)
 	}
 	rec, got = call(h, "GET", "/api/terrain/metadata", nil, "")
 	elig := got["eligibility"].(map[string]any)

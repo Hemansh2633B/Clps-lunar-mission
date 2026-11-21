@@ -29,14 +29,15 @@ interface Props {
 }
 
 const W = 1200;
-const H = 120;
+const H = 154;
 const ML = 112;
 const MR = 20;
 const PW = W - ML - MR;
 const TRACKS = [
-  { key: 'sun', label: 'Sunlight / power', y: 12, color: '#c4842a', bg: '#fdf0d5' },
-  { key: 'earth', label: 'DTE comms', y: 38, color: '#0e7490', bg: '#e3f2f6' },
-  { key: 'combined', label: 'Mission viable', y: 64, color: '#1f7a52', bg: '#e7f5ee' },
+  { key: 'sun', label: 'Sun · terrain + limb', y: 10, color: '#c4842a', bg: '#fdf0d5' },
+  { key: 'earth', label: 'Earth · direct LOS', y: 34, color: '#0e7490', bg: '#e3f2f6' },
+  { key: 'combined', label: 'Sun + direct Earth', y: 58, color: '#1f7a52', bg: '#e7f5ee' },
+  { key: 'relay', label: 'Relay · both legs', y: 82, color: '#8056a5', bg: '#efe8f5' },
 ] as const;
 const TH = 16;
 const SPEEDS = [1, 60, 3600, 86400, 604800];
@@ -52,10 +53,10 @@ export function TimelineScrubber(props: Props) {
   const xOf = (t: number) => ML + ((t - win.startMs) / domain) * PW;
 
   const runs = useMemo(() => {
-    if (!sim) return { sun: [], earth: [], combined: [] } as Record<string, { x: number; w: number }[]>;
+    if (!sim) return { sun: [], earth: [], combined: [], relay: [] } as Record<string, { x: number; w: number }[]>;
     const stride = Math.max(1, Math.floor(sim.samples.length / 1400));
-    const out: Record<string, { x: number; w: number }[]> = { sun: [], earth: [], combined: [] };
-    const pick = (s: EvaluatedSample, key: string) => key === 'sun' ? s.sunVisibility.visible : key === 'earth' ? s.earthVisibility.visible : s.viable;
+    const out: Record<string, { x: number; w: number }[]> = { sun: [], earth: [], combined: [], relay: [] };
+    const pick = (s: EvaluatedSample, key: string) => key === 'sun' ? s.sunVisibility.visible : key === 'earth' ? s.earthVisibility.visible : key === 'relay' ? !!s.relay?.linkUp : s.viable;
     for (const track of TRACKS) {
       let start: number | null = null;
       for (let i = 0; i < sim.samples.length; i += stride) {
@@ -129,11 +130,11 @@ export function TimelineScrubber(props: Props) {
           ))}
           {ticks.map((t) => (
             <g key={t}>
-              <line x1={xOf(t)} x2={xOf(t)} y1={8} y2={82} stroke="#f3e6d0" strokeWidth={1} />
-              <text x={xOf(t)} y={96} textAnchor="middle" fontSize={9} fill="#8a7358" fontFamily="IBM Plex Mono, monospace">{formatDate(t).slice(5)}</text>
+              <line x1={xOf(t)} x2={xOf(t)} y1={6} y2={104} stroke="#f3e6d0" strokeWidth={1} />
+              <text x={xOf(t)} y={118} textAnchor="middle" fontSize={9} fill="#8a7358" fontFamily="IBM Plex Mono, monospace">{formatDate(t).slice(5)}</text>
             </g>
           ))}
-          <rect x={mx0} y={8} width={Math.max(2, mx1 - mx0)} height={76} fill="rgba(30,58,95,.08)" stroke="#1e3a5f" strokeOpacity={0.6} strokeWidth={1} strokeDasharray="3 2" rx={0}
+          <rect x={mx0} y={6} width={Math.max(2, mx1 - mx0)} height={104} fill="rgba(30,58,95,.08)" stroke="#1e3a5f" strokeOpacity={0.6} strokeWidth={1} strokeDasharray="3 2" rx={0}
             style={{ cursor: 'grab' }}
             onPointerDown={(e) => { e.stopPropagation(); (e.target as Element).setPointerCapture(e.pointerId); drag.current = { x: e.clientX, slip: slipDays }; }}
             onPointerMove={(e) => {
@@ -147,11 +148,11 @@ export function TimelineScrubber(props: Props) {
           />
           <text x={mx0 + 6} y={18} fontSize={9} fill="#1c2430" fontFamily="IBM Plex Mono, monospace" pointerEvents="none">MISSION {durationDays}d · slip +{slipDays}d</text>
           <g pointerEvents="none">
-            <line x1={xOf(timeMs)} x2={xOf(timeMs)} y1={6} y2={86} stroke="#fff" strokeWidth={1.2} />
+            <line x1={xOf(timeMs)} x2={xOf(timeMs)} y1={4} y2={110} stroke="#fff" strokeWidth={1.2} />
             <polygon points={`${xOf(timeMs) - 5},4 ${xOf(timeMs) + 5},4 ${xOf(timeMs)},10`} fill="#fff" />
           </g>
-          {hoverT != null && <line x1={xOf(hoverT)} x2={xOf(hoverT)} y1={6} y2={86} stroke="#5c5348" strokeOpacity={0.4} strokeDasharray="2 3" />}
-          <text x={ML} y={112} fontSize={9} fill="#8a7358" fontFamily="Outfit, sans-serif">Drag the white mission box to simulate launch slip · click tracks to scrub</text>
+          {hoverT != null && <line x1={xOf(hoverT)} x2={xOf(hoverT)} y1={4} y2={110} stroke="#5c5348" strokeOpacity={0.4} strokeDasharray="2 3" />}
+          <text x={ML} y={142} fontSize={9} fill="#8a7358" fontFamily="Outfit, sans-serif">Drag the white mission box to simulate launch slip · click tracks to scrub · relay is geometry only, not an RF link</text>
         </svg>
         {hoverT != null && <div className="tooltip" style={{ right: 16, top: 8 }}>{formatUTC(hoverT)}</div>}
         {loading && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(243,230,208,.6)', fontSize: 11, color: 'var(--ink-soft)' }} className="pulse">Recomputing window…</div>}
@@ -184,6 +185,10 @@ export function TimelineScrubber(props: Props) {
           <div className="metric sm"><span className="label">Energy Δ</span><span className="value" style={{ fontSize: 13, color: energyDelta == null ? 'var(--muted)' : energyDelta >= 0 ? 'var(--nominal)' : 'var(--blocked)' }}>{energyDelta == null ? '—' : `${energyDelta >= 0 ? '+' : ''}${energyDelta.toFixed(1)}`}<span className="unit">kWh</span></span></div>
           <div className="metric sm"><span className="label">Min batt</span><span className="value" style={{ fontSize: 13, color: missionSummary && missionSummary.minBatterySocPct <= 0 ? 'var(--blocked)' : 'var(--nominal)' }}>{missionSummary ? missionSummary.minBatterySocPct.toFixed(0) : '—'}<span className="unit">%</span></span></div>
           <div className="metric sm"><span className="label">Verdict</span><span className="value" style={{ fontSize: 12, color: missionSummary?.verdict === 'NOMINAL' ? 'var(--nominal)' : missionSummary?.verdict === 'CONDITIONAL' ? 'var(--solar)' : 'var(--blocked)' }}>{missionSummary?.verdict ?? '—'}</span></div>
+          {missionSummary && <div className="mono" style={{ fontSize: 9, color: 'var(--muted)', lineHeight: 1.5 }}>
+            <div>Sunlit {missionSummary.sunlitHours?.toFixed(1) ?? '—'} h · longest continuous {missionSummary.longestIlluminationHours?.toFixed(1) ?? '—'} h · dark {missionSummary.darkHours?.toFixed(1) ?? '—'} h</div>
+            <div>Next sunrise {missionSummary.nextSunriseMs == null ? 'none in 35 d' : formatUTC(missionSummary.nextSunriseMs)} · sunset {missionSummary.nextSunsetMs == null ? 'none in 35 d' : formatUTC(missionSummary.nextSunsetMs)}{missionSummary.relay ? ` · relay geometry ${missionSummary.relay.linkPct.toFixed(0)}%` : ''}</div>
+          </div>}
         </div>
       </div>
       {sampling && (

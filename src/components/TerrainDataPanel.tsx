@@ -198,8 +198,10 @@ export function TerrainDataPanel({ online, datasets, datasetsError, datasetId, o
                 </select>
               </div>
               <p className="lab-note">
-                {productInfo?.coverage ?? 'Coverage not confirmed'}{productInfo?.file_size ? ` · full file ${productInfo.file_size}` : ''}. Only the blocks covering{' '}
+                {productInfo?.coverage ?? products.find((p) => p.id === productId)?.coverage_note ?? 'Coverage not confirmed'}{productInfo?.file_size ? ` · full file ${productInfo.file_size}` : ''}. Only the blocks covering{' '}
                 <span className="mono">{location.latitude}°, {location.longitude}°E ± {location.radius} km</span> are read by HTTP range requests — the full file is never downloaded.
+                {' '}{products.find((p) => p.id === productId)?.nominal_resolution_m && <>Nominal product scale {products.find((p) => p.id === productId)?.nominal_resolution_m} m/pixel; actual spacing is validated from the acquired raster. </>}
+                An out-of-footprint plan fails explicitly; CHANDRA never substitutes another region or resolution silently.
                 {' '}{productInfo?.documentation_url && <a href={productInfo.documentation_url} target="_blank" rel="noopener noreferrer">Product page <ExternalLink size={9} /></a>}
               </p>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

@@ -1,9 +1,14 @@
 import type { EnergyHistoryRow, IntegrationDiagnostics } from '../engine/integration';
+import type { SiteGeometry } from './geometry';
+import type { OccultationState } from '../engine/occultation';
 
-export type SiteCategory = 'polar' | 'reference';
+export type SiteCategory = 'polar' | 'reference' | 'far-side';
 export type ArrayMode = 'horizontal' | 'vertical-tracking' | 'vertical-fixed';
 export type AppMode = 'planner' | 'educator';
 export type BodyKind = 'sun' | 'earth';
+/** Selenographic side: |longitude| ≤ 90° faces Earth; the rest is the far side; 80–100° is the limb band. */
+export type LunarSide = 'near' | 'far' | 'limb';
+export type RelayModelKind = 'circular-lunar' | 'earth-moon-l2-halo' | 'fixed-body';
 
 export interface TerrainFeature {
   name: string;
@@ -47,6 +52,14 @@ export interface TerrainProfile {
   productVersion?: string;
   /** Where the DEM came from (dataset id, source product/URL, subset checksum, resampling). Descriptive only. */
   sourceProvenance?: string;
+  /** Local surface slope at the landing point, degrees (0 = level). Only defined when a DEM/measured model provides it. */
+  slopeDeg?: number;
+  /** Downslope azimuth, degrees clockwise from north. Required whenever slopeDeg is present. */
+  aspectDeg?: number;
+  /** How the slope was obtained; never silently assumed. */
+  slopeProvenance?: string;
+  /** Horizontal spacing of the elevation samples the slope came from, metres. */
+  slopeSpacingM?: number;
 }
 
 /** How the mission window was sampled (reproducibility + convergence disclosure). */
@@ -91,6 +104,12 @@ export interface LandingSite {
   sourceUrl?: string;
   sourceDate?: string;
   dataConfidence?: 'measured' | 'illustrative' | 'synthetic' | 'region-approximate';
+  /** Near side / far side / limb band, derived from the IAU 2015 east longitude. */
+  side?: LunarSide;
+  /** False when no authoritative elevation exists; `elevationM` is then a disclosed datum placeholder. */
+  elevationAvailable?: boolean;
+  /** Human-readable region class (basin floor, polar highland, mare, …) when known. */
+  regionType?: string;
 }
 
 export interface SkyPosition {
@@ -113,14 +132,129 @@ export interface EphemerisSample {
   libration: LibrationState;
   subsolarLatitudeDeg: number;
   subsolarLongitudeDeg: number;
+  /** Inertial vectors + explicit lunar-limb occultation state for this epoch. */
+  geometry: SiteGeometry;
 }
 
+/**
+ * Three independent tests are reported, never conflated:
+ *  • `geometricVisible` — target centre above the local *horizontal plane*
+ *    (elevation ≥ 0). Reference only; it is NOT a visibility claim.
+ *  • `bodyOccultation` — is the target behind the Moon's limb? (curvature dip)
+ *  • `visible` — both of the above plus the local terrain horizon.
+ */
 export interface VisibilityState {
   visible: boolean;
   geometricVisible: boolean;
   clearanceDeg: number;
   terrainElevationDeg: number;
-  reason: 'clear' | 'terrain' | 'below-horizon' | 'never';
+  reason: 'clear' | 'terrain' | 'below-horizon' | 'never' | 'lunar-limb' | 'margin';
+  /** Elevation of the mean lunar limb in this azimuth, degrees (≤ 0). */
+  limbElevationDeg?: number;
+  /** Elevation actually used as the obstruction: max(terrain, limb). */
+  obstructionElevationDeg?: number;
+  /** Which obstruction set the limit. `none` when the body is clear of both. */
+  obstructionSource?: 'terrain' | 'lunar-limb' | 'margin' | 'none';
+  /** Lunar-body occultation state (independent of local terrain). */
+  bodyOccultation?: OccultationState;
+  /** Fraction of the body's apparent disk hidden by the lunar limb, 0…1. */
+  occultedFraction?: number;
+  /** Apparent angular radius of the observed body, degrees. */
+  angularRadiusDeg?: number;
+}
+
+/** Solar incidence on the local terrain surface (not on a flat deck). */
+export interface SolarIncidence {
+  /** Local surface slope, degrees (0 = level). */
+  slopeDeg: number;
+  /** Downslope azimuth, degrees clockwise from north. */
+  aspectDeg: number;
+  /** Angle between the Sun direction and the surface normal, degrees (90 = grazing). */
+  incidenceDeg: number;
+  /** cos(incidence): fraction of the direct beam intercepted by a surface element. */
+  cosIncidence: number;
+  /** Where the slope came from; `assumed-flat` is disclosed, never disguised. */
+  source: 'dem' | 'custom' | 'assumed-flat';
+}
+
+/** Parametric relay-spacecraft state. A model, not an ephemeris — always labelled. */
+export interface RelayConfig {
+  id: string;
+  name: string;
+  model: RelayModelKind;
+  /** circular-lunar: altitude above the 1737.4 km sphere, km. */
+  altitudeKm?: number;
+  /** circular-lunar: inclination to the J2000 equator, degrees. */
+  inclinationDeg?: number;
+  /** circular-lunar: right ascension of the ascending node, degrees. */
+  raanDeg?: number;
+  /** circular-lunar: argument of latitude at epoch, degrees. */
+  phaseDeg?: number;
+  /** circular-lunar: optional period override, minutes (default: two-body Kepler period). */
+  periodMinutes?: number;
+  /** earth-moon-l2-halo: amplitude in the halo plane, km. */
+  haloAmplitudeKm?: number;
+  /** earth-moon-l2-halo: period, days (default 14). */
+  haloPeriodDays?: number;
+  /** earth-moon-l2-halo: phase at epoch, degrees. */
+  haloPhaseDeg?: number;
+  /** fixed-body: selenographic position (keeps the body-fixed frame, e.g. a surface asset). */
+  latitudeDeg?: number;
+  longitudeDeg?: number;
+  /** Model epoch for phase propagation (UTC ms). Defaults to the analysis start. */
+  epochMs?: number;
+  /** Free-text provenance for a user-supplied state vector/orbit; never invented here. */
+  note?: string;
+}
+
+export interface RelaySample {
+  id: string;
+  name: string;
+  model: RelayModelKind;
+  /** Relay direction from the site: azimuth (deg from north, clockwise) and elevation above the horizontal plane. */
+  azimuthDeg: number;
+  elevationDeg: number;
+  rangeKm: number;
+  /** Site → relay: clear of the lunar body's limb? */
+  siteBodyClear: boolean;
+  /** Site → relay: clear of the local terrain horizon? */
+  siteTerrainClear: boolean;
+  /** Elevation actually required at the site: max(terrain horizon, lunar limb). */
+  siteLimitDeg: number;
+  /** Relay → Earth: clear of the lunar body? */
+  earthClear: boolean;
+  /** Closest approach of the relay→Earth segment to the Moon's centre minus the limb radius, km. */
+  earthClearanceKm: number;
+  /** Both legs clear at this instant. Geometry only — NOT an RF link. */
+  linkUp: boolean;
+  relayLatitudeDeg: number;
+  relayLongitudeDeg: number;
+  relayAltitudeKm: number;
+}
+
+export interface VisibilityWindow {
+  startMs: number;
+  endMs: number;
+}
+
+export interface RelaySummary {
+  id: string;
+  name: string;
+  model: RelayModelKind;
+  /** Fraction of the analysis window with both legs geometrically clear, %. */
+  linkPct: number;
+  /** Longest continuous outage of the two-hop link, hours. */
+  longestOutageHours: number;
+  /** Number of link windows in the analysis window. */
+  windowCount: number;
+  /** Fraction of the window where the lunar body blocks the site→relay leg, %. */
+  siteLimbBlockedPct: number;
+  /** Fraction of the window where the lunar body blocks the relay→Earth leg, %. */
+  earthLimbBlockedPct: number;
+  /** Mean relay elevation above the site horizon, degrees. */
+  meanElevationDeg: number;
+  /** Explicit disclaimer repeated in every export. */
+  note: string;
 }
 
 export interface PowerState {
@@ -131,6 +265,8 @@ export interface PowerState {
   selectedW: number;
   horizontalIncidence: number;
   verticalIncidence: number;
+  /** Direct-beam power on the local terrain slope, W (undefined without a slope). */
+  terrainSurfaceW?: number;
 }
 
 export interface EvaluatedSample {
@@ -144,6 +280,19 @@ export interface EvaluatedSample {
   libration: LibrationState;
   subsolarLatitudeDeg: number;
   subsolarLongitudeDeg: number;
+  /** Lunar-limb geometry summary for this epoch (additive; absent on manually built samples). */
+  lunar?: {
+    dipDeg: number;
+    limbElevationDeg: number;
+    sunOccultation: OccultationState;
+    earthOccultation: OccultationState;
+    sunLimbClearanceDeg: number;
+    earthLimbClearanceDeg: number;
+  };
+  /** Solar incidence on the local terrain slope, when a slope is known. */
+  incidence?: SolarIncidence;
+  /** Configured relay link state at this epoch (null/absent when no relay is configured). */
+  relay?: RelaySample | null;
 }
 
 export interface MissionConfig {
@@ -158,6 +307,8 @@ export interface MissionConfig {
   initialSocPct: number;
   commsMarginDeg: number;
   stepMinutes: number;
+  /** Optional relay spacecraft state; absent/null means direct-to-Earth only. */
+  relay?: RelayConfig | null;
 }
 
 export interface TransitionEvent {
@@ -248,6 +399,28 @@ export interface MissionSummary {
   frameVerified: boolean;
   /** Event-aware energy/battery integration quality (resolution + numerical uncertainty). */
   integrationDiagnostics?: IntegrationDiagnostics;
+  /** Hours of the window with the Sun clear of terrain and the lunar limb. */
+  sunlitHours?: number;
+  /** Hours of the window in darkness. */
+  darkHours?: number;
+  /** Longest uninterrupted illuminated interval, hours. */
+  longestIlluminationHours?: number;
+  /** Next sunrise after the window start (null when none within the forward search). */
+  nextSunriseMs?: number | null;
+  /** Next sunset after the window start (null when none within the forward search). */
+  nextSunsetMs?: number | null;
+  /** Visibility windows derived from the refined transition events (capped for export size). */
+  windows?: { sun: VisibilityWindow[]; earth: VisibilityWindow[]; relay: VisibilityWindow[] };
+  /** Fraction of the window with the Earth occulted by the lunar body (curvature), %. */
+  earthOccludedPct?: number;
+  /** Fraction of the window with the Earth above the limb but blocked by local terrain, %. */
+  earthTerrainBlockedPct?: number;
+  /** Mean solar incidence angle on the local terrain slope, degrees (null without a slope). */
+  meanSolarIncidenceDeg?: number | null;
+  /** Two-hop relay result when a relay is configured. */
+  relay?: RelaySummary | null;
+  /** Relay-specific verdict text; the primary `verdict` stays DTE-based. */
+  relayVerdict?: string | null;
 }
 
 export interface SimulationResult {

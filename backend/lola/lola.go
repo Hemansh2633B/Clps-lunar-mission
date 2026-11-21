@@ -32,14 +32,25 @@ type Product struct {
 	ID          string
 	URL         string
 	ProductPage string
-	Assumptions map[string]any
+	// NominalResolutionM is the pixel scale encoded in the published product
+	// name; the actual raster geotransform is still inspected per acquisition.
+	NominalResolutionM float64
+	// CoverageNote is deliberately descriptive, not a fabricated polygon. The
+	// GeoTIFF CRS/geotransform is the authority for the exact footprint.
+	CoverageNote string
+	Provider     string
+	Configured   bool // true only for a deployment-operator manifest entry
+	Assumptions  map[string]any
 }
 
 // LDEM80S20M is NASA PGDA's 20 m/pixel LOLA south-polar mosaic (80°S to the pole).
 var LDEM80S20M = Product{
-	ID:          "lola-ldem-80s-20mpp-adj",
-	URL:         "https://pgda.gsfc.nasa.gov/data/LOLA_20mpp/LDEM_80S_20MPP_ADJ.TIF",
-	ProductPage: "https://pgda.gsfc.nasa.gov/products/90",
+	ID:                 "lola-ldem-80s-20mpp-adj",
+	URL:                "https://pgda.gsfc.nasa.gov/data/LOLA_20mpp/LDEM_80S_20MPP_ADJ.TIF",
+	ProductPage:        "https://pgda.gsfc.nasa.gov/products/90",
+	NominalResolutionM: 20,
+	CoverageNote:       "South-polar LOLA mosaic; exact footprint is determined from the source GeoTIFF georeferencing. This product does not provide global or far-side coverage.",
+	Provider:           "NASA LOLA · PDS Geosciences Node / PGDA",
 	Assumptions: map[string]any{
 		"vertical_unit": "m", "value_kind": "elevation",
 		"elevation_reference":          "LOLA surface height relative to the 1737.4 km reference sphere; verify against product documentation before mission use",
@@ -51,6 +62,14 @@ var LDEM80S20M = Product{
 func sibling(id, file string) Product {
 	p := LDEM80S20M
 	p.ID, p.URL = id, "https://pgda.gsfc.nasa.gov/data/LOLA_20mpp/"+file
+	for _, part := range strings.Split(id, "-") {
+		if strings.HasSuffix(part, "mpp") {
+			if resolution, err := strconv.ParseFloat(strings.TrimSuffix(part, "mpp"), 64); err == nil && resolution > 0 {
+				p.NominalResolutionM = resolution
+			}
+		}
+	}
+	p.CoverageNote = "Southern-polar LOLA mosaic; exact footprint is determined from the source GeoTIFF georeferencing. This product does not provide global or far-side coverage."
 	return p
 }
 
@@ -66,7 +85,13 @@ var Products = map[string]Product{
 }
 
 // AllowedHosts are the only hosts raster bytes may be fetched from.
-var AllowedHosts = map[string]bool{"pgda.gsfc.nasa.gov": true}
+var AllowedHosts = map[string]bool{
+	"pgda.gsfc.nasa.gov": true,
+	// PDS Geosciences Node is an official public planetary data archive. A
+	// deployment operator may register a specific range-capable GeoTIFF/COG
+	// product from this host; browser clients still cannot submit URLs.
+	"pds-geosciences.wustl.edu": true,
+}
 
 // AllowedURL enforces the host allowlist (https only). Loopback http is accepted
 // only when explicitly enabled for tests.
@@ -274,7 +299,20 @@ func OpenRemote(ctx context.Context, o Options) (*terrain.DEM, *RangeReader, err
 		return nil, nil, terrain.Errorf("Cannot read the remote DEM header: %v", err)
 	}
 	name := o.Product.URL[strings.LastIndex(o.Product.URL, "/")+1:]
-	d, err := terrain.Inspect(f, o.Product.Assumptions, name)
+	assumptions := make(map[string]any, len(o.Product.Assumptions)+6)
+	for k, v := range o.Product.Assumptions {
+		assumptions[k] = v
+	}
+	assumptions["product_id"] = o.Product.ID
+	assumptions["source_url"] = o.Product.URL
+	assumptions["product_page"] = o.Product.ProductPage
+	if o.Product.Configured {
+		assumptions["configured_product"] = true
+		assumptions["provider"] = o.Product.Provider
+		assumptions["coverage_note"] = o.Product.CoverageNote
+		assumptions["nominal_resolution_m"] = o.Product.NominalResolutionM
+	}
+	d, err := terrain.Inspect(f, assumptions, name)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -297,12 +335,40 @@ type Plan struct {
 	ResolutionUnit string  `json:"native_resolution_unit"`
 }
 
+func productCoverageError(d *terrain.DEM) error {
+	configured, _ := d.Info.Provenance["configured_product"].(bool)
+	if configured {
+		provider, _ := d.Info.Provenance["provider"].(string)
+		if strings.TrimSpace(provider) == "" {
+			provider = "configured provider"
+		}
+		if note, ok := d.Info.Provenance["coverage_note"].(string); ok && strings.TrimSpace(note) != "" {
+			return terrain.Errorf("Requested square is outside or cannot be mapped into the configured product footprint (%s): %s", provider, note)
+		}
+		return terrain.Errorf("Requested square is outside or cannot be mapped into the configured product footprint (%s). No fallback dataset was selected.", provider)
+	}
+	// Keep the historical message for the original test fixture/golden contract.
+	return terrain.Errorf("Requested square extends outside this NASA south-pole product. Use a covered location or a smaller radius.")
+}
+
 // PlanSubset computes the native-resolution pixel window covering the analysis
 // square plus a bilinear halo, exactly as the Python downloader did.
 func PlanSubset(d *terrain.DEM, lat, lon, radiusKm float64) (*Plan, error) {
 	res := d.Info.SourceResolution
 	local := lunarcrs.Sphere(lunarcrs.AzimuthalEquidistant, d.Info.LunarRadiusM, lat, lon, 0)
-	extent := radiusKm*1000 + 2*math.Max(res[0], res[1])
+	// Expand the sampled analysis square by two source pixels. Projected DEMs
+	// report linear units; geographic grids report degrees, which must be
+	// converted locally to metres before they can be added to radiusKm.
+	resXMetres, resYMetres := math.Abs(res[0])*d.CRS.LinearUnitM, math.Abs(res[1])*d.CRS.LinearUnitM
+	if d.CRS.IsGeographic() {
+		latRad := lat * math.Pi / 180
+		resXMetres = math.Abs(res[0]) * d.CRS.AngularUnitRad * d.Info.LunarRadiusM * math.Abs(math.Cos(latRad))
+		resYMetres = math.Abs(res[1]) * d.CRS.AngularUnitRad * d.Info.LunarRadiusM
+	}
+	if !(resXMetres > 0) || !(resYMetres > 0) {
+		return nil, terrain.Errorf("Source raster pixel spacing is zero or cannot be converted to lunar metres.")
+	}
+	extent := radiusKm*1000 + 2*math.Max(resXMetres, resYMetres)
 	minX, minY, maxX, maxY := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
 	for i := 0; i < 65; i++ {
 		for j := 0; j < 65; j++ {
@@ -310,11 +376,11 @@ func PlanSubset(d *terrain.DEM, lat, lon, radiusKm float64) (*Plan, error) {
 			north := -extent + float64(i)*(2*extent/64)
 			lo, la, ok := local.Inverse(east, north)
 			if !ok {
-				return nil, terrain.Errorf("Requested area cannot be mapped into this NASA polar product.")
+				return nil, productCoverageError(d)
 			}
 			x, y, ok := d.CRS.Forward(lo, la)
 			if !ok || math.IsNaN(x) || math.IsNaN(y) || math.IsInf(x, 0) || math.IsInf(y, 0) {
-				return nil, terrain.Errorf("Requested area cannot be mapped into this NASA polar product.")
+				return nil, productCoverageError(d)
 			}
 			minX, maxX = math.Min(minX, x), math.Max(maxX, x)
 			minY, maxY = math.Min(minY, y), math.Max(maxY, y)
@@ -331,7 +397,7 @@ func PlanSubset(d *terrain.DEM, lat, lon, radiusKm float64) (*Plan, error) {
 	left, top := int(math.Floor(colOff)), int(math.Floor(rowOff))
 	width, height := int(math.Ceil(colEnd))-left, int(math.Ceil(rowEnd))-top
 	if left < 0 || top < 0 || left+width > d.File.Width || top+height > d.File.Height {
-		return nil, terrain.Errorf("Requested square extends outside this NASA south-pole product. Use a covered location or a smaller radius.")
+		return nil, productCoverageError(d)
 	}
 	if width*height > terrain.MaxSubsetPixels {
 		return nil, terrain.Errorf("Requested subset exceeds the download memory limit. Choose a smaller radius.")
@@ -370,6 +436,7 @@ func Extract(d *terrain.DEM, plan *Plan, product Product, now time.Time, transfe
 	}
 	frame, _ := product.Assumptions["lunar_reference_frame"].(string)
 	tags["SOURCE_URL"], tags["SOURCE_PRODUCT_PAGE"], tags["LUNAR_REFERENCE_FRAME"] = product.URL, product.ProductPage, frame
+	tags["SOURCE_PRODUCT_ID"], tags["SOURCE_PROVIDER"], tags["SOURCE_COVERAGE_NOTE"] = product.ID, product.Provider, product.CoverageNote
 	tags["PROCESSING"] = "Native-resolution source subset; original values, CRS, and NoData retained"
 	w := geotiff.WriteOptions{Width: width, Height: height, BitsPerSample: f.BitsPerSample, SampleFormat: f.SampleFormat, Data: values,
 		Geotransform: [6]float64{d.GT[0] + float64(left)*d.GT[1], d.GT[1], 0, d.GT[3] + float64(top)*d.GT[5], 0, d.GT[5]},
@@ -390,6 +457,7 @@ func Extract(d *terrain.DEM, plan *Plan, product Product, now time.Time, transfe
 		config[k] = v
 	}
 	config["source_url"], config["product_page"], config["product_id"] = product.URL, product.ProductPage, product.ID
+	config["provider"], config["coverage_note"], config["nominal_resolution_m"] = product.Provider, product.CoverageNote, product.NominalResolutionM
 	prov := map[string]any{
 		"latitude": plan.Latitude, "longitude": plan.Longitude, "analysis_radius_km": plan.RadiusKm,
 		"source_pixel_window": []int{left, top, width, height}, "downloaded_utc": now.UTC().Format(time.RFC3339Nano),

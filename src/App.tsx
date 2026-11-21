@@ -526,6 +526,7 @@ export default function App() {
         <aside className="site-rail" data-tour="catalog">
           <SiteCatalog sites={sites} selectedId={site.id} onSelect={setSelectedId}
             onCustom={() => { setCustomInitial(undefined); setCustomOpen(true); }}
+            onCoordinateInput={(lat, lon) => { setCustomInitial({ lat, lon }); setCustomOpen(true); }}
             onHorizonTable={() => setHorizonOpen(true)} onPin={pinCurrent} compareMode={compareMode} />
         </aside>
         <main className="center-stack">

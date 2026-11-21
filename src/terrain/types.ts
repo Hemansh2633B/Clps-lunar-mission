@@ -54,7 +54,16 @@ export interface DatasetEntry {
   frame?: FrameClassificationInfo;
 }
 
-export interface AcquisitionProduct { id: string; url: string; product_page: string; }
+export interface AcquisitionProduct {
+  id: string;
+  url: string;
+  product_page: string;
+  /** Product-name nominal pixel scale; actual subset spacing is reported from the raster. */
+  nominal_resolution_m?: string;
+  /** Plain-language documented coverage; exact footprint is checked from GeoTIFF CRS/georeferencing. */
+  coverage_note?: string;
+  provider?: string;
+}
 
 export interface DatasetsResponse {
   datasets: DatasetEntry[];

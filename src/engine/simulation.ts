@@ -5,6 +5,8 @@ import { findTransitions, visibilityFor, TRANSITION_MIN_STEP_MS, TRANSITION_NODE
 import { computePower, summarizeMission } from './powerComms';
 import { integrateMissionEnergy } from './integration';
 import { assessTerrainEligibility, numericalResolutionBlocked, computationFailed } from './analysisStatus';
+import { solarIncidence, type SlopeSpec } from './incidence';
+import { evaluateRelay, relayConfigured } from './relay';
 import { sanitizeConfig } from './configLimits';
 import { canonicalJson } from './canonicalJson';
 
@@ -22,11 +24,44 @@ export const DEFAULT_CONFIG: MissionConfig = {
   stepMinutes: 15,
 };
 
+/**
+ * Local slope for incidence, or null when none is known. A synthetic or
+ * user-edited grid is labelled `custom`; only a real DEM is labelled `dem`.
+ * Nothing is ever invented: `incidence` is absent without a slope.
+ */
+export function slopeOf(site: LandingSite): SlopeSpec | null {
+  const t = site.terrain;
+  if (t.slopeDeg == null || t.aspectDeg == null) return null;
+  if (!Number.isFinite(t.slopeDeg) || !Number.isFinite(t.aspectDeg)) return null;
+  return { slopeDeg: t.slopeDeg, aspectDeg: t.aspectDeg, source: t.kind === 'dem' && !t.synthetic ? 'dem' : 'custom' };
+}
+
+/**
+ * One instant of the analysis. The three obstruction channels stay separate:
+ * the lunar limb (curvature), the local terrain mask, and the local horizontal
+ * plane. Relay geometry is evaluated only when a relay state is configured.
+ */
 export function evaluateAt(site: LandingSite, timeMs: number, config: MissionConfig): EvaluatedSample {
   const eph = computeEphemeris(site, timeMs);
-  const sunVisibility = visibilityFor('sun', eph.sun.elevationDeg, eph.sun.azimuthDeg, site.terrain);
-  const earthVisibility = visibilityFor('earth', eph.earth.elevationDeg, eph.earth.azimuthDeg, site.terrain, config.commsMarginDeg);
-  const power = computePower(eph.sun.elevationDeg, eph.sun.azimuthDeg, eph.sun.distanceKm, sunVisibility, config);
+  const limbFloorDeg = eph.geometry.limb.limbElevationDeg;
+  const sunVisibility: EvaluatedSample['sunVisibility'] = {
+    ...visibilityFor('sun', eph.sun.elevationDeg, eph.sun.azimuthDeg, site.terrain, 0, limbFloorDeg),
+    bodyOccultation: eph.geometry.sunOccultation.state,
+    occultedFraction: eph.geometry.sunOccultation.occultedFraction,
+    angularRadiusDeg: eph.geometry.sunAngularRadiusDeg,
+  };
+  const earthVisibility: EvaluatedSample['earthVisibility'] = {
+    ...visibilityFor('earth', eph.earth.elevationDeg, eph.earth.azimuthDeg, site.terrain, config.commsMarginDeg, limbFloorDeg),
+    bodyOccultation: eph.geometry.earthOccultation.state,
+    occultedFraction: eph.geometry.earthOccultation.occultedFraction,
+    angularRadiusDeg: eph.geometry.earthAngularRadiusDeg,
+  };
+  const slope = slopeOf(site);
+  const incidence = slope ? solarIncidence(eph.sun.azimuthDeg, eph.sun.elevationDeg, slope) : undefined;
+  const power = computePower(eph.sun.elevationDeg, eph.sun.azimuthDeg, eph.sun.distanceKm, sunVisibility, config, incidence?.cosIncidence);
+  const relay = relayConfigured(config.relay)
+    ? evaluateRelay({ relay: config.relay, site, profile: site.terrain, geom: eph.geometry, timeMs })
+    : null;
   return {
     timeMs,
     sun: eph.sun,
@@ -34,10 +69,25 @@ export function evaluateAt(site: LandingSite, timeMs: number, config: MissionCon
     sunVisibility,
     earthVisibility,
     power,
+    // Mission viability = surface power AND a path to Earth (direct geometric
+    // LOS or a configured relay whose BOTH legs are geometrically clear).
+    // Legacy mission viability remains the direct-to-Earth metric for API and
+    // regression compatibility. Relay windows are a separate track/summary;
+    // they never rewrite the direct-Earth availability claim.
     viable: sunVisibility.visible && earthVisibility.visible,
     libration: eph.libration,
     subsolarLatitudeDeg: eph.subsolarLatitudeDeg,
     subsolarLongitudeDeg: eph.subsolarLongitudeDeg,
+    lunar: {
+      dipDeg: eph.geometry.limb.dipDeg,
+      limbElevationDeg: limbFloorDeg,
+      sunOccultation: eph.geometry.sunOccultation.state,
+      earthOccultation: eph.geometry.earthOccultation.state,
+      sunLimbClearanceDeg: eph.geometry.sunOccultation.limbClearanceDeg,
+      earthLimbClearanceDeg: eph.geometry.earthOccultation.limbClearanceDeg,
+    },
+    ...(incidence ? { incidence } : {}),
+    relay,
   };
 }
 
@@ -129,7 +179,7 @@ export function simulateMission(site: LandingSite, startMs: number, endMs: numbe
 }
 
 /** Internal identity-format tag; independent of REPORT_SCHEMA_VERSION. */
-export const SIMULATION_IDENTITY_VERSION = 'chandra-analysis-v2';
+export const SIMULATION_IDENTITY_VERSION = 'chandra-analysis-v3';
 
 /**
  * Exact, synchronous cache/guard identity (v1.11). The full JSON-safe site

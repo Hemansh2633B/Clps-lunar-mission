@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { X, Download, Plus, SlidersHorizontal } from 'lucide-react';
-import type { EvaluatedSample, LandingSite, MissionConfig } from '../types/mission';
+import type { EvaluatedSample, LandingSite, MissionConfig, RelayConfig } from '../types/mission';
 import type { CustomTerrainPreset } from '../data/landingSites';
 import { horizonTable } from '../engine/horizonPhysics';
 import { formatCoord } from '../engine/constants';
@@ -104,6 +104,14 @@ export function SettingsModal({ config, onChange, onClose }: { config: MissionCo
   const activePreset = matchingPresetId(config);
   const setNum = (key: NumericConfigKey) => (v: number) => onChange({ ...config, [key]: v });
   const fields: NumericConfigKey[] = ['arrayAreaM2', 'cellEfficiency', 'systemDerate', 'loadW', 'batteryCapacityKWh', 'initialSocPct', 'commsMarginDeg', 'stepMinutes', 'fixedPanelAzimuthDeg', 'durationDays'];
+  const relay = config.relay ?? null;
+  const setRelay = (patch: Partial<RelayConfig>) => onChange({
+    ...config,
+    relay: relay ? { ...relay, ...patch } : {
+      id: 'relay-1', name: 'Configured relay', model: 'circular-lunar',
+      altitudeKm: 100, inclinationDeg: 90, raanDeg: 0, phaseDeg: 0, ...patch,
+    },
+  });
   return (
     <Modal title="Mission parameters" onClose={onClose} wide>
       <div style={{ marginBottom: 14 }}>
@@ -137,8 +145,50 @@ export function SettingsModal({ config, onChange, onClose }: { config: MissionCo
         </div>
         {fields.map((f) => <NumberField key={f} field={f} value={config[f] as number} onChange={setNum(f)} />)}
       </div>
+      <section style={{ marginTop: 16, border: '1px solid var(--border)', background: '#fffdf7', padding: 10 }} aria-label="Relay spacecraft configuration">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+          <div>
+            <div className="panel-title">Relay geometry · optional two-hop link</div>
+            <div style={{ fontSize: 9, color: 'var(--dim)', marginTop: 3 }}>Site→relay uses body + local-terrain tests; relay→Earth uses body occultation. Geometry only—not RF availability.</div>
+          </div>
+          <button className={`btn sm ${relay ? 'active' : 'ghost'}`} onClick={() => onChange({ ...config, relay: relay ? null : { id: 'relay-1', name: 'Lunar relay (idealised)', model: 'circular-lunar', altitudeKm: 100, inclinationDeg: 90, raanDeg: 0, phaseDeg: 0 } })} aria-pressed={!!relay}>
+            {relay ? 'Disable relay' : 'Configure relay'}
+          </button>
+        </div>
+        {relay && <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8 }}>
+            <div className="field"><label>Spacecraft model</label>
+              <select className="input" value={relay.model} onChange={(e) => setRelay({ model: e.target.value as RelayConfig['model'] })}>
+                <option value="circular-lunar">Circular lunar orbit · two-body</option>
+                <option value="earth-moon-l2-halo">Earth–Moon L2 · parametric halo</option>
+                <option value="fixed-body">Fixed selenographic state</option>
+              </select>
+            </div>
+            <div className="field"><label>Relay label</label><input className="input" value={relay.name} maxLength={120} onChange={(e) => setRelay({ name: e.target.value })} /></div>
+            {relay.model === 'circular-lunar' && <>
+              <div className="field"><label>Altitude · km</label><input className="input mono" type="number" min={0} max={200000} value={relay.altitudeKm ?? 100} onChange={(e) => setRelay({ altitudeKm: Number(e.target.value) })} /></div>
+              <div className="field"><label>Inclination · °</label><input className="input mono" type="number" min={0} max={180} value={relay.inclinationDeg ?? 90} onChange={(e) => setRelay({ inclinationDeg: Number(e.target.value) })} /></div>
+              <div className="field"><label>RAAN · ° J2000</label><input className="input mono" type="number" min={0} max={360} value={relay.raanDeg ?? 0} onChange={(e) => setRelay({ raanDeg: Number(e.target.value) })} /></div>
+              <div className="field"><label>Argument of latitude at epoch · °</label><input className="input mono" type="number" min={0} max={360} value={relay.phaseDeg ?? 0} onChange={(e) => setRelay({ phaseDeg: Number(e.target.value) })} /></div>
+            </>}
+            {relay.model === 'earth-moon-l2-halo' && <>
+              <div className="field"><label>Halo plane amplitude · km</label><input className="input mono" type="number" min={0} max={200000} step={500} value={relay.haloAmplitudeKm ?? 15000} onChange={(e) => setRelay({ haloAmplitudeKm: Number(e.target.value) })} /></div>
+              <div className="field"><label>Parametric period · days</label><input className="input mono" type="number" min={1} max={120} step={0.5} value={relay.haloPeriodDays ?? 14} onChange={(e) => setRelay({ haloPeriodDays: Number(e.target.value) })} /></div>
+              <div className="field"><label>Phase at epoch · °</label><input className="input mono" type="number" min={0} max={360} value={relay.haloPhaseDeg ?? 0} onChange={(e) => setRelay({ haloPhaseDeg: Number(e.target.value) })} /></div>
+            </>}
+            {relay.model === 'fixed-body' && <>
+              <div className="field"><label>Latitude · °</label><input className="input mono" type="number" min={-90} max={90} value={relay.latitudeDeg ?? 0} onChange={(e) => setRelay({ latitudeDeg: Number(e.target.value) })} /></div>
+              <div className="field"><label>East longitude · °</label><input className="input mono" type="number" min={-180} max={360} value={relay.longitudeDeg ?? 0} onChange={(e) => setRelay({ longitudeDeg: Number(e.target.value) })} /></div>
+              <div className="field"><label>Altitude · km</label><input className="input mono" type="number" min={0} max={200000} value={relay.altitudeKm ?? 0} onChange={(e) => setRelay({ altitudeKm: Number(e.target.value) })} /></div>
+            </>}
+          </div>
+          <div className="mono" style={{ fontSize: 9, marginTop: 8, color: 'var(--muted)', lineHeight: 1.5 }}>
+            {relay.model === 'circular-lunar' ? 'Analytic two-body circular proxy; no perturbations, station-keeping or verified spacecraft ephemeris.' : relay.model === 'earth-moon-l2-halo' ? 'L2 location is solved in the circular restricted three-body model; the halo is a parametric ring, not a fitted mission orbit.' : 'Fixed body coordinates are an explicit static state, not an orbit.'} A clear two-hop path does not establish an RF link.
+          </div>
+        </>}
+      </section>
       <div style={{ fontSize: 10, color: 'var(--dim)', marginTop: 14, lineHeight: 1.6 }}>
-        Power model: P = flux × area × cell efficiency × derate × max(0, cos incidence). Horizontal uses sin(elevation); vertical tracking uses cos(elevation); fixed vertical adds cos(azimuth offset). Battery integrates net power with 92% charge / 95% discharge efficiency on the event-aware generation timeline. DTE requires Earth center above terrain + margin. No atmospheric refraction.
+        Power model: P = flux × area × cell efficiency × derate × max(0, cos incidence). Horizontal uses sin(elevation); vertical tracking uses cos(elevation); fixed vertical adds cos(azimuth offset). Battery integrates net power with 92% charge / 95% discharge efficiency on the event-aware generation timeline. Direct Earth LOS requires the Earth center above local terrain and the spherical lunar limb + margin; this is geometry, not an RF link budget. No atmospheric refraction.
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}><button className="btn primary" onClick={onClose}>Done</button></div>
     </Modal>

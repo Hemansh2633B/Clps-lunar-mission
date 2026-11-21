@@ -22,7 +22,7 @@ export function SiteBrief({ site, current, onHorizonTable, onPin, visibilityBloc
     <section className="panel" style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="panel-header">
         <span className="panel-title"><Crosshair size={13} /> Site context</span>
-        <span className="chip neutral">{site.category === 'polar' ? (site.latitude >= 0 ? 'North pole' : 'South pole') : 'Reference'}</span>
+        <span className="chip neutral">{site.category === 'polar' ? (site.latitude >= 0 ? 'North pole' : 'South pole') : site.side === 'far' ? 'Far side' : site.side === 'limb' ? 'Limb band' : 'Near side'}</span>
       </div>
       <div style={{ position: 'relative', height: 92, overflow: 'hidden', borderBottom: '1px solid var(--line)', background: '#fdf6e8' }}>
         <img src="/assets/lander.jpg" alt="" aria-hidden="true" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 62%', mixBlendMode: 'multiply', opacity: 0.9 }} />
@@ -31,7 +31,7 @@ export function SiteBrief({ site, current, onHorizonTable, onPin, visibilityBloc
       <div className="panel-body" style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
         <div>
           <div className="display" style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.15 }}>{site.name}</div>
-          <div className="mono" style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{formatCoord(site.latitude, site.longitude)} · elev {site.elevationM} m</div>
+          <div className="mono" style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{formatCoord(site.latitude, site.longitude)} · elev {site.elevationAvailable === false ? 'unavailable' : `${site.elevationM} m`}{site.terrain.slopeDeg != null ? ` · slope ${site.terrain.slopeDeg.toFixed(1)}°` : ''}</div>
         </div>
         <p style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.6, margin: 0 }}>{site.description}</p>
         <div>
@@ -57,14 +57,20 @@ export function SiteBrief({ site, current, onHorizonTable, onPin, visibilityBloc
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 10 }}>
           <div className="panel" style={{ padding: 8, background: '#fffdf7' }}>
-            <div style={{ color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '.06em', fontSize: 9 }}>Sun clearance</div>
-            <div className="mono" style={{ fontSize: 14, color: visibilityBlocked ? 'var(--dim)' : current.sunVisibility.visible ? 'var(--nominal)' : 'var(--blocked)' }}>{visibilityBlocked ? 'blocked' : `${current.sunVisibility.clearanceDeg.toFixed(2)}°`}</div>
+            <div style={{ color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '.06em', fontSize: 9 }}>Sun · az / el</div>
+            <div className="mono" style={{ fontSize: 12, color: visibilityBlocked ? 'var(--dim)' : current.sunVisibility.visible ? 'var(--nominal)' : 'var(--blocked)' }}>{current.sun.azimuthDeg.toFixed(1)}° / {current.sun.elevationDeg.toFixed(2)}°</div>
+            <div style={{ color: 'var(--dim)', fontSize: 9 }}>clearance {visibilityBlocked ? 'blocked' : `${current.sunVisibility.clearanceDeg.toFixed(2)}°`} · {current.sunVisibility.visible ? 'terrain + limb clear' : current.sunVisibility.reason === 'lunar-limb' ? 'Moon limb blocks' : current.sunVisibility.reason === 'terrain' ? 'local terrain blocks' : 'below local horizon'}</div>
           </div>
           <div className="panel" style={{ padding: 8, background: '#fffdf7' }}>
-            <div style={{ color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '.06em', fontSize: 9 }}>Earth clearance</div>
-            <div className="mono" style={{ fontSize: 14, color: visibilityBlocked ? 'var(--dim)' : current.earthVisibility.visible ? 'var(--nominal)' : 'var(--blocked)' }}>{visibilityBlocked ? 'blocked' : `${current.earthVisibility.clearanceDeg.toFixed(2)}°`}</div>
+            <div style={{ color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: '.06em', fontSize: 9 }}>Earth · az / el</div>
+            <div className="mono" style={{ fontSize: 12, color: visibilityBlocked ? 'var(--dim)' : current.earthVisibility.visible ? 'var(--nominal)' : 'var(--blocked)' }}>{current.earth.azimuthDeg.toFixed(1)}° / {current.earth.elevationDeg.toFixed(2)}°</div>
+            <div style={{ color: 'var(--dim)', fontSize: 9 }}>{visibilityBlocked ? 'visibility gated' : current.earthVisibility.bodyOccultation === 'occulted' ? 'lunar body blocks Earth' : current.earthVisibility.bodyOccultation === 'partial' ? 'Earth disk partly behind limb' : current.earthVisibility.visible ? 'geometric LOS clear · not RF' : current.earthVisibility.reason === 'margin' ? 'comms margin not met' : current.earthVisibility.reason === 'terrain' ? 'local terrain blocks' : 'below local horizon'}</div>
           </div>
         </div>
+        {(current.incidence || current.relay) && <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '7px 8px', border: '1px solid var(--border)', background: '#fffdf7', fontSize: 10 }}>
+          {current.incidence && <div>Terrain incidence <b>{current.incidence.incidenceDeg.toFixed(1)}°</b> · slope {current.incidence.slopeDeg.toFixed(1)}° / aspect {current.incidence.aspectDeg.toFixed(1)}° ({current.incidence.source})</div>}
+          {current.relay && <div style={{ color: current.relay.linkUp ? 'var(--nominal)' : 'var(--blocked)' }}>Relay geometry: {current.relay.linkUp ? 'both legs clear' : `site→relay ${current.relay.siteBodyClear && current.relay.siteTerrainClear ? 'clear' : 'blocked'}, relay→Earth ${current.relay.earthClear ? 'clear' : 'Moon-blocked'}`} · {current.relay.rangeKm.toFixed(0)} km · NOT an RF link</div>}
+        </div>}
         <div style={{ display: 'flex', gap: 6, marginTop: 'auto' }}>
           <button className="btn sm" onClick={onHorizonTable}><Table2 size={12} /> Horizon table</button>
           <button className="btn sm primary" onClick={onPin}><Pin size={12} /> Pin scenario</button>
