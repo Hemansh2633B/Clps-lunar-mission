@@ -4,7 +4,7 @@ import type { AppMode, GuidedScenario, LandingSite, MissionConfig, Scenario, Sim
 import { LANDING_SITES, makeCustomSite } from './data/landingSites';
 import { DEFAULT_CONFIG, analysisWindow, evaluateAt } from './engine/simulation';
 import { assessTerrainEligibility } from './engine/analysisStatus';
-import { DAY_MS, HOUR_MS, clamp } from './engine/constants';
+import { DAY_MS, HOUR_MS, clamp, formatCoord } from './engine/constants';
 import { useSimulation } from './hooks/useSimulation';
 import { cachedSimulation, requestSimulation, releaseSimulation } from './engine/simulationClient';
 import { HeaderBar } from './components/HeaderBar';
@@ -51,11 +51,6 @@ const CATALOG_IDS = new Set(LANDING_SITES.map((s) => s.id));
 function appStorage(): Storage | null {
   try { return window.localStorage; } catch { return null; }
 }
-const TICKER = [
-  '1.54° AXIAL TILT', '709h SYNODIC DAY', '±6.7° LAT LIBRATION', '±7.9° LON LIBRATION',
-  '0.0″ AIRLESS REFRACTION', '1361 W/m² SOLAR CONSTANT', 'IAU 2015 MOON ROTATION',
-  '360° TERRAIN OCCLUSION', 'DIRECT-TO-EARTH WINDOWS', 'LAUNCH-SLIP ECLIPSES',
-];
 
 export default function App() {
   // Refresh-safe training context: a valid persisted session + in-training progress
@@ -511,11 +506,6 @@ export default function App() {
         subSolar={{ lat: current.subsolarLatitudeDeg, lon: current.subsolarLongitudeDeg }}
         subEarth={{ lat: current.libration.subEarthLatitudeDeg, lon: current.libration.subEarthLongitudeDeg }}
       />
-      <div className="ticker" aria-hidden="true">
-        <div className="ticker-track">
-          {[...TICKER, ...TICKER].map((t, i) => <span key={i}>· {t}</span>)}
-        </div>
-      </div>
       {mode === 'educator' && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 14px', background: '#e7f5ee', borderBottom: '1px solid #a9d3bd', fontSize: 11, color: '#1f7a52' }}>
           <GraduationCap size={13} /> Educator mode active — telemetry is translated into plain English.
@@ -563,10 +553,16 @@ export default function App() {
                     exportBlocked: !!missionSim.data?.analysis && !missionSim.data.analysis.demoEligible,
                   }} />
               ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
-                  <button className="btn sm ghost" onClick={() => setWorkflowOpen(true)}><ListChecks size={12} /> Guided workflow</button>
-                  <button className="btn sm ghost" onClick={story.start} data-tour="story-launch"><BookOpen size={12} /> {story.progress && story.progress.status === 'paused' ? 'Resume briefing' : story.progress && story.progress.status === 'completed' ? 'Briefing debrief' : 'Story briefing'}</button>
-                  <span style={{ fontSize: 10, color: 'var(--dim)' }}>New here? Follow the six-step path, or join the 14-day-window briefing.</span>
+                <div className="workspace-toolbar" aria-label="Current mission workspace">
+                  <div className="workspace-context">
+                    <span className="workspace-context-label">ANALYSIS SITE</span>
+                    <strong>{site.shortName}</strong>
+                    <span className="mono">{formatCoord(site.latitude, site.longitude)} · {site.side ?? 'unclassified'}</span>
+                  </div>
+                  <div className="workspace-actions">
+                    <button className="btn sm" onClick={() => setWorkflowOpen(true)}><ListChecks size={12} /> Guided workflow</button>
+                    <button className="btn sm ghost" onClick={story.start} data-tour="story-launch"><BookOpen size={12} /> {story.progress && story.progress.status === 'paused' ? 'Resume briefing' : story.progress && story.progress.status === 'completed' ? 'Briefing debrief' : 'Story briefing'}</button>
+                  </div>
                 </div>
               )}
               <HorizonPanorama site={site} current={current} sim={activeSim.data} mode={mode} options={panorama} onOptions={setPanorama} visibilityBlocked={instantBlocked} />
@@ -597,7 +593,6 @@ export default function App() {
         <ProvenanceIndicator site={site} summary={missionSim.data?.summary} compact />
         <span>LOS · geometric center-of-disk, no refraction, not an RF link budget</span>
         <span>{activeSim.loading ? 'computing…' : activeSim.error ? 'simulation error' : activeSim.data ? `${activeSim.data.sampling.sampleCount.toLocaleString()} samples · eff ${activeSim.data.sampling.effectiveStepMinutes.toFixed(1)} min · ${activeSim.data.computeMs.toFixed(0)} ms` : 'idle'}</span>
-        <span style={{ marginLeft: 'auto' }}>Space play · [ ] days · C compare · T terrain · O space · D data · E educator · G guide · ? help</span>
       </footer>
 
       {customOpen && <CustomSiteModal onClose={() => setCustomOpen(false)} onCreate={createCustom} initial={customInitial} />}
