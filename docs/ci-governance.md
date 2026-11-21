@@ -1,20 +1,24 @@
 # CI governance · CHANDRA
 
-**Last verified:** 2026-11-08 (rebrand); v1.11 metadata re-read in §7; **v1.12 changes to jobs, check names and pins in §8, which supersedes the lists in §1, §2, §5 and §7 where they differ.** This document records the CI contract, the
-verified action pins, and what the repository owner must configure. Claims
-here are limited to what was actually verified via the GitHub API.
+**Last verified:** 2026-11-21. The v1.12 Go CI contract is recorded in §8;
+the v1.13 branch-push result is recorded in §9. Historical sections are kept
+for context, but §8 is authoritative for current checks and local commands.
+This document records the CI contract, verified action pins, and owner
+configuration actions. Claims here are limited to what was actually verified
+via GitHub Actions and the GitHub API.
 
 ## 1. Required checks (owner action needed)
 
-The workflow `.github/workflows/ci.yml` produces three jobs. For `main`, the
-owner should require **all three** by their exact check names:
+The current workflow defines four jobs. For pull requests to `main`, the owner
+should require **all four** by their exact check names (also listed in §8):
 
-1. `Typecheck · build · unit · geometry · parity · Python`
-2. `Browser E2E (mission · terrain · space · onboarding)` — includes the story
-   tutorial personas A–E **and the v1.11 scientific-export personas A–E** as
-   mandatory steps (any suite failing fails the job).
-3. `Independent SPICE validation (fetched kernels)` — v1.9 runs this on every
-   pull request as well as pushes to `main` and manual dispatch.
+1. `Typecheck · build · unit · geometry · native backend · parity`
+2. `Vercel build output (Go function executed locally)`
+3. `Browser E2E (mission · terrain · space · onboarding · data hub)` — includes
+   planner, tutorial, scientific-export, and data-feature Playwright suites.
+4. `Independent SPICE validation (fetched kernels)` — runs on pull requests,
+   manual dispatches, and pushes to `main`; it is intentionally skipped on
+   pushes to non-main branches.
 
 **Branch-protection status (verified 2026-11-07; re-checked for v1.10 and
 v1.11 — still `protected: false`, still owner action outstanding):**
@@ -77,22 +81,22 @@ commit SHA, update both the SHA and the comment, and let CI prove the change.
   CI run **42383009327** (step 10 "Run story tutorial E2E (personas A–E)":
   success) before any further changes were layered on.
 
-## 5. Local suite contract
+## 5. Local suite contract (historical v1.11)
 
-Every release run executes, in the repository root:
+The v1.11 Python-backend command list below is retained as history only. The
+current Go-backend local suite contract is in §8. Skips are reported as skips
+in docs/verification.md, never as passes.
 
 ```
 npm run typecheck && npm run build
-npm test                  # vitest unit suite
-npm run test:python       # pytest -q -rs (kernel-gated tests skip without kernels)
+npm test
+npm run test:python
 npm run test:geometry
 npm run test:parity
-npm run test:browser      # needs npm run dev:full on :5173/:8000
-npm run test:story        # personas A–E, same servers
-npm run test:exports      # export personas A–E, same servers
+npm run test:browser
+npm run test:story
+npm run test:exports
 ```
-
-Skips are reported as skips in docs/verification.md, never as passes.
 
 Optional, not required checks and not part of every release battery:
 
@@ -152,7 +156,7 @@ the earlier 403s; this environment's token cannot perform them. Owner checklist:
 5. Optional: choose and add a LICENSE; enable a static demo host only after the
    base-path asset fixes in `docs/product-design.md` are implemented and verified.
 
-## 8. v1.12: four jobs, new check names, Go toolchain
+## 8. v1.12: current four-job Go CI contract and check names
 
 v1.12 replaces the Python backend with a native Go one. The workflow changed
 accordingly; the lists in §1, §5 and §7 describe v1.11.
@@ -207,4 +211,20 @@ npm run test:exports
 **Owner checklist** (replaces item 3 of §7): require the four check names
 above. The repository rename, description and branch protection remain owner
 actions; they were not re-attempted in v1.12.
+
+## 9. Far-side analysis branch CI verification (2026-11-21)
+
+GitHub Actions run [44917565022](https://github.com/Hemansh2633B/Clps-lunar-mission/actions/runs/44917565022)
+verified commit `650bc97` on `arena/764accb8-clps-lunar-mission` after the
+far-side site catalogue, occultation/relay geometry, terrain-incidence, LOLA
+metadata and export changes. Results:
+
+- `Typecheck · build · unit · geometry · native backend · parity`: **passed**,
+  including `gofmt`, `go vet`, all Go tests, and TypeScript/Go horizon parity.
+- `Vercel build output (Go function executed locally)`: **passed**.
+- `Browser E2E (mission · terrain · space · onboarding · data hub)`: **passed**,
+  including the data-feature suite.
+- `Independent SPICE validation (fetched kernels)`: **skipped by the workflow
+  condition**, as expected for a push to a non-main feature branch. This run
+  does not count SPICE validation as passed.
 
