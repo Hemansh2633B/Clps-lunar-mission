@@ -1,34 +1,14 @@
 import * as A from 'astronomy-engine';
 import type { EphemerisSample, LandingSite, SkyPosition } from '../types/mission';
 import { AU_KM, MOON_RADIUS_KM, wrap180, wrap360 } from './constants';
+import type { V3 } from './vectors';
+import { add, dot, length, mul, norm, sub } from './vectors';
+import type { LocalFrame } from './vectors';
+import { bodyOccultation, earthAngularRadiusDeg, lunarLimb, sunAngularRadiusDeg } from './occultation';
+import type { BodyFrame, SiteGeometry } from '../types/geometry';
 
-type V3 = { x: number; y: number; z: number };
-
-const add = (a: V3, b: V3): V3 => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z });
-const sub = (a: V3, b: V3): V3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
-const mul = (a: V3, s: number): V3 => ({ x: a.x * s, y: a.y * s, z: a.z * s });
-const dot = (a: V3, b: V3): number => a.x * b.x + a.y * b.y + a.z * b.z;
-const cross = (a: V3, b: V3): V3 => ({
-  x: a.y * b.z - a.z * b.y,
-  y: a.z * b.x - a.x * b.z,
-  z: a.x * b.y - a.y * b.x,
-});
-const norm = (a: V3): V3 => {
-  const l = Math.hypot(a.x, a.y, a.z) || 1;
-  return mul(a, 1 / l);
-};
-
-export interface BodyFrame {
-  x: V3;
-  y: V3;
-  z: V3;
-}
-
-export interface LocalFrame {
-  east: V3;
-  north: V3;
-  up: V3;
-}
+export type { LocalFrame } from './vectors';
+export type { BodyFrame, SiteGeometry } from '../types/geometry';
 
 /** IAU 2015 Moon body-fixed frame expressed in J2000 mean equator (EQJ). */
 export function moonBodyFrame(time: A.AstroTime): BodyFrame {
@@ -36,11 +16,19 @@ export function moonBodyFrame(time: A.AstroTime): BodyFrame {
   const z = norm(axis.north);
   const node = norm({ x: -z.y, y: z.x, z: 0 });
   const w = (axis.spin * Math.PI) / 180;
-  const x = norm(add(mul(node, Math.cos(w)), mul(cross(z, node), Math.sin(w))));
-  const y = norm(cross(z, x));
+  const x = norm(add(mul(node, Math.cos(w)), mul(crossArr(z, node), Math.sin(w))));
+  const y = norm(crossArr(z, x));
   return { x, y, z };
 }
 
+function crossArr(a: V3, b: V3): V3 {
+  return { x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x };
+}
+
+/**
+ * Local east/north/up triad at a selenographic site, expressed in EQJ.
+ * Latitude is planetocentric and longitude east-positive (IAU 2015).
+ */
 export function localFrame(site: Pick<LandingSite, 'latitude' | 'longitude' | 'elevationM'>, frame: BodyFrame): LocalFrame {
   const lat = (site.latitude * Math.PI) / 180;
   const lon = (wrap360(site.longitude) * Math.PI) / 180;
@@ -59,7 +47,7 @@ function toSky(topocentric: V3, local: LocalFrame): SkyPosition {
   const north = dot(topocentric, local.north);
   const up = dot(topocentric, local.up);
   const horizontal = Math.hypot(east, north);
-  const distanceKm = Math.hypot(topocentric.x, topocentric.y, topocentric.z) * AU_KM;
+  const distanceKm = length(topocentric) * AU_KM;
   return {
     azimuthDeg: wrap360((Math.atan2(east, north) * 180) / Math.PI),
     elevationDeg: (Math.atan2(up, horizontal) * 180) / Math.PI,
@@ -90,13 +78,22 @@ function aberrate(direction: V3, beta: V3): V3 {
  * Sun: heliocentric Moon vector back-dated for light time, first-order aberration.
  * Earth: geocentric Moon vector (light-time corrected by astronomy-engine), geometric.
  * No atmospheric refraction is applied — the Moon has no appreciable atmosphere.
+ *
+ * The returned `geometry` block is additive: it makes lunar-body occultation
+ * explicit (see occultation.ts) instead of leaving it implicit in the sign of an
+ * elevation, and it carries the inertial vectors the relay model needs so that
+ * geometry is never recomputed from a different source.
  */
 export function computeEphemeris(site: LandingSite, timeMs: number): EphemerisSample {
+  if (!Number.isFinite(site.latitude) || site.latitude < -90 || site.latitude > 90) throw new RangeError('Site latitude must be finite and within −90°…90°.');
+  if (!Number.isFinite(site.longitude) || site.longitude < -180 || site.longitude > 360) throw new RangeError('Site longitude must be finite and within −180°…360° east-positive.');
+  if (!Number.isFinite(site.elevationM) || site.elevationM < -20_000 || site.elevationM > 100_000) throw new RangeError('Site elevation must be a finite lunar datum height in metres.');
+  if (!Number.isFinite(timeMs) || !Number.isFinite(new Date(timeMs).getTime())) throw new RangeError('Ephemeris epoch must be a valid UTC millisecond timestamp.');
   const time = new A.AstroTime(new Date(timeMs));
   const frame = moonBodyFrame(time);
   const local = localFrame(site, frame);
-  const radiusAU = (MOON_RADIUS_KM + site.elevationM / 1000) / AU_KM;
-  const observer = mul(local.up, radiusAU);
+  const observerRadiusKm = MOON_RADIUS_KM + site.elevationM / 1000;
+  const observer = mul(local.up, observerRadiusKm / AU_KM);
 
   const sunGeometric = mul(A.HelioVector(A.Body.Moon, time), -1);
   const sunLightCorrected = A.CorrectLightTravel((t) => {
@@ -110,8 +107,9 @@ export function computeEphemeris(site: LandingSite, timeMs: number): EphemerisSa
   const sunTopo = sub(mul(sunDirection, sunLightCorrected.Length()), observer);
   const sun = toSky(sunTopo, local);
 
-  const earthFromMoon = mul(A.GeoVector(A.Body.Moon, time, false), -1);
-  const earthTopo = sub(earthFromMoon, observer);
+  const moonGeo = A.GeoVector(A.Body.Moon, time, false);
+  const earthFromMoon = mul({ x: -moonGeo.x, y: -moonGeo.y, z: -moonGeo.z }, AU_KM);
+  const earthTopo = sub(mul(earthFromMoon, 1 / AU_KM), observer);
   const earth = toSky(earthTopo, local);
 
   // Sub-solar and sub-Earth points are SELENOCENTRIC: the body-fixed points where
@@ -123,6 +121,24 @@ export function computeEphemeris(site: LandingSite, timeMs: number): EphemerisSa
   const subsolar = bodyLatLon(toBody(sunDirection, frame));
   const subEarth = bodyLatLon(toBody(earthFromMoon, frame));
   const lib = A.Libration(time);
+
+  const limb = lunarLimb(observerRadiusKm);
+  const sunRadius = sunAngularRadiusDeg(sun.distanceKm);
+  const earthRadius = earthAngularRadiusDeg(earth.distanceKm);
+  const moonPositionEqjKm = mul({ x: moonGeo.x, y: moonGeo.y, z: moonGeo.z }, AU_KM);
+  const geometry: SiteGeometry = {
+    sitePositionEqjKm: add(moonPositionEqjKm, mul(local.up, observerRadiusKm)),
+    moonPositionEqjKm,
+    earthFromMoonEqjKm: earthFromMoon,
+    observerRadiusKm,
+    local,
+    bodyFrame: frame,
+    limb,
+    sunOccultation: bodyOccultation(limb, sun.elevationDeg, sunRadius),
+    earthOccultation: bodyOccultation(limb, earth.elevationDeg, earthRadius),
+    sunAngularRadiusDeg: sunRadius,
+    earthAngularRadiusDeg: earthRadius,
+  };
 
   return {
     timeMs,
@@ -136,5 +152,6 @@ export function computeEphemeris(site: LandingSite, timeMs: number): EphemerisSa
     },
     subsolarLatitudeDeg: subsolar.lat,
     subsolarLongitudeDeg: subsolar.lon,
+    geometry,
   };
 }

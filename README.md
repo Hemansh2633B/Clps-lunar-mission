@@ -9,14 +9,15 @@ CHANDRA is available as a hosted web application. You can access the live versio
 Open the website in your browser to explore the lunar mission planning and analysis features.
 Lunar mission planning and analysis workbench.
 
-CHANDRA evaluates candidate landing sites near the lunar south pole for a
-surface mission: when the Sun clears the local terrain, when Earth is
-geometrically visible, what a solar array generates, and whether the battery
-energy budget closes over a mission window — including the effect of a launch
-slip. It is a browser application (React + TypeScript) with a scientific
-engine that runs in a Web Worker, plus an optional native API (Go, standard
-library only) for working with real lunar elevation models and for checking
-the ephemeris against NASA/JPL Horizons.
+CHANDRA evaluates arbitrary selenographic landing coordinates across the lunar
+near side, far side and polar regions: where the Sun and Earth lie in the local
+frame, whether the Moon's body or local terrain blocks each direction, when
+illumination and geometric relay windows occur, what a solar array generates,
+and whether a battery energy budget closes over a UTC mission window. It is a
+browser application (React + TypeScript) with a scientific engine in a Web
+Worker, plus an optional native API (Go, standard library only) for validated
+lunar elevation models, bounded LOLA/PDS subset acquisition and independent
+NASA/JPL Horizons checks.
 
 The project started as a NASA Space Apps Challenge concept and has since been
 rebuilt as an analysis tool with explicit data provenance. It is not a NASA
@@ -25,27 +26,40 @@ what the underlying data supports: illustrative terrain, synthetic demo
 terrain, and frame-verified DEMs are distinct confidence tiers, and analyses
 that fail validation are blocked rather than quietly degraded.
 
+**Far-side scope note:** far-side sites and their Sun/Earth/relay geometry are
+available, but no validated global far-side DEM is bundled or enabled by
+default. Far-side terrain therefore remains clearly labelled illustrative until
+a deployment configures and validates a provider product. See [known issues](docs/known-issues.md)
+and the [API/data contract](docs/api.md).
+
 ![CHANDRA workspace](screenshots/01-workspace.png)
 
 ## What it does
 
-- **Candidate sites** — a curated catalogue of polar CLPS/Artemis candidate
-  regions (approximate region centers with source and uncertainty, not
-  surveyed landing points), historical benchmarks (Apollo 11, Chang'e 4), and
-  custom sites from coordinates or editable horizon masks.
-- **Sun and Earth geometry** — topocentric directions from astronomy-engine
-  with the IAU 2015 Moon body-fixed rotation; optical libration emerges from
-  the time-varying frame. Validated against independent SPICE computations.
-- **Local horizon analysis** — 360° terrain masks occlude Sun and Earth;
-  visibility transitions are refined by bisection below the sample grid.
+- **Candidate sites** — a curated, extensible catalogue of polar CLPS/Artemis
+  regions, near-side references and named far-side regions (Von Kármán crater,
+  Apollo basin, Hertzsprung basin, SPA interior, Tsiolkovskiy). Region centres
+  carry coordinate uncertainty and are never represented as surveyed points;
+  arbitrary custom latitude / east-longitude coordinates remain supported.
+- **Sun and Earth geometry** — topocentric azimuth/elevation from
+  astronomy-engine with the IAU-era Moon body-fixed rotation. Visibility
+  separates the horizontal plane, the spherical lunar-body limb (curvature dip,
+  finite apparent Sun/Earth disks) and the local terrain horizon. Far-side Earth
+  rays are body-occulted, not labelled as direct communication.
+- **Illumination and incidence** — 360° terrain masks are integrated into
+  sunrise/sunset and illumination intervals; a validated DEM grid can supply
+  local Horn 3×3 slope/aspect for a separately labelled surface-incidence
+  estimate. Missing slope/coverage remains unavailable, not zero.
 - **Terrain import** — load real lunar DEMs (GeoTIFF) through the native API,
   inspect them in 3D, ray-march a horizon mask, and import it into the planner
   with samples preserved verbatim. Frame validation is an explicit allowlist;
   unknown frames are blocked from quantitative use.
-- **LOLA terrain acquisition** — fetch a regional subset of a NASA PGDA LOLA
-  polar DEM from the Terrain Lab. The API reads only the blocks it needs by
-  HTTP range requests, shows the size before downloading, keeps the source
-  samples unchanged, and records the product, pixel window and checksum.
+- **Terrain acquisition** — the built-in NASA PGDA LOLA products are
+  south-polar-only; the Go API reads bounded HTTP ranges and validates the
+  raster footprint, CRS/frame, datum, units and NoData. Deployment operators
+  can add verified range-readable NASA/PDS COGs through a strict allowlisted
+  product manifest. No global/far-side product is bundled by default, and
+  out-of-footprint requests never silently substitute another DEM.
 - **Polar map with live imagery** — the south-pole map is drawn in the Moon
   2000 polar stereographic projection (0° meridian up, 90°E right) and can
   overlay NASA Moon Trek and LROC imagery on the bundled LROC mosaic. Imagery
@@ -65,9 +79,13 @@ that fail validation are blocked rather than quietly degraded.
 - **Power and battery** — cosine-incidence solar generation (horizontal deck
   or vertical mast), event-aware adaptive-Simpson energy integration with
   charge/discharge efficiencies and SOC limits.
-- **Communication visibility** — geometric Earth line-of-sight with a
-  configurable margin. This is not an RF link budget.
+- **Communication visibility** — direct Earth body occultation and local
+  terrain obstruction are independent; configurable relay states compute
+  site→relay and relay→Earth geometric legs separately. Relay visibility is not
+  RF connectivity: no link budget or antenna model is claimed.
 - **Scenario comparison** — pin up to four site/date/configuration scenarios;
+  compare illumination, Earth obstruction, relay geometry, local slope,
+  resolution and provenance. Unknown values stay explicitly unavailable;
   ranking never mixes data-confidence tiers.
 - **Reproducible exports** — JSON mission report and five CSVs (summary,
   telemetry, energy history, visibility events, horizon mask). Every file
@@ -82,7 +100,7 @@ that fail validation are blocked rather than quietly degraded.
 
 A typical CHANDRA session follows these steps:
 
-1. **Select a landing site:** Choose a candidate lunar south-pole region or define a custom site using coordinates.
+1. **Select a landing site:** Choose a near-side, far-side or polar region candidate, or define an arbitrary custom latitude / east-longitude coordinate.
 2. **Configure the mission:** Set the mission start time in UTC, mission duration, and launch slip.
 3. **Analyze illumination:** Examine sunlight availability and local terrain obstruction at the selected landing site.
 4. **Check Earth visibility:** Review geometric Earth visibility during the selected mission window.

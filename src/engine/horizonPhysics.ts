@@ -50,24 +50,41 @@ export function terrainElevationAt(profile: TerrainProfile, azimuthDeg: number):
   return profile.elevations[i0] * (1 - f) + profile.elevations[i1] * f;
 }
 
+/**
+ * Local visibility of a body: terrain obstruction and optional curvature floor.
+ *
+ * @param limbFloorDeg Elevation of the mean lunar limb in this azimuth (≤ 0).
+ *   The obstruction used is max(terrain horizon, limb floor). The default is
+ *   −Infinity so that callers that only know a terrain mask (and predate the
+ *   occultation model) keep their original, terrain-only semantics. The mission
+ *   engine always passes the computed limb floor.
+ */
 export function visibilityFor(
   body: BodyKind,
   elevationDeg: number,
   azimuthDeg: number,
   profile: TerrainProfile,
   commsMarginDeg = 0,
+  limbFloorDeg = Number.NEGATIVE_INFINITY,
 ): VisibilityState {
   const terrainElevationDeg = terrainElevationAt(profile, azimuthDeg);
-  const clearanceDeg = elevationDeg - terrainElevationDeg;
+  const finiteLimb = Number.isFinite(limbFloorDeg) ? limbFloorDeg : null;
+  const obstructionElevationDeg = finiteLimb === null ? terrainElevationDeg : Math.max(terrainElevationDeg, finiteLimb);
+  const clearanceDeg = elevationDeg - obstructionElevationDeg;
   const margin = body === 'earth' ? commsMarginDeg : 0;
   const geometricVisible = elevationDeg >= 0;
   const visible = clearanceDeg >= margin;
+  const limbBlocks = finiteLimb !== null && finiteLimb > terrainElevationDeg && elevationDeg < finiteLimb;
+  const marginBlocks = !visible && clearanceDeg >= 0 && margin > 0 && geometricVisible;
+  const terrainBlocks = elevationDeg < terrainElevationDeg;
   return {
     visible,
     geometricVisible,
     clearanceDeg,
     terrainElevationDeg,
-    reason: visible ? 'clear' : geometricVisible ? 'terrain' : 'below-horizon',
+    reason: visible ? 'clear' : marginBlocks ? 'margin' : limbBlocks ? 'lunar-limb' : geometricVisible ? 'terrain' : 'below-horizon',
+    ...(finiteLimb === null ? {} : { limbElevationDeg: finiteLimb, obstructionElevationDeg }),
+    obstructionSource: visible ? 'none' : marginBlocks ? 'margin' : limbBlocks ? 'lunar-limb' : terrainBlocks ? 'terrain' : 'none',
   };
 }
 
@@ -112,8 +129,9 @@ export function refineCrossing(
 ): number {
   const stateAt = (t: number) => {
     const s = computeEphemeris(site, t);
-    const sun = visibilityFor('sun', s.sun.elevationDeg, s.sun.azimuthDeg, site.terrain);
-    const earth = visibilityFor('earth', s.earth.elevationDeg, s.earth.azimuthDeg, site.terrain, config.commsMarginDeg);
+    const limb = s.geometry.limb.limbElevationDeg;
+    const sun = visibilityFor('sun', s.sun.elevationDeg, s.sun.azimuthDeg, site.terrain, 0, limb);
+    const earth = visibilityFor('earth', s.earth.elevationDeg, s.earth.azimuthDeg, site.terrain, config.commsMarginDeg, limb);
     if (body === 'sun') return sun.visible;
     if (body === 'earth') return earth.visible;
     return sun.visible && earth.visible;
@@ -139,8 +157,13 @@ function clearanceOf(sample: EvaluatedSample, body: BodyKind | 'combined', comms
 
 function clearanceAt(site: LandingSite, config: MissionConfig, t: number, body: BodyKind | 'combined'): number {
   const s = computeEphemeris(site, t);
-  const sun = s.sun.elevationDeg - terrainElevationAt(site.terrain, s.sun.azimuthDeg);
-  const earth = s.earth.elevationDeg - terrainElevationAt(site.terrain, s.earth.azimuthDeg) - config.commsMarginDeg;
+  // Same obstruction definition as evaluateAt/visibilityFor: the larger of the
+  // terrain horizon and the mean lunar limb (curvature dip).
+  const limb = s.geometry.limb.limbElevationDeg;
+  const sunObstruction = Math.max(terrainElevationAt(site.terrain, s.sun.azimuthDeg), limb);
+  const earthObstruction = Math.max(terrainElevationAt(site.terrain, s.earth.azimuthDeg), limb);
+  const sun = s.sun.elevationDeg - sunObstruction;
+  const earth = s.earth.elevationDeg - earthObstruction - config.commsMarginDeg;
   if (body === 'sun') return sun;
   if (body === 'earth') return earth;
   return Math.min(sun, earth);
@@ -323,4 +346,37 @@ export function findNextTransition(
   const future = dedupEvents(det.events).filter((e) => e.timeMs > fromMs).sort((a, b) => a.timeMs - b.timeMs);
   if (future.length === 0) return null;
   return { timeMs: future[0].timeMs, visible: future[0].visible };
+}
+
+/**
+ * Next sunrise and sunset (Sun clears/blocks the combined terrain + lunar-limb
+ * obstruction) after `fromMs`.
+ *
+ * Deliberately cheaper than re-running the full 40-day detector twice: the scan
+ * advances in 2-hour steps, stops as soon as both directions are found, refines
+ * each crossing with the same bisection used everywhere else, and reports null
+ * when nothing happens inside `maxDays`. It is a *display* quantity (countdown);
+ * window statistics remain driven by the refined event list.
+ */
+export function findNextSunCrossings(
+  site: LandingSite, config: MissionConfig, fromMs: number, maxDays = 35,
+): { nextSunriseMs: number | null; nextSunsetMs: number | null } {
+  const stepMs = 2 * HOUR_MS;
+  const endMs = fromMs + maxDays * 24 * HOUR_MS;
+  let sunrise: number | null = null;
+  let sunset: number | null = null;
+  let prevT = fromMs;
+  let prevVisible = clearanceAt(site, config, fromMs, 'sun') >= 0;
+  for (let t = fromMs + stepMs; t <= endMs; t += stepMs) {
+    const visible = clearanceAt(site, config, t, 'sun') >= 0;
+    if (visible !== prevVisible) {
+      const crossing = refineCrossing(site, config, prevT, t, 'sun', visible);
+      if (visible && sunrise === null) sunrise = crossing;
+      if (!visible && sunset === null) sunset = crossing;
+      if (sunrise !== null && sunset !== null) break;
+    }
+    prevT = t;
+    prevVisible = visible;
+  }
+  return { nextSunriseMs: sunrise, nextSunsetMs: sunset };
 }

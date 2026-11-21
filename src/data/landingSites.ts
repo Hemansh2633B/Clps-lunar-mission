@@ -4,6 +4,7 @@ import { buildTerrainProfile, flatProfile } from '../engine/horizonPhysics';
 import { terrainProfileFromHorizon } from '../terrain/missionProfile';
 import { classifyFrame, convertSite } from '../engine/lunarFrame';
 import { wrap360 } from '../engine/constants';
+import { BUILT_IN_REGIONS, sideOfCoordinates, type RegionEntry } from './lunarRegions';
 
 interface SiteSeed {
   id: string;
@@ -28,6 +29,8 @@ interface SiteSeed {
   sourceUrl?: string;
   sourceDate?: string;
   dataConfidence?: LandingSite['dataConfidence'];
+  elevationAvailable?: boolean;
+  regionType?: string;
 }
 
 // Authoritative source for the nine Artemis III candidate regions (Oct 2024 LEAG
@@ -297,6 +300,47 @@ const referenceSeeds: (SiteSeed & { terrain?: TerrainProfile })[] = [
   },
 ];
 
+/**
+ * Far-side candidate regions.
+ *
+ * Built from the region catalogue, not from code: every entry that is marked a
+ * candidate and lies beyond the limb becomes a far-side site. Terrain here is an
+ * illustrative horizon (clearly labelled) because this build ships no far-side
+ * DEM; acquiring one is a Terrain Lab action with explicit coverage checks. The
+ * geometry (Sun, Earth occultation, relay) is coordinate-based and does not
+ * depend on terrain being measured.
+ */
+const farSideSeeds: SiteSeed[] = BUILT_IN_REGIONS
+  .filter((r) => r.candidate && sideOfCoordinates(r.latitudeDeg, r.longitudeDeg) === 'far')
+  .map((r, i) => ({
+    id: r.id,
+    name: r.name,
+    shortName: r.shortName,
+    latitude: r.latitudeDeg,
+    longitude: wrap360(r.longitudeDeg),
+    elevationM: r.elevationM ?? 0,
+    region: `${r.kind === 'basin' ? 'Basin' : r.kind === 'crater' ? 'Crater' : 'Highland'} · far side`,
+    description: r.description,
+    accent: ['#4a3b57', '#5b4a2f', '#2f4a5b', '#3f5b4a'][i % 4],
+    base: -0.05,
+    seed: 53 + i * 7,
+    // Illustrative relief only: a low rim segment and a saddle. It is NOT a DEM.
+    features: [
+      { name: 'Illustrative rim', azimuthDeg: 120 + (i * 37) % 240, elevationDeg: 2.4, widthDeg: 58, kind: 'rim' },
+      { name: 'Illustrative low saddle', azimuthDeg: 20 + (i * 53) % 300, elevationDeg: 0.35, widthDeg: 62, kind: 'saddle' },
+    ],
+    program: r.program,
+    coordinateType: 'region-center',
+    coordinateProvenance: `${r.coordinateProvenance} (${r.name}, ${r.latitudeDeg.toFixed(1)}°, ${wrap360(r.longitudeDeg).toFixed(1)}°E)`,
+    coordinateUncertaintyDeg: r.coordinateUncertaintyDeg,
+    elevationProvenance: r.elevationM === null
+      ? 'No authoritative elevation is bundled for this region centre; 0 m is a disclosed datum placeholder and the elevation is reported as unavailable. Not a measurement.'
+      : 'Published approximate elevation; horizon is illustrative.',
+    sourceUrl: r.sourceUrl,
+    sourceDate: r.sourceDate,
+    dataConfidence: 'illustrative',
+  }));
+
 // Per-site provenance. Artemis III regions use approximate region centers (NASA
 // publishes ~15 km regions, not precise points). Historical polar candidates are
 // illustrative. Apollo/Chang'e coordinates are published landing points, but their
@@ -323,25 +367,84 @@ function makeSite(seed: SiteSeed, category: LandingSite['category']): LandingSit
   const terrain = category === 'reference'
     ? flatProfile('Idealized mare / basin horizon')
     : buildTerrainProfile('LOLA-inspired illustrative mask', seed.features, seed.base ?? -0.08, seed.seed ?? 1, 'illustrative', 0.75);
+  const longitude = wrap360(seed.longitude);
   return {
     id: seed.id,
     name: seed.name,
     shortName: seed.shortName,
     latitude: seed.latitude,
-    longitude: wrap360(seed.longitude),
+    longitude,
     elevationM: seed.elevationM,
     category,
     region: seed.region,
     description: seed.description,
     terrain,
     accent: seed.accent,
+    side: sideOfCoordinates(seed.latitude, longitude),
     ...SITE_PROVENANCE[seed.id],
   };
 }
 
 export const POLAR_SITES: LandingSite[] = polarSeeds.map((s) => makeSite(s, 'polar'));
 export const REFERENCE_SITES: LandingSite[] = referenceSeeds.map((s) => makeSite(s, 'reference'));
-export const LANDING_SITES: LandingSite[] = [...POLAR_SITES, ...REFERENCE_SITES];
+export const FAR_SIDE_SITES: LandingSite[] = farSideSeeds.map((s) => {
+  const site = makeSite(s, 'far-side');
+  // The elevation for these region centres is not known in this build: 0 m is a
+  // disclosed placeholder, never presented as a measured value.
+  return {
+    ...site,
+    elevationAvailable: s.elevationProvenance?.startsWith('No authoritative elevation') ? false : true,
+    regionType: s.region,
+    program: s.program,
+    coordinateType: s.coordinateType,
+    coordinateProvenance: s.coordinateProvenance,
+    coordinateUncertaintyDeg: s.coordinateUncertaintyDeg,
+    elevationProvenance: s.elevationProvenance,
+    sourceUrl: s.sourceUrl,
+    sourceDate: s.sourceDate,
+    dataConfidence: s.dataConfidence,
+  };
+});
+export const LANDING_SITES: LandingSite[] = [...POLAR_SITES, ...REFERENCE_SITES, ...FAR_SIDE_SITES];
+
+/**
+ * Build a candidate site from a region-catalogue entry (built-in or registered
+ * at runtime). This is what makes the database extensible: a new region needs no
+ * code change, and its provenance/uncertainty travel with it.
+ */
+export function siteFromRegion(region: RegionEntry): LandingSite {
+  const longitude = wrap360(region.longitudeDeg);
+  const side = sideOfCoordinates(region.latitudeDeg, longitude);
+  const terrain = region.elevationM === null
+    ? buildTerrainProfile('Illustrative horizon (no bundled DEM)', [], -0.05, 61, 'illustrative', 0.75)
+    : buildTerrainProfile('LOLA-inspired illustrative mask', [], -0.05, 61, 'illustrative', 0.75);
+  return {
+    id: region.id,
+    name: region.name,
+    shortName: region.shortName,
+    latitude: region.latitudeDeg,
+    longitude,
+    elevationM: region.elevationM ?? 0,
+    elevationAvailable: region.elevationM !== null,
+    category: Math.abs(region.latitudeDeg) >= 80 ? 'polar' : side === 'far' ? 'far-side' : 'reference',
+    side,
+    regionType: region.kind,
+    region: `${region.kind} · ${side === 'far' ? 'far side' : side === 'limb' ? 'limb band' : 'near side'}`,
+    description: region.description,
+    terrain,
+    accent: '#4a3b57',
+    program: region.program,
+    coordinateType: 'region-center',
+    coordinateProvenance: region.coordinateProvenance,
+    coordinateUncertaintyDeg: region.coordinateUncertaintyDeg,
+    elevationProvenance: region.elevationM === null
+      ? 'No authoritative elevation is bundled for this region; 0 m is a disclosed datum placeholder, not a measurement.'
+      : 'Published approximate elevation; horizon is illustrative.',
+    sourceUrl: region.sourceUrl,
+    sourceDate: region.sourceDate,
+    dataConfidence: 'illustrative',
+  };
+}
 
 export function siteById(id: string): LandingSite | undefined {
   return LANDING_SITES.find((s) => s.id === id);
@@ -415,11 +518,28 @@ export function makeCustomSite(input: {
   terrainLabel?: string;
   sourceFrame?: string;
   horizon?: HorizonMask;
+  /** Measured/derived local slope (from the same DEM as the horizon), if available. */
+  slope?: { slopeDeg: number; aspectDeg: number; spacingM?: number; provenance?: string };
 }): LandingSite {
+  if (!Number.isFinite(input.latitude) || input.latitude < -90 || input.latitude > 90) throw new RangeError('Latitude must be finite and within −90°…90° (planetocentric).');
+  if (!Number.isFinite(input.longitude) || input.longitude < -180 || input.longitude > 360) throw new RangeError('Longitude must be finite and within −180°…360° east-positive.');
+  if (!Number.isFinite(input.elevationM) || input.elevationM < -20_000 || input.elevationM > 100_000) throw new RangeError('Elevation must be finite and within −20,000…100,000 m relative to the lunar reference sphere.');
   const terrain = input.horizon ? terrainProfileFromHorizon(input.horizon) : customTerrain(input.preset, input.sectors);
   if (input.terrainLabel) terrain.label = input.terrainLabel;
   if (input.sourceFrame) terrain.sourceFrame = input.sourceFrame;
   if (!input.horizon && input.terrainLabel) terrain.uncertaintyDeg = 1.5;
+  // Slope travels with the terrain it came from and is never inferred for an
+  // illustrative/custom mask: without a measured grid the field stays absent.
+  if (input.slope && Number.isFinite(input.slope.slopeDeg) && Number.isFinite(input.slope.aspectDeg)) {
+    terrain.slopeDeg = input.slope.slopeDeg;
+    // The Horn aspect is measured clockwise from north in the DEM's declared
+    // frame. The DEM horizon and coordinates are both rotated into IAU 2015 by
+    // `terrainProfileFromHorizon`; apply the identical offset to the downslope
+    // azimuth so the normal and ephemeris Sun vector share a frame.
+    terrain.aspectDeg = wrap360(input.slope.aspectDeg + (terrain.azimuthOffsetDeg ?? 0));
+    if (input.slope.spacingM != null) terrain.slopeSpacingM = input.slope.spacingM;
+    terrain.slopeProvenance = input.slope.provenance ?? 'Local slope from the same gridded elevation model as the horizon (Horn 3×3).';
+  }
 
   // Convert site coordinates from the DEM source frame into the IAU 2015 ephemeris
   // frame (recognized frames only) and record the provenance of any shift. The
@@ -452,7 +572,8 @@ export function makeCustomSite(input: {
     latitude,
     longitude,
     elevationM: input.elevationM,
-    category: Math.abs(input.latitude) >= 80 ? 'polar' : 'reference',
+    category: Math.abs(input.latitude) >= 80 ? 'polar' : sideOfCoordinates(input.latitude, input.longitude) === 'far' ? 'far-side' : 'reference',
+    side: sideOfCoordinates(input.latitude, input.longitude),
     region: 'User-defined coordinates',
     description: input.horizon ? demDescription : input.terrainLabel
       ? 'Synthesized from a Terrain Lab horizon. Verify source frame and coverage before operational use.'

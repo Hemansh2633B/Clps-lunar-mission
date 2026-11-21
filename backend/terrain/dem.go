@@ -162,7 +162,7 @@ func Inspect(f *geotiff.File, options map[string]any, name string) (*DEM, error)
 		Synthetic: f.Tags["LUNAR_SIM_SOURCE"] == "SYNTHETIC",
 	}
 	prov := map[string]any{}
-	for _, key := range []string{"subset_provenance", "source_url", "product_page", "product_id", "product_version", "source_checksum"} {
+	for _, key := range []string{"subset_provenance", "source_url", "product_page", "product_id", "product_version", "source_checksum", "provider", "coverage_note", "nominal_resolution_m"} {
 		if v, ok := options[key]; ok && v != nil {
 			prov[key] = v
 		}

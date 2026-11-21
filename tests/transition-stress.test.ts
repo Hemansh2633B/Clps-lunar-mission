@@ -19,8 +19,9 @@ const START = Date.parse('2026-09-01T00:00:00Z');
 
 function clearance(site: LandingSite, t: number, body: 'sun' | 'earth' | 'combined', margin: number): number {
   const eph = computeEphemeris(site, t);
-  const sun = eph.sun.elevationDeg - terrainElevationAt(site.terrain, eph.sun.azimuthDeg);
-  const earth = eph.earth.elevationDeg - terrainElevationAt(site.terrain, eph.earth.azimuthDeg) - margin;
+  const limb = eph.geometry.limb.limbElevationDeg;
+  const sun = eph.sun.elevationDeg - Math.max(terrainElevationAt(site.terrain, eph.sun.azimuthDeg), limb);
+  const earth = eph.earth.elevationDeg - Math.max(terrainElevationAt(site.terrain, eph.earth.azimuthDeg), limb) - margin;
   return body === 'sun' ? sun : body === 'earth' ? earth : Math.min(sun, earth);
 }
 

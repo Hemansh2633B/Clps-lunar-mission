@@ -2,6 +2,15 @@ export const HOUR_MS = 3_600_000;
 export const DAY_MS = 86_400_000;
 export const SYNODIC_DAYS = 29.530588853;
 export const MOON_RADIUS_KM = 1737.4;
+/** Volumetric mean radius, used only for the Moon→Earth limb geometry (not for terrain). */
+export const EARTH_RADIUS_KM = 6371.0;
+/** IAU 2015 nominal solar radius; used for the Sun's angular radius at the Moon. */
+export const SUN_RADIUS_KM = 695_700;
+/** Lunar gravitational parameter, km³/s² (NASA/JPL DE440 value). */
+export const MOON_MU_KM3_S2 = 4902.800;
+/** Earth + Moon gravitational parameters and mean Earth–Moon distance for the L2 geometry. */
+export const EARTH_MU_KM3_S2 = 398_600.4418;
+export const MOON_MASS_RATIO = 0.0123000371;
 export const SOLAR_CONSTANT_WM2 = 1361;
 export const AU_KM = 149_597_870.7;
 export const LIGHT_SPEED_KMS = 299_792.458;

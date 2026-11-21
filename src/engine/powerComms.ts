@@ -1,4 +1,6 @@
-import type { EvaluatedSample, LandingSite, MissionConfig, MissionSummary, PowerState, SamplingInfo, ScoreBreakdown, TransitionEvent, VisibilityState } from '../types/mission';
+import type { EvaluatedSample, LandingSite, MissionConfig, MissionSummary, PowerState, RelaySummary, SamplingInfo, ScoreBreakdown, TransitionEvent, VisibilityState, VisibilityWindow } from '../types/mission';
+import { RELAY_DISCLAIMER } from './relay';
+import { findNextSunCrossings } from './horizonPhysics';
 import type { EnergyIntegrationResult } from './integration';
 import { AU_KM, HOUR_MS, SOLAR_CONSTANT_WM2, clamp, wrap180 } from './constants';
 
@@ -13,9 +15,12 @@ export function computePower(
   distanceKm: number,
   sunVisibility: VisibilityState,
   config: MissionConfig,
+  /** cos(incidence) on the local terrain slope; omitted when no slope is known. */
+  terrainCosIncidence?: number,
 ): PowerState {
   const fluxWm2 = solarFlux(distanceKm);
   const area = config.arrayAreaM2 * config.cellEfficiency * config.systemDerate;
+  const facet = terrainCosIncidence == null ? undefined : fluxWm2 * area * Math.max(0, Math.min(1, terrainCosIncidence));
   // Visibility is terrain-relative: a Sun slightly below the reference tangent
   // can still illuminate a site whose local DEM horizon is lower. Horizontal
   // decks receive nothing at negative elevation; vertical masts can still track.
@@ -28,6 +33,7 @@ export function computePower(
       selectedW: 0,
       horizontalIncidence: 0,
       verticalIncidence: 0,
+      ...(facet === undefined ? {} : { terrainSurfaceW: 0 }),
     };
   }
   const el = (elevationDeg * Math.PI) / 180;
@@ -50,6 +56,7 @@ export function computePower(
     selectedW,
     horizontalIncidence,
     verticalIncidence: config.arrayMode === 'vertical-fixed' ? verticalFixedIncidence : verticalTrackingIncidence,
+    ...(facet === undefined ? {} : { terrainSurfaceW: facet }),
   };
 }
 
@@ -155,6 +162,89 @@ function visibleHoursFromEvents(
   return totalMs / HOUR_MS;
 }
 
+/** Visibility windows (contiguous intervals) derived from the refined events. */
+function visibilityWindows(
+  samples: EvaluatedSample[], events: TransitionEvent[], body: 'sun' | 'earth' | 'combined',
+  startMs: number, endMs: number, cap = 200,
+): VisibilityWindow[] {
+  if (samples.length === 0 || endMs <= startMs) return [];
+  const stateAt = (s: EvaluatedSample) => body === 'sun' ? s.sunVisibility.visible : body === 'earth' ? s.earthVisibility.visible : s.viable;
+  let visible = stateAt(samples[0]);
+  let cursor = startMs;
+  const out: VisibilityWindow[] = [];
+  const relevant = events.filter((e) => e.body === body).sort((a, b) => a.timeMs - b.timeMs);
+  for (const e of relevant) {
+    const t = clamp(e.timeMs, startMs, endMs);
+    if (t <= cursor) { visible = e.visible; continue; }
+    if (visible) out.push({ startMs: cursor, endMs: t });
+    visible = e.visible;
+    cursor = t;
+  }
+  if (visible) out.push({ startMs: cursor, endMs });
+  return out.length > cap ? out.slice(0, cap) : out;
+}
+
+/** Time-weighted fraction (%) with a predicate, using sample midpoints. */
+function timeWeightedPct(samples: EvaluatedSample[], startMs: number, endMs: number, pick: (s: EvaluatedSample) => boolean): number {
+  const span = endMs - startMs;
+  if (samples.length === 0 || span <= 0) return 0;
+  let acc = 0;
+  for (let i = 1; i < samples.length; i++) {
+    const dt = samples[i].timeMs - samples[i - 1].timeMs;
+    if (dt <= 0) continue;
+    const a = pick(samples[i - 1]);
+    const b = pick(samples[i]);
+    acc += dt * ((a ? 1 : 0) + (b ? 1 : 0)) / 2;
+  }
+  return clamp((acc / span) * 100, 0, 100);
+}
+
+/** Longest contiguous interval (hours) where the predicate is false. */
+function longestFalseHours(samples: EvaluatedSample[], startMs: number, endMs: number, pick: (s: EvaluatedSample) => boolean): number {
+  if (samples.length === 0) return 0;
+  let longest = 0;
+  let gapStart: number | null = pick(samples[0]) ? null : startMs;
+  let prevTrue = pick(samples[0]);
+  for (let i = 1; i < samples.length; i++) {
+    const now = pick(samples[i]);
+    if (prevTrue && !now) gapStart = samples[i - 1].timeMs;
+    if (!prevTrue && now && gapStart != null) {
+      longest = Math.max(longest, (samples[i - 1].timeMs - gapStart) / HOUR_MS);
+      gapStart = null;
+    }
+    prevTrue = now;
+  }
+  if (gapStart != null) longest = Math.max(longest, (endMs - gapStart) / HOUR_MS);
+  return longest;
+}
+
+/** Two-hop relay summary, or null when no relay is configured in this window. */
+function relaySummary(samples: EvaluatedSample[], startMs: number, endMs: number): RelaySummary | null {
+  const withRelay = samples.filter((s) => s.relay);
+  if (withRelay.length === 0) return null;
+  const first = withRelay[0].relay!;
+  let windows = 0;
+  let prev = false;
+  for (const s of withRelay) {
+    const up = !!s.relay?.linkUp;
+    if (up && !prev) windows++;
+    prev = up;
+  }
+  const meanElevationDeg = withRelay.reduce((a, s) => a + (s.relay?.elevationDeg ?? 0), 0) / withRelay.length;
+  return {
+    id: first.id,
+    name: first.name,
+    model: first.model,
+    linkPct: timeWeightedPct(samples, startMs, endMs, (s) => !!s.relay?.linkUp),
+    longestOutageHours: longestFalseHours(samples, startMs, endMs, (s) => !!s.relay?.linkUp),
+    windowCount: windows,
+    siteLimbBlockedPct: timeWeightedPct(samples, startMs, endMs, (s) => !!s.relay && !s.relay.siteBodyClear),
+    earthLimbBlockedPct: timeWeightedPct(samples, startMs, endMs, (s) => !!s.relay && !s.relay.earthClear),
+    meanElevationDeg,
+    note: RELAY_DISCLAIMER,
+  };
+}
+
 function pctFromHours(hours: number, durationHours: number): number {
   return durationHours > 0 ? clamp((hours / durationHours) * 100, 0, 100) : 0;
 }
@@ -211,6 +301,31 @@ export function summarizeMission(
   );
   const dataConfidence = site ? terrainDataConfidence(site) : 'illustrative';
   const frameVerified = site ? (site.terrain.kind === 'dem' ? (site.terrain.frameVerified ?? false) : true) : true;
+  const windows = {
+    sun: visibilityWindows(samples, events, 'sun', startMs, endMs),
+    earth: visibilityWindows(samples, events, 'earth', startMs, endMs),
+    relay: relayWindowsFromSamples(samples, endMs),
+  };
+  const sunlitHours = visibleHoursFromEvents(samples, events, 'sun', startMs, endMs);
+  const nextSun = nextSunCrossingsInWindow(site, config, events, startMs, endMs);
+  const relay = relaySummary(samples, startMs, endMs);
+  const earthOccludedPct = timeWeightedPct(samples, startMs, endMs, (s) => s.earthVisibility.bodyOccultation === 'occulted' || s.earthVisibility.bodyOccultation === 'partial');
+  const earthTerrainBlockedPct = timeWeightedPct(samples, startMs, endMs, (s) =>
+    s.earthVisibility.obstructionSource === 'terrain'
+    || (s.earthVisibility.obstructionSource == null && (s.earthVisibility.bodyOccultation ?? 'clear') === 'clear' && !s.earthVisibility.visible),
+  );
+  const incidenceValues = samples.map((s) => s.incidence).filter((v): v is NonNullable<typeof v> => !!v);
+  const meanSolarIncidenceDeg = incidenceValues.length > 0
+    ? incidenceValues.reduce((a, v) => a + v.incidenceDeg, 0) / incidenceValues.length
+    : null;
+  const relayVerdict = relay
+    ? relay.linkPct >= 80
+      ? `Relay geometry closes both legs for ${relay.linkPct.toFixed(0)}% of the window (${relay.windowCount} window(s)). Geometric LOS only — not an RF link budget.`
+      : relay.linkPct > 0
+        ? `Relay geometry closes both legs for only ${relay.linkPct.toFixed(0)}% of the window, with a longest outage of ${relay.longestOutageHours.toFixed(1)} h. Geometric LOS only.`
+        : 'The configured relay never closes both geometric legs in this window: either the site or the relay cannot see the other side of the link. Geometric LOS only.'
+    : null;
+
   const scoreBreakdown: ScoreBreakdown = {
     heuristic: true,
     weightsSum: W.combined + W.illumination + W.earth + W.energy,
@@ -283,5 +398,59 @@ export function summarizeMission(
     dataConfidence,
     frameVerified,
     integrationDiagnostics: integration?.diagnostics,
+    sunlitHours,
+    darkHours: Math.max(0, durationHours - sunlitHours),
+    longestIlluminationHours: longestVisibleHours(samples, events, 'sun', startMs, endMs),
+    nextSunriseMs: nextSun.nextSunriseMs,
+    nextSunsetMs: nextSun.nextSunsetMs,
+    windows,
+    earthOccludedPct,
+    earthTerrainBlockedPct,
+    meanSolarIncidenceDeg,
+    relay,
+    relayVerdict,
+  };
+}
+
+/** Relay link windows straight from the samples (relay transitions are not in `events`). */
+function relayWindowsFromSamples(samples: EvaluatedSample[], endMs: number, cap = 200): VisibilityWindow[] {
+  const out: VisibilityWindow[] = [];
+  let start: number | null = null;
+  for (const s of samples) {
+    const up = !!s.relay?.linkUp;
+    if (up && start == null) start = s.timeMs;
+    if (!up && start != null) { out.push({ startMs: start, endMs: s.timeMs }); start = null; }
+  }
+  if (start != null) out.push({ startMs: start, endMs });
+  return out.length > cap ? out.slice(-cap) : out;
+}
+
+/** Longest contiguous visible interval (hours) for a body/combined state. */
+function longestVisibleHours(
+  samples: EvaluatedSample[], events: TransitionEvent[], body: 'sun' | 'earth' | 'combined', startMs: number, endMs: number,
+): number {
+  const windows = visibilityWindows(samples, events, body, startMs, endMs, 10_000);
+  return windows.reduce((best, w) => Math.max(best, (w.endMs - w.startMs) / HOUR_MS), 0);
+}
+
+/**
+ * Next sunrise/sunset after the window start. Crossings inside the window come
+ * straight from the refined event list (zero extra ephemeris work); only when a
+ * direction is missing is a targeted forward scan run — once, for both.
+ */
+function nextSunCrossingsInWindow(
+  site: LandingSite | undefined, config: MissionConfig, events: TransitionEvent[], startMs: number, endMs: number,
+): { nextSunriseMs: number | null; nextSunsetMs: number | null } {
+  const inside = events
+    .filter((e) => e.body === 'sun' && e.timeMs >= startMs && e.timeMs <= endMs)
+    .sort((a, b) => a.timeMs - b.timeMs);
+  const firstRise = inside.find((e) => e.visible)?.timeMs ?? null;
+  const firstSet = inside.find((e) => !e.visible)?.timeMs ?? null;
+  if (firstRise !== null && firstSet !== null) return { nextSunriseMs: firstRise, nextSunsetMs: firstSet };
+  if (!site) return { nextSunriseMs: firstRise, nextSunsetMs: firstSet };
+  const ahead = findNextSunCrossings(site, config, endMs);
+  return {
+    nextSunriseMs: firstRise ?? ahead.nextSunriseMs,
+    nextSunsetMs: firstSet ?? ahead.nextSunsetMs,
   };
 }

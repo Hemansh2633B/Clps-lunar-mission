@@ -106,6 +106,19 @@ describe('custom site coordinate provenance', () => {
     expect(site.terrain.frameVerified).toBe(true);
   });
 
+  it('rotates DEM-derived downslope aspect into the same IAU frame as the horizon', () => {
+    const m = mask({}, 'MOON_ME (JPL DE421)');
+    const sourceAspect = 37;
+    const site = makeCustomSite({
+      name: 'Sloped ME DEM', latitude: m.latitude, longitude: m.longitude, elevationM: 0,
+      preset: 'flat', horizon: m,
+      slope: { slopeDeg: 12, aspectDeg: sourceAspect },
+    });
+    const conv = convertSite(m.latitude, m.longitude, 'me');
+    expect(site.terrain.azimuthOffsetDeg).toBeCloseTo(conv.azimuthOffsetDeg, 6);
+    expect(site.terrain.aspectDeg).toBeCloseTo((sourceAspect + conv.azimuthOffsetDeg + 360) % 360, 6);
+  });
+
   it('leaves an unknown-frame site uncorrected and labeled unverified', () => {
     const m = mask({}, 'WEIRD_FRAME');
     const site = makeCustomSite({ name: 'Test', latitude: -45, longitude: 30, elevationM: 0, preset: 'flat', horizon: m });

@@ -41,9 +41,15 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions, 
     const maxTerrain = Math.max(...site.terrain.elevations);
     const minTerrain = Math.min(...site.terrain.elevations);
     let trackMax = 0;
-    if (sim) for (const s of sim.samples) trackMax = Math.max(trackMax, s.sun.elevationDeg, s.earth.elevationDeg);
-    const elMax = clamp(Math.max(12, maxTerrain + 4, current.sun.elevationDeg + 6, current.earth.elevationDeg + 6, trackMax + 6), 12, 90);
-    const elMin = clamp(Math.min(-4, minTerrain - 2), -30, -4);
+    let trackMin = 0;
+    if (sim) for (const s of sim.samples) {
+      trackMax = Math.max(trackMax, s.sun.elevationDeg, s.earth.elevationDeg, s.relay?.elevationDeg ?? -90);
+      trackMin = Math.min(trackMin, s.sun.elevationDeg, s.earth.elevationDeg, s.relay?.elevationDeg ?? 0);
+    }
+    const elMax = clamp(Math.max(12, maxTerrain + 4, current.sun.elevationDeg + 6, current.earth.elevationDeg + 6, current.relay?.elevationDeg ?? -90, trackMax + 6), 12, 90);
+    // Include far-side Earth/relay directions, which can be well below the local
+    // horizontal plane. Clipping those vectors would visually imply they were absent.
+    const elMin = clamp(Math.min(-4, minTerrain - 2, current.sun.elevationDeg - 6, current.earth.elevationDeg - 6, current.relay?.elevationDeg ?? 0, trackMin - 6), -90, -4);
     let azStart = 0;
     let azSpan = 360;
     if (options.sector === 'sun') { azStart = wrap360(current.sun.azimuthDeg - 60); azSpan = 120; }
@@ -73,7 +79,7 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions, 
   }, [site, azStart, azSpan, elMin, elMax, options.showTerrain]);
 
   const tracks = useMemo(() => {
-    if (!options.showTracks || !sim) return { sun: [] as string[], earth: [] as string[] };
+    if (!options.showTracks || !sim) return { sun: [] as string[], earth: [] as string[], relay: [] as string[] };
     const stride = Math.max(1, Math.floor(sim.samples.length / 240));
     const build = (pick: (s: EvaluatedSample) => { az: number; el: number }) => {
       const segs: string[] = [];
@@ -94,14 +100,18 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions, 
     return {
       sun: build((s) => ({ az: s.sun.azimuthDeg, el: s.sun.elevationDeg })),
       earth: build((s) => ({ az: s.earth.azimuthDeg, el: s.earth.elevationDeg })),
+      relay: sim.samples.some((s) => s.relay) ? build((s) => ({ az: s.relay?.azimuthDeg ?? 0, el: s.relay?.elevationDeg ?? -90 })) : [],
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sim, options.showTracks, azStart, azSpan, elMin, elMax]);
 
   const sunX = xOf(current.sun.azimuthDeg);
   const earthX = xOf(current.earth.azimuthDeg);
+  const relayX = current.relay ? xOf(current.relay.azimuthDeg) : null;
+  const limbY = yOf(current.lunar?.limbElevationDeg ?? 0);
   const sunY = yOf(current.sun.elevationDeg);
   const earthY = yOf(current.earth.elevationDeg);
+  const relayY = current.relay ? yOf(current.relay.elevationDeg) : null;
   const probe = locked ?? (hover ? { az: hover.az, el: hover.el } : null);
   const probeTerrain = probe ? terrainElevationAt(site.terrain, probe.az) : 0;
 
@@ -125,7 +135,7 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions, 
         <span className="panel-title"><Mountain size={13} /> Local horizon · 360° panorama</span>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span className={`chip ${visibilityBlocked ? 'blocked' : current.sunVisibility.visible ? 'solar' : 'blocked'}`}><Sun size={11} /> {visibilityBlocked ? 'Sun visibility blocked' : current.sunVisibility.visible ? 'Sunlit' : current.sunVisibility.reason === 'terrain' ? 'Terrain shadow' : 'Night'}</span>
-          <span className={`chip ${visibilityBlocked ? 'blocked' : current.earthVisibility.visible ? 'earth' : 'blocked'}`}><Earth size={11} /> {visibilityBlocked ? 'Earth visibility blocked' : current.earthVisibility.visible ? 'DTE open' : 'Earth blocked'}</span>
+          <span className={`chip ${visibilityBlocked ? 'blocked' : current.earthVisibility.visible ? 'earth' : 'blocked'}`}><Earth size={11} /> {visibilityBlocked ? 'Earth visibility blocked' : current.earthVisibility.visible ? 'Earth LOS clear' : current.earthVisibility.reason === 'lunar-limb' ? 'Moon body blocks' : 'Terrain blocks'}</span>
           <select className="input" style={{ width: 130, height: 24, fontSize: 11 }} value={options.sector} onChange={(e) => onOptions({ ...options, sector: e.target.value as PanoramaOptions['sector'] })}>
             <option value="full">Full 360°</option>
             <option value="sun">Sun sector ±60°</option>
@@ -172,7 +182,12 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions, 
           })}
           {tracks.sun.map((d, i) => <path key={`s${i}`} d={d} fill="none" stroke="#c4842a" strokeOpacity={0.4} strokeWidth={1.2} strokeDasharray="4 4" />)}
           {tracks.earth.map((d, i) => <path key={`e${i}`} d={d} fill="none" stroke="#0e7490" strokeOpacity={0.45} strokeWidth={1.2} strokeDasharray="2 4" />)}
+          {tracks.relay.map((d, i) => <path key={`r${i}`} d={d} fill="none" stroke="#8056a5" strokeOpacity={0.55} strokeWidth={1.2} strokeDasharray="5 3" />)}
           {options.showTerrain && <path d={terrainPath} fill="url(#terrainGrad)" stroke="#3d3128" strokeWidth={1.6} />}
+          {current.lunar && <g aria-label="Mean spherical lunar limb reference">
+            <line x1={ML} x2={ML + PW} y1={limbY} y2={limbY} stroke="#7b6b8a" strokeDasharray="6 4" strokeWidth={1} opacity={0.85} />
+            <text x={ML + 4} y={limbY - 3} fontSize={8} fill="#6f587e" fontFamily="IBM Plex Mono, monospace">MEAN LUNAR LIMB · {current.lunar.limbElevationDeg.toFixed(2)}°</text>
+          </g>}
           {options.showTerrain && site.terrain.features.filter((f) => f.kind !== 'drop' && f.elevationDeg > 1).map((f) => {
             const x = xOf(f.azimuthDeg);
             if (x == null) return null;
@@ -192,6 +207,12 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions, 
               <circle cx={sunX} cy={sunY} r={24} fill="url(#sunGlow)" />
               <circle cx={sunX} cy={sunY} r={7} fill={visibilityBlocked ? '#efe8da' : current.sunVisibility.visible ? '#c4842a' : '#fdf0d5'} stroke={visibilityBlocked ? '#8a7358' : current.sunVisibility.visible ? '#8a5a16' : '#c23b32'} strokeWidth={1.5} strokeDasharray={visibilityBlocked || !current.sunVisibility.visible ? '3 2' : ''} />
               <text x={sunX > W - 130 ? sunX - 12 : sunX + 12} y={sunY + 4} textAnchor={sunX > W - 130 ? "end" : "start"} fontSize={10} fill={visibilityBlocked ? '#8a7358' : current.sunVisibility.visible ? '#8a5a16' : '#c23b32'} fontFamily="IBM Plex Mono, monospace">SUN {current.sun.elevationDeg.toFixed(2)}°</text>
+            </g>
+          )}
+          {relayX != null && relayY != null && current.relay && (
+            <g aria-label="Configured relay line-of-sight direction">
+              <path d={`M${relayX - 5},${relayY - 5} L${relayX + 5},${relayY + 5} M${relayX + 5},${relayY - 5} L${relayX - 5},${relayY + 5}`} stroke={current.relay.linkUp ? '#8056a5' : '#c23b32'} strokeWidth={2} />
+              <text x={relayX > W - 150 ? relayX - 10 : relayX + 10} y={relayY + 3} textAnchor={relayX > W - 150 ? 'end' : 'start'} fontSize={9} fill={current.relay.linkUp ? '#8056a5' : '#c23b32'} fontFamily="IBM Plex Mono, monospace">RELAY {current.relay.elevationDeg.toFixed(1)}° · GEOMETRY ONLY</text>
             </g>
           )}
           {probe && (() => {

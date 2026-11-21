@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -45,6 +46,9 @@ type Options struct {
 	Horizons        *horizons.Client
 	HorizonsEnabled bool
 	AcquireEnabled  bool
+	// ProductCatalogue is the deployment-validated list exposed by GET /api/datasets.
+	// Additional NASA/PDS entries can be supplied by CHANDRA_LOLA_PRODUCTS_JSON.
+	ProductCatalogue map[string]lola.Product
 	// ResolveProduct maps a catalogue product id to acquisition options.
 	ResolveProduct func(id string) (lola.Options, bool)
 	RateLimit      bool
@@ -106,9 +110,15 @@ func New(o Options) http.Handler {
 	if o.Horizons == nil {
 		o.Horizons = &horizons.Client{MinInterval: 600 * time.Millisecond}
 	}
+	if o.ProductCatalogue == nil {
+		o.ProductCatalogue = make(map[string]lola.Product, len(lola.Products))
+		for id, p := range lola.Products {
+			o.ProductCatalogue[id] = p
+		}
+	}
 	if o.ResolveProduct == nil {
 		o.ResolveProduct = func(id string) (lola.Options, bool) {
-			p, ok := lola.Products[id]
+			p, ok := o.ProductCatalogue[id]
 			return lola.Options{Product: p}, ok
 		}
 	}
@@ -461,9 +471,13 @@ func (s *server) datasets(r *http.Request) (any, error) {
 			list = append(list, s.describe(strings.TrimSuffix(strings.TrimPrefix(k, "datasets/"), ".json"), "acquired"))
 		}
 	}
-	products := make([]map[string]string, 0, len(lola.Products))
-	for _, p := range lola.Products {
-		products = append(products, map[string]string{"id": p.ID, "url": p.URL, "product_page": p.ProductPage})
+	products := make([]map[string]string, 0, len(s.o.ProductCatalogue))
+	for _, p := range s.o.ProductCatalogue {
+		products = append(products, map[string]string{
+			"id": p.ID, "url": p.URL, "product_page": p.ProductPage,
+			"nominal_resolution_m": strconv.FormatFloat(p.NominalResolutionM, 'f', -1, 64),
+			"coverage_note":        p.CoverageNote, "provider": p.Provider,
+		})
 	}
 	sort.Slice(products, func(i, j int) bool { return products[i]["id"] < products[j]["id"] })
 	return map[string]any{"datasets": list,
@@ -575,7 +589,11 @@ func (s *server) acquire(r *http.Request) (any, error) {
 		}
 		return nil, err
 	}
-	product := map[string]string{"id": opts.Product.ID, "url": opts.Product.URL, "product_page": opts.Product.ProductPage}
+	product := map[string]string{
+		"id": opts.Product.ID, "url": opts.Product.URL, "product_page": opts.Product.ProductPage,
+		"nominal_resolution_m": strconv.FormatFloat(opts.Product.NominalResolutionM, 'f', -1, 64),
+		"coverage_note":        opts.Product.CoverageNote, "provider": opts.Product.Provider,
+	}
 	if dryRun {
 		return map[string]any{"dry_run": true, "plan": sub.Plan, "product": product}, nil
 	}
@@ -740,9 +758,24 @@ func FromEnv(getenv func(string) string, projectRoot string) (Options, error) {
 		// Every writable path of a function instance is temporary, whatever directory was chosen.
 		local.Ephemeral = true
 	}
+	productCatalogue := make(map[string]lola.Product, len(lola.Products))
+	for id, product := range lola.Products {
+		productCatalogue[id] = product
+	}
+	configuredProducts, err := lola.ParseConfiguredProducts(getenv("CHANDRA_LOLA_PRODUCTS_JSON"))
+	if err != nil {
+		return Options{}, err
+	}
+	for _, product := range configuredProducts {
+		productCatalogue[product.ID] = product
+	}
 	o := Options{Settings: settings, Store: st, ProjectRoot: projectRoot, Deployment: deployment,
 		HorizonsEnabled: getenv("CHANDRA_HORIZONS") != "off", AcquireEnabled: getenv("CHANDRA_ACQUIRE") != "off",
-		RateLimit: getenv("CHANDRA_RATE_LIMIT") != "off"}
+		RateLimit: getenv("CHANDRA_RATE_LIMIT") != "off", ProductCatalogue: productCatalogue}
+	o.ResolveProduct = func(id string) (lola.Options, bool) {
+		product, ok := productCatalogue[id]
+		return lola.Options{Product: product}, ok
+	}
 	client := &horizons.Client{MinInterval: 600 * time.Millisecond}
 	if base := getenv("CHANDRA_HORIZONS_BASE_URL"); base != "" {
 		if !horizons.AllowedBase(base) {
@@ -757,8 +790,8 @@ func FromEnv(getenv func(string) string, projectRoot string) (Options, error) {
 			return Options{}, fmt.Errorf("CHANDRA_LOLA_BASE_URL must be an allowlisted or loopback URL")
 		}
 		o.ResolveProduct = func(id string) (lola.Options, bool) {
-			p, ok := lola.Products[id]
-			if ok {
+			p, ok := productCatalogue[id]
+			if ok && strings.Contains(p.Provider, "PGDA") {
 				p.URL = strings.TrimRight(base, "/") + p.URL[strings.LastIndex(p.URL, "/"):]
 			}
 			return lola.Options{Product: p, AllowLoopback: true}, ok

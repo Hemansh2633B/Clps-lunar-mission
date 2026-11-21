@@ -15,11 +15,12 @@ import { horizonImportBlocked } from '../terrain/missionProfile';
 import { classifyFrame } from '../engine/lunarFrame';
 import { sampleLonLat } from '../terrain/coordinates';
 import { computeEphemeris } from '../engine/ephemeris';
+import { slopeAtLandingPoint } from '../terrain/slope';
 import { formatCoord, formatUTC } from '../engine/constants';
 import { download, toCSV } from '../utils/export';
 import type { CustomSiteInput } from './Modals';
 
-export type TerrainSiteInput = CustomSiteInput & { horizon: HorizonMask };
+export type TerrainSiteInput = CustomSiteInput & { horizon: HorizonMask; slope?: { slopeDeg: number; aspectDeg: number; spacingM: number; provenance: string } };
 
 interface Props {
   site: LandingSite;
@@ -454,6 +455,7 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
 
   const sendToMission = useCallback(() => {
     if (!data || !horizon || horizonImportBlocked(horizon)) return;
+    const slope = !data.synthetic && data.mode === 'real' ? slopeAtLandingPoint(data) : null;
     onCreateSite({
       name: `${horizon.synthetic ? 'Demo' : 'DEM'} ${data.latitude.toFixed(2)}° ${data.longitude.toFixed(1)}°`,
       latitude: data.latitude,
@@ -461,6 +463,14 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
       elevationM: data.landing_elevation_m,
       preset: 'flat',
       horizon,
+      ...(slope ? {
+        slope: {
+          slopeDeg: slope.slopeDeg,
+          aspectDeg: slope.aspectDeg,
+          spacingM: slope.spacingM,
+          provenance: `Horn 3×3 from the same validated DEM subset (${data.source.dataset_id ?? data.source.filename}); centre-window search offset ${slope.offsetCells.join(',')} cells.`,
+        },
+      } : {}),
     });
   }, [data, horizon, onCreateSite]);
 

@@ -143,6 +143,8 @@ export function reportWarnings(site: LandingSite, sim: SimulationResult | null):
   }
   if (sim?.transitionDiagnostics.fallbackUsed) w.push(`Transition detection used the fine-scan fallback for ${sim.transitionDiagnostics.exhaustedIntervals} interval(s); resolved to ${(sim.transitionDiagnostics.minStepMs / 1000).toFixed(0)} s.`);
   const conf = sim?.summary?.dataConfidence ?? terrainDataConfidence(site);
+  if (site.elevationAvailable === false) w.push('SITE ELEVATION UNAVAILABLE — the displayed 0 m is a datum placeholder, not an observation; the spherical limb calculation clamps below-datum sites to the reference sphere and local terrain is illustrative until a measured DEM is supplied.');
+  if (t.slopeDeg == null || t.aspectDeg == null) w.push('LOCAL TERRAIN SLOPE / ASPECT UNAVAILABLE — no surface-normal incidence is reported; solar-panel estimates use the configured array geometry, not an assumed measured slope.');
   if (t.synthetic) w.push('Synthetic demo terrain — procedural, NOT real lunar data; not a scientific result.');
   else if (t.kind !== 'dem') w.push('Illustrative / user-edited terrain — NOT a measured flight DEM; ranking is indicative only.');
   if (t.kind === 'dem' && !t.synthetic && !t.frameVerified) w.push('FRAME UNVERIFIED — terrain reference frame not confirmed compatible with the IAU 2015 ephemeris frame; quantitative mission visibility is blocked.');
@@ -152,6 +154,8 @@ export function reportWarnings(site: LandingSite, sim: SimulationResult | null):
   if (conf !== 'measured') w.push(`Data confidence is "${conf}", not measured — do not treat the feasibility score as a measured-terrain ranking.`);
   w.push('Feasibility score is an application-defined heuristic, NOT a NASA methodology.');
   w.push('Earth visibility is geometric line-of-sight only — NOT an RF link budget.');
+  w.push('Lunar-body occultation uses a spherical 1737.4 km reference body; real limb topography and irregular shape (order-kilometre relief) are not modelled.');
+  if (sim?.summary?.relay) w.push(sim.summary.relay.note);
   w.push('Battery result is an energy-balance model only — NOT thermal/radiation survival.');
   const energyResolution = energyResolutionDisclosure(sim?.summary?.integrationDiagnostics);
   if (energyResolution) w.push(energyResolution.message);
@@ -163,7 +167,10 @@ export function reportWarnings(site: LandingSite, sim: SimulationResult | null):
  *  Full text lives in the JSON report (keyed by the same analysis fingerprint). */
 export function disclosureCodes(site: LandingSite, sim: SimulationResult | null): string[] {
   const t = site.terrain;
-  const codes = ['LOCAL_HORIZON', 'SCORE_HEURISTIC', 'LOS_NOT_RF', 'ENERGY_NOT_THERMAL'];
+  const codes = ['LOCAL_HORIZON', 'SCORE_HEURISTIC', 'LOS_NOT_RF', 'ENERGY_NOT_THERMAL', 'SPHERICAL_LUNAR_LIMB'];
+  if (site.elevationAvailable === false) codes.push('ELEVATION_UNAVAILABLE');
+  if (t.slopeDeg == null || t.aspectDeg == null) codes.push('SLOPE_UNAVAILABLE');
+  if (sim?.summary?.relay) codes.push('RELAY_GEOMETRY_ONLY');
   if (t.synthetic) codes.push('SYNTHETIC_TERRAIN');
   else if (t.kind !== 'dem') codes.push('ILLUSTRATIVE_TERRAIN');
   else if (!t.frameVerified) codes.push('FRAME_UNVERIFIED');
@@ -376,12 +383,32 @@ export async function timeseriesCSV(sim: SimulationResult, fingerprint: string):
     sun_el_deg: s.sun.elevationDeg.toFixed(4),
     sun_terrain_deg: s.sunVisibility.terrainElevationDeg.toFixed(4),
     sun_clearance_deg: s.sunVisibility.clearanceDeg.toFixed(4),
+    sun_limb_elevation_deg: s.sunVisibility.limbElevationDeg?.toFixed(4) ?? '',
+    sun_obstruction_source: s.sunVisibility.obstructionSource ?? '',
+    sun_body_occultation: s.sunVisibility.bodyOccultation ?? '',
+    sun_occulted_fraction: s.sunVisibility.occultedFraction?.toFixed(6) ?? '',
     sun_visible: s.sunVisibility.visible ? 1 : 0,
     earth_az_deg: s.earth.azimuthDeg.toFixed(4),
     earth_el_deg: s.earth.elevationDeg.toFixed(4),
     earth_terrain_deg: s.earthVisibility.terrainElevationDeg.toFixed(4),
     earth_clearance_deg: s.earthVisibility.clearanceDeg.toFixed(4),
+    earth_limb_elevation_deg: s.earthVisibility.limbElevationDeg?.toFixed(4) ?? '',
+    earth_obstruction_source: s.earthVisibility.obstructionSource ?? '',
+    earth_body_occultation: s.earthVisibility.bodyOccultation ?? '',
+    earth_occulted_fraction: s.earthVisibility.occultedFraction?.toFixed(6) ?? '',
     earth_visible: s.earthVisibility.visible ? 1 : 0,
+    terrain_incidence_deg: s.incidence?.incidenceDeg.toFixed(4) ?? '',
+    terrain_slope_deg: s.incidence?.slopeDeg.toFixed(4) ?? '',
+    terrain_aspect_deg: s.incidence?.aspectDeg.toFixed(4) ?? '',
+    terrain_incidence_source: s.incidence?.source ?? '',
+    relay_az_deg: s.relay?.azimuthDeg.toFixed(4) ?? '',
+    relay_el_deg: s.relay?.elevationDeg.toFixed(4) ?? '',
+    relay_range_km: s.relay?.rangeKm.toFixed(3) ?? '',
+    relay_site_body_clear: s.relay ? (s.relay.siteBodyClear ? 1 : 0) : '',
+    relay_site_terrain_clear: s.relay ? (s.relay.siteTerrainClear ? 1 : 0) : '',
+    relay_earth_body_clear: s.relay ? (s.relay.earthClear ? 1 : 0) : '',
+    relay_geometry_link_up: s.relay ? (s.relay.linkUp ? 1 : 0) : '',
+    relay_claim: s.relay ? 'GEOMETRY_ONLY_NOT_RF' : '',
     viable: s.viable ? 1 : 0,
     flux_wm2: s.power.fluxWm2.toFixed(2),
     horizontal_w: s.power.horizontalW.toFixed(2),
@@ -487,6 +514,14 @@ export async function summaryCSV(sim: SimulationResult, fingerprint: string): Pr
     end_utc: new Date(s.endMs).toISOString(),
     duration_hours: s.durationHours.toFixed(2),
     illumination_pct: s.illuminationPct.toFixed(2),
+    sunlit_hours: s.sunlitHours?.toFixed(2) ?? '',
+    dark_hours: s.darkHours?.toFixed(2) ?? '',
+    longest_illumination_h: s.longestIlluminationHours?.toFixed(2) ?? '',
+    next_sunrise_utc: s.nextSunriseMs == null ? '' : new Date(s.nextSunriseMs).toISOString(),
+    next_sunset_utc: s.nextSunsetMs == null ? '' : new Date(s.nextSunsetMs).toISOString(),
+    mean_solar_incidence_deg: s.meanSolarIncidenceDeg?.toFixed(3) ?? '',
+    earth_body_occulted_pct: s.earthOccludedPct?.toFixed(2) ?? '',
+    earth_terrain_blocked_pct: s.earthTerrainBlockedPct?.toFixed(2) ?? '',
     dte_pct: s.dtePct.toFixed(2),
     combined_pct: s.combinedPct.toFixed(2),
     mean_sun_el_deg: s.meanSunElevationDeg.toFixed(3),
@@ -499,6 +534,10 @@ export async function summaryCSV(sim: SimulationResult, fingerprint: string): Pr
     feasibility_score: s.feasibilityScore,
     score_is_heuristic: 1,
     verdict: s.verdict,
+    relay_model: s.relay?.model ?? '',
+    relay_geometry_link_pct: s.relay?.linkPct.toFixed(2) ?? '',
+    relay_longest_outage_h: s.relay?.longestOutageHours.toFixed(2) ?? '',
+    relay_disclaimer: s.relay?.note ?? '',
     data_confidence: s.dataConfidence,
     frame_verified: s.frameVerified ? 1 : 0,
     requested_step_min: s.sampling.requestedStepMinutes,
@@ -607,9 +646,22 @@ export async function comparisonCSV(rows: ComparisonRow[]): Promise<string> {
       site_id: r.scenario.siteId,
       latitude: r.site?.latitude ?? '',
       longitude: r.site?.longitude ?? '',
+      lunar_side: r.site?.side ?? '',
+      elevation_m: r.site && r.site.elevationAvailable !== false ? r.site.elevationM : '',
+      slope_deg: t?.slopeDeg ?? '',
+      slope_aspect_deg: t?.aspectDeg ?? '',
       coordinate_type: r.site?.coordinateType ?? '',
       data_confidence: r.dataConfidence ?? '',
       terrain_kind: t?.kind ?? '',
+      dem_resolution_m: t?.effectiveResolutionM ?? t?.slopeSpacingM ?? '',
+      dem_coverage_pct: t?.coveragePercent ?? '',
+      earth_body_occulted_pct: s?.earthOccludedPct?.toFixed(2) ?? '',
+      earth_terrain_blocked_pct: s?.earthTerrainBlockedPct?.toFixed(2) ?? '',
+      mean_solar_incidence_deg: s?.meanSolarIncidenceDeg?.toFixed(3) ?? '',
+      longest_illumination_h: s?.longestIlluminationHours?.toFixed(2) ?? '',
+      relay_model: s?.relay?.model ?? '',
+      relay_geometry_link_pct: s?.relay?.linkPct.toFixed(2) ?? '',
+      relay_longest_outage_h: s?.relay?.longestOutageHours.toFixed(2) ?? '',
       source_frame: t?.sourceFrame ?? '',
       frame_transform: t?.frameTransform ?? '',
       horizon_scale: r.site ? 'LOCAL' : '',
@@ -641,6 +693,10 @@ export async function comparisonCSV(rows: ComparisonRow[]): Promise<string> {
       site: r.site?.name ?? '',
       failure_reason: r.failureReason ?? '',
       warnings: r.warnings.join('; '),
+      terrain_provenance: t?.sourceProvenance ?? r.site?.sourceUrl ?? '',
+      terrain_elevation_reference: t?.accuracyNote ?? '',
+      slope_source: t?.slopeProvenance ?? '',
+      relay_disclaimer: s?.relay?.note ?? '',
     };
   }));
 }

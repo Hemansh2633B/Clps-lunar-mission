@@ -215,7 +215,10 @@ function validSite(s: unknown): s is LandingSite {
   if (!finite(o.longitude) || !inRange(o.longitude, -360, 720)) return false;
   if (!finite(o.elevationM) || !inRange(o.elevationM, -20000, 20000)) return false;
   if (!str(o.region) || !str(o.description) || !str(o.accent)) return false;
-  if (o.category !== 'polar' && o.category !== 'reference') return false;
+  if (o.category !== 'polar' && o.category !== 'reference' && o.category !== 'far-side') return false;
+  if (o.side !== undefined && !['near', 'far', 'limb'].includes(o.side as string)) return false;
+  if (o.elevationAvailable !== undefined && typeof o.elevationAvailable !== 'boolean') return false;
+  if (o.regionType !== undefined && typeof o.regionType !== 'string') return false;
   if (o.custom !== undefined && typeof o.custom !== 'boolean') return false;
   if (!optStr(o.program) || !optStr(o.coordinateProvenance) || !optStr(o.elevationProvenance) || !optStr(o.sourceUrl) || !optStr(o.sourceDate)) return false;
   if (o.coordinateType !== undefined && (!str(o.coordinateType) || !COORD_TYPES.has(o.coordinateType))) return false;

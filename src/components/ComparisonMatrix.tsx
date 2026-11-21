@@ -144,6 +144,60 @@ function ScenarioCard({ scenario, site, sites, onUpdate, onRemove, best, indicat
   );
 }
 
+function DetailedComparison({ rows }: { rows: ComparisonRow[] }) {
+  if (rows.length < 2) return null;
+  const ready = rows.filter((r) => r.site && r.sim?.summary);
+  const pct = (v: number | undefined) => v == null || !Number.isFinite(v) ? '—' : `${v.toFixed(1)}%`;
+  const scalar = (v: number | undefined, digits = 2) => v == null || !Number.isFinite(v) ? 'unavailable' : v.toFixed(digits);
+  return <section className="panel" style={{ marginTop: 12, overflow: 'hidden' }} aria-label="Detailed landing-site comparison">
+    <div className="panel-header"><span className="panel-title">Comparison metrics · explicit missing-data labels</span></div>
+    {ready.length > 0 && <div style={{ padding: '10px 12px 2px' }} aria-label="Illumination, direct Earth visibility, and relay geometry chart">
+      {ready.map((r) => {
+        const s = r.sim!.summary!;
+        const measures = [
+          ['Solar illumination', s.illuminationPct, '#c4842a'],
+          ['Direct Earth LOS', s.dtePct, '#0e7490'],
+          ['Relay · both legs', s.relay?.linkPct, '#8056a5'],
+        ] as const;
+        return <div key={r.scenario.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(88px, 150px) 1fr', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+          <span style={{ fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.site!.name}>{r.site!.shortName}</span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(80px, 1fr))', gap: 6 }}>
+            {measures.map(([label, value, color]) => <div key={label} title={`${label}: ${pct(value)}`}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 4, fontSize: 8, color: 'var(--dim)' }}><span>{label}</span><span>{pct(value)}</span></div>
+              <div style={{ height: 5, background: '#eee5d7', marginTop: 2 }}><div style={{ height: '100%', width: `${Math.max(0, Math.min(100, value ?? 0))}%`, background: color }} /></div>
+            </div>)}
+          </div>
+        </div>;
+      })}
+    </div>}
+    <div style={{ overflowX: 'auto', padding: '4px 10px 10px' }}>
+      <table className="table" style={{ minWidth: 820 }}>
+        <thead><tr><th>Site / coordinates</th><th>Elevation</th><th>Slope</th><th>Sun visible</th><th>Illumination</th><th>Incidence</th><th>Earth body blocked</th><th>Earth terrain blocked</th><th>Relay</th><th>DEM resolution</th><th>Terrain provenance</th></tr></thead>
+        <tbody>{rows.map((r) => {
+          const s = r.sim?.summary;
+          const site = r.site;
+          const terrain = site?.terrain;
+          const resolutionM = terrain?.effectiveResolutionM ?? terrain?.slopeSpacingM;
+          return <tr key={r.scenario.id}>
+            <td>{site ? <><strong>{site.shortName}</strong><br /><span className="mono" style={{ fontSize: 9 }}>{formatCoord(site.latitude, site.longitude)}</span></> : <span>Missing site · {r.scenario.siteId}</span>}</td>
+            <td>{!site || site.elevationAvailable === false ? 'unavailable' : `${site.elevationM.toFixed(0)} m`}</td>
+            <td>{terrain?.slopeDeg == null ? 'unavailable' : `${terrain.slopeDeg.toFixed(2)}° / ${terrain.aspectDeg?.toFixed(1)}°`}</td>
+            <td>{s ? pct(s.illuminationPct) : '—'}</td>
+            <td>{s ? `${pct(s.illuminationPct)} · longest ${scalar(s.longestIlluminationHours, 1)} h` : '—'}</td>
+            <td>{s?.meanSolarIncidenceDeg == null ? 'unavailable' : `${s.meanSolarIncidenceDeg.toFixed(2)}°`}</td>
+            <td>{s ? pct(s.earthOccludedPct) : '—'}</td>
+            <td>{s ? pct(s.earthTerrainBlockedPct) : '—'}</td>
+            <td>{s?.relay ? `${pct(s.relay.linkPct)} geometric` : 'not configured'}</td>
+            <td>{resolutionM == null ? 'unavailable' : `${resolutionM.toFixed(1)} m`}</td>
+            <td style={{ maxWidth: 260, whiteSpace: 'normal' }}>{terrain?.sourceProvenance ?? site?.sourceUrl ?? 'No dataset provenance'}</td>
+          </tr>;
+        })}</tbody>
+      </table>
+    </div>
+    <div role="note" style={{ padding: '0 12px 10px', fontSize: 9, color: 'var(--dim)' }}>Solar illumination = terrain + lunar-limb visible time. Earth body occultation and local terrain obstruction are independent; relay percentage is two-hop geometry only, not RF availability. Unknown elevation, slope, DEM resolution, or provenance is shown as unavailable—not zero.</div>
+  </section>;
+}
+
 export function ComparisonMatrix({ scenarios, sites, onUpdate, onRemove, onPin, onClose, onExport, mode }: Props) {
   const [cardStates, setCardStates] = useState<Record<string, CardState>>({});
   const onCardState = useMemo(() => (id: string, state: CardState) => {
@@ -222,6 +276,7 @@ export function ComparisonMatrix({ scenarios, sites, onUpdate, onRemove, onPin, 
                   : <MissingSiteCard key={sc.id} scenario={sc} sites={sites} onUpdate={onUpdate} onRemove={onRemove} />;
               })}
             </div>
+            <DetailedComparison rows={rows} />
           </>
         )}
       </div>
