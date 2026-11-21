@@ -250,24 +250,12 @@ input[type="range"].earth::-webkit-slider-thumb { background: var(--lagoon); }
 .modeswitch button:hover { background: #f6efe3; }
 .modeswitch button[aria-checked="true"] { background: var(--ink); color: var(--paper-2); }
 
-/* ---- ticker ---- */
-/* Decorative marquee: never intercept clicks (it overlaps header dropdowns that
-   extend below the header bar) and never animate under prefers-reduced-motion. */
-.ticker { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #fff8ee; overflow: hidden; flex-shrink: 0; pointer-events: none; }
-/* The header's backdrop-filter creates a stacking context; without an explicit
-   z-index the ticker/workspace paint OVER its Export dropdown. Keep the header
-   above page content but below the story panel (45), modals and toasts. */
+/* ---- compact workspace chrome ---- */
 .app-header { position: relative; z-index: 30; flex-wrap: wrap; row-gap: 8px; }
-/* Header tools are never clipped. As the window narrows they compact in steps (key hints,
-   then the engine pill, then the text labels — every button keeps an aria-label and a title)
-   and, whatever the fonts measure, anything that still does not fit wraps to a second row. */
-.header-tools { display: flex; align-items: center; gap: 8px; margin-left: 12px; flex: 0 1 auto; min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
+.header-tools { display: flex; align-items: center; gap: 6px; margin-left: 12px; flex: 0 1 auto; min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
 @media (max-width: 1760px) { .app-header .kbd { display: none; } }
 @media (max-width: 1560px) { .engine-pill { display: none; } }
 @media (max-width: 1340px) { .app-header .tool-label { display: none; } }
-.ticker-track { display: flex; width: max-content; gap: 32px; padding: 7px 0; animation: ticker 48s linear infinite; }
-.ticker-track span { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; color: var(--ink-soft); white-space: nowrap; }
-@keyframes ticker { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
 .fade-in { animation: fadeIn .18s ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
@@ -277,7 +265,7 @@ input[type="range"].earth::-webkit-slider-thumb { background: var(--lagoon); }
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .led, .ticker-track, .reveal, .pulse { animation: none !important; }
+  .led, .reveal, .pulse { animation: none !important; }
 }
 
 @media (max-width: 1200px) {
@@ -568,3 +556,47 @@ input[type="range"].earth::-webkit-slider-thumb { background: var(--lagoon); }
 .lab-model[data-level="demo"], .lab-model[data-level="partial"] { border-left: 3px solid var(--amber); }
 .lab-model[data-level="blocked"] { border-left: 3px solid var(--crimson); }
 .lab-model-head { display: flex; gap: 5px; align-items: center; color: var(--ink); margin-bottom: 2px; }
+
+
+/* v1.13 workspace hierarchy: show the selected site and primary actions without a
+   scrolling decorative strip. Detailed clock fields are available on demand. */
+.clock-toggle {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 34px;
+  padding: 5px 10px; border: 1px solid var(--line-strong); background: var(--paper-2);
+  color: var(--ink); font-family: var(--font-mono); font-size: 10px; white-space: nowrap;
+}
+.clock-toggle:hover { border-color: var(--ink); background: #fffdf7; }
+.clock-toggle time { color: var(--brass); font-variant-numeric: tabular-nums; }
+.clock-chevron { transition: transform .15s ease; }
+.clock-chevron.open { transform: rotate(180deg); }
+.header-clock { border-bottom: 1px solid var(--line); }
+.workspace-toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap; padding: 9px 14px; background: var(--paper-2);
+  border-bottom: 1px solid var(--line); min-width: 0;
+}
+.workspace-context { display: flex; align-items: baseline; gap: 9px; min-width: 0; flex-wrap: wrap; }
+.workspace-context-label { color: var(--brass); font: 600 9px var(--font-mono); letter-spacing: .13em; }
+.workspace-context strong { color: var(--ink); font: 600 15px var(--font-display); }
+.workspace-context .mono { color: var(--dim); font-size: 10px; }
+.workspace-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+@media (max-width: 1200px) {
+  .workspace { grid-template-columns: 224px minmax(0, 1fr) 264px; }
+}
+@media (max-width: 900px) {
+  .workspace:not(.terrain):not(.orbital) .center-stack { order: -2; }
+  .workspace:not(.terrain):not(.orbital) .site-rail { order: -1; }
+  .workspace:not(.terrain):not(.orbital) .telemetry-rail { order: 0; }
+  .clock-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .header-tools { gap: 4px; }
+  .workspace-toolbar { align-items: flex-start; }
+}
+@media (max-width: 600px) {
+  .clock-toggle { flex: 1 1 auto; justify-content: center; min-width: 0; }
+  .clock-toggle time { overflow: hidden; text-overflow: ellipsis; }
+  .workspace-context { gap: 6px; }
+  .workspace-actions { width: 100%; }
+  .workspace-actions .btn { flex: 1 1 auto; }
+  .status-bar { font-size: 9px; }
+}
