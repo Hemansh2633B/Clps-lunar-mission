@@ -512,7 +512,7 @@ try {
   const beyondViewport = () => page.evaluate(() => {
     const out = [];
     for (const el of document.querySelectorAll('body *')) {
-      if (el.closest('.ticker') || el.parentElement?.closest('[data-hscroll]')) continue;
+      if (el.parentElement?.closest('[data-hscroll]')) continue;
       const cs = getComputedStyle(el);
       if (cs.display === 'none' || cs.visibility === 'hidden') continue;
       const r = el.getBoundingClientRect();

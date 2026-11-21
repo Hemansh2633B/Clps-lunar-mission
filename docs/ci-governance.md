@@ -15,7 +15,8 @@ should require **all four** by their exact check names (also listed in §8):
 1. `Typecheck · build · unit · geometry · native backend · parity`
 2. `Vercel build output (Go function executed locally)`
 3. `Browser E2E (mission · terrain · space · onboarding · data hub)` — includes
-   planner, tutorial, scientific-export, and data-feature Playwright suites.
+   the responsive layout smoke plus planner, tutorial, scientific-export, and
+   data-feature Playwright suites.
 4. `Independent SPICE validation (fetched kernels)` — runs on pull requests,
    manual dispatches, and pushes to `main`; it is intentionally skipped on
    pushes to non-main branches.
@@ -169,8 +170,9 @@ accordingly; the lists in §1, §5 and §7 describe v1.11.
 2. `Vercel build output (Go function executed locally)` — runs `vercel build`
    and executes the built function through a local Lambda-runtime emulator.
    It proves the deployable artifact, not a live deployment.
-3. `Browser E2E (mission · terrain · space · onboarding · data hub)` — the
-   three v1.11 suites plus the self-contained data-feature suite
+3. `Browser E2E (mission · terrain · space · onboarding · data hub)` — includes
+   the responsive layout smoke (`npm run test:layout`), the three v1.11
+   interaction suites, and the self-contained data-feature suite
    (`npm run test:datahub`), which also exercises the production
    Content-Security-Policy.
 4. `Independent SPICE validation (fetched kernels)` — unchanged in purpose; now

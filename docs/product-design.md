@@ -371,3 +371,24 @@ No deploy is claimed by this document.
 
 Each phase is a focused PR with tests alongside, full ci-governance battery,
 docs updated to executed evidence, and no automatic merge.
+
+
+## 8. Workspace-shell cleanup implemented in the responsive UI branch
+
+The following focused shell changes are implemented without changing planner
+state, scientific calculations, exports, or the existing view modules:
+
+- Decorative ticker removed; it was non-interactive chrome rather than mission
+  information.
+- Mission clock collapsed into an accessible disclosure; full UTC/MJD/sub-solar/
+  sub-Earth values remain available on demand.
+- Header scope now says lunar mission analysis rather than south-pole-only.
+- Mode labels use **Plan / Teach** while preserving the existing
+  `planner` / `educator` state values.
+- The planner's top row identifies the selected site and keeps the guided
+  workflow / briefing actions together.
+- Mobile order prioritizes the analysis, then site selection, then telemetry.
+- `npm run test:layout` is added to the existing browser CI job.
+
+These changes do not implement the separate landing-page/router proposal above;
+the root route remains the planner.

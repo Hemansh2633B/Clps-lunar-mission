@@ -180,3 +180,20 @@ continuity; the protocol document is the authoritative step list.
   wording cannot drift from the gate without a failing test.
 - The audit deliberately did not add a second onboarding/glossary system, new
   animation, or any change to the paper-folio identity.
+
+
+## v1.13 workspace-shell cleanup
+
+- Removed the decorative scrolling ticker; it carried no actionable mission
+  information and competed with the workspace for vertical space.
+- Collapsed the four-field mission clock behind a labeled, keyboard-operable
+  **Mission clock** button. Opening it reveals UTC epoch, MJD, sub-solar and
+  sub-Earth readouts.
+- Replaced the south-pole-only header descriptor with a lunar mission-analysis
+  descriptor and renamed the workspace modes **Plan / Teach** without changing
+  their underlying mode values.
+- On narrow screens, the main analysis view is presented before the site
+  catalogue and telemetry details. Desktop keeps the three-column planning desk.
+- The responsive layout smoke checks desktop, tablet and phone widths, clock
+  disclosure, mobile reading order and horizontal overflow. This is automated
+  browser coverage; it does not replace the unexecuted NVDA / VoiceOver protocol.

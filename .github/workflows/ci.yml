@@ -131,6 +131,11 @@ jobs:
           done
           curl -sf http://localhost:5173/ >/dev/null || (echo "dev server failed"; cat /tmp/devfull.log; exit 1)
           curl -sf http://localhost:8000/api/config >/dev/null || (echo "terrain API failed"; cat /tmp/devfull.log; exit 1)
+      - name: Responsive layout smoke (desktop, tablet and mobile)
+        env:
+          CHANDRA_BROWSER_CI: '1'
+          BASE_URL: http://localhost:5173/
+        run: npm run test:layout
       - name: Run browser E2E
         env:
           CHANDRA_BROWSER_CI: '1'
