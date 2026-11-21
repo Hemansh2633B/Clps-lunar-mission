@@ -4,7 +4,7 @@
 
 CHANDRA is available as a hosted web application. You can access the live version using the link below:
 
-**Live Website:** [CHANDRA – Lunar Mission Planning](https://chandra-jet.vercel.app/)
+**Live Website:** [CHANDRA – South Pole Landing Navigator](https://chandra-jet.vercel.app/)
 
 Open the website in your browser to explore the lunar mission planning and analysis features.
 South-pole landing-site analysis for mission planners, educators and the public.
@@ -49,8 +49,8 @@ that fail validation are blocked rather than quietly degraded.
   south-polar-only; the Go API reads bounded HTTP ranges and validates the
   raster footprint, CRS/frame, datum, units and NoData. Deployment operators
   can add verified range-readable NASA/PDS COGs through a strict allowlisted
-  product manifest. No global/far-side product is bundled by default, and
-  out-of-footprint requests never silently substitute another DEM.
+  product manifest. Out-of-footprint requests never silently substitute
+  another DEM.
 - **Polar map with live imagery** — the south-pole map is drawn in the Moon
   2000 polar stereographic projection (0° meridian up, 90°E right) and can
   overlay NASA Moon Trek and LROC imagery on the bundled LROC mosaic. Imagery
