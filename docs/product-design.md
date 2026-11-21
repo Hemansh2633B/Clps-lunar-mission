@@ -382,7 +382,7 @@ state, scientific calculations, exports, or the existing view modules:
   information.
 - Mission clock collapsed into an accessible disclosure; full UTC/MJD/sub-solar/
   sub-Earth values remain available on demand.
-- Header scope now says lunar mission analysis rather than south-pole-only.
+- Header and onboarding now state the south-pole landing-site challenge scope.
 - Mode labels use **Plan / Teach** while preserving the existing
   `planner` / `educator` state values.
 - The planner's top row identifies the selected site and keeps the guided
@@ -392,3 +392,27 @@ state, scientific calculations, exports, or the existing view modules:
 
 These changes do not implement the separate landing-page/router proposal above;
 the root route remains the planner.
+
+
+## 9. Challenge-scope trim
+
+The primary workflow is now explicitly aligned to the 2026 Lunar Landing Site
+Navigator brief: compare south-polar candidate sites and UTC dates, inspect Sun
+and Earth against the local terrain horizon, and assess solar-power potential
+and direct-to-Earth visibility windows.
+
+- Site catalogue opens on **South pole** and offers only the south-pole,
+  historical 2024 Artemis-region, and custom-site filters. Far-side and
+  non-polar reference browsing and the redundant global coordinate grid were
+  removed from the primary site selector; the polar map and numeric custom-site
+  entry remain.
+- The optional 3D Moon context remains, but the unrelated stylized vehicle
+  hangar (Starship/HLS/CLPS model viewer) was removed from the UI, source and
+  browser/unit tests.
+- Terrain Lab, Data Hub, Horizons verification, scenario/date comparison,
+  timeline, solar-array estimates and exports remain because they support
+  terrain validity or the challenge's core evaluation workflow.
+- The nine-chapter Story Tutorial, its artwork, docked folio presentation,
+  interactive spotlight, progress and debrief were not redesigned or removed.
+  The welcome copy was narrowed to the south-pole challenge; the tutorial
+  presentation itself remains intact.
