@@ -590,10 +590,7 @@ Browser evidence: `screenshots/09-real-dem-lab.png`, `screenshots/10-real-dem-mi
   flow and procedural vehicle-model tests were removed with it; the selenographic
   mapping tests for the retained planet view remain.
 - Provenance for the two planet textures (lunar albedo + Earth Blue Marble via the three.js
-  examples, NASA-derived) recorded in `public/assets/PROVENANCE.md`; decorative only.
-
- (lunar albedo + Earth Blue Marble via the three.js
-  examples, NASA-derived) recorded in `public/assets/PROVENANCE.md`; decorative only.
+  examples, NASA-derived) is recorded in `public/assets/PROVENANCE.md`; decorative only.
 
 ## DEM horizon → mission planner
 
