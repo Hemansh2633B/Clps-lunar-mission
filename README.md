@@ -7,17 +7,15 @@ CHANDRA is available as a hosted web application. You can access the live versio
 **Live Website:** [CHANDRA – Lunar Mission Planning](https://chandra-jet.vercel.app/)
 
 Open the website in your browser to explore the lunar mission planning and analysis features.
-Lunar mission planning and analysis workbench.
+South-pole landing-site analysis for mission planners, educators and the public.
 
-CHANDRA evaluates arbitrary selenographic landing coordinates across the lunar
-near side, far side and polar regions: where the Sun and Earth lie in the local
-frame, whether the Moon's body or local terrain blocks each direction, when
-illumination and geometric relay windows occur, what a solar array generates,
-and whether a battery energy budget closes over a UTC mission window. It is a
-browser application (React + TypeScript) with a scientific engine in a Web
-Worker, plus an optional native API (Go, standard library only) for validated
-lunar elevation models, bounded LOLA/PDS subset acquisition and independent
-NASA/JPL Horizons checks.
+CHANDRA helps users compare lunar south-pole candidate sites and UTC mission
+dates. It visualizes the Sun and Earth relative to each site's local terrain
+horizon, estimates sunlight availability and solar-array output, and identifies
+potential direct-to-Earth visibility windows. A browser application (React +
+TypeScript) runs the scientific engine in a Web Worker, with an optional Go API
+for validated lunar elevation models, bounded LOLA/PDS subset acquisition and
+independent NASA/JPL Horizons checks.
 
 The project started as a NASA Space Apps Challenge concept and has since been
 rebuilt as an analysis tool with explicit data provenance. It is not a NASA
@@ -26,26 +24,19 @@ what the underlying data supports: illustrative terrain, synthetic demo
 terrain, and frame-verified DEMs are distinct confidence tiers, and analyses
 that fail validation are blocked rather than quietly degraded.
 
-**Far-side scope note:** far-side sites and their Sun/Earth/relay geometry are
-available, but no validated global far-side DEM is bundled or enabled by
-default. Far-side terrain therefore remains clearly labelled illustrative until
-a deployment configures and validates a provider product. See [known issues](docs/known-issues.md)
-and the [API/data contract](docs/api.md).
-
 ![CHANDRA workspace](screenshots/01-workspace.png)
 
 ## What it does
 
-- **Candidate sites** — a curated, extensible catalogue of polar CLPS/Artemis
-  regions, near-side references and named far-side regions (Von Kármán crater,
-  Apollo basin, Hertzsprung basin, SPA interior, Tsiolkovskiy). Region centres
-  carry coordinate uncertainty and are never represented as surveyed points;
-  arbitrary custom latitude / east-longitude coordinates remain supported.
+- **Candidate sites** — a south-polar catalogue centered on NASA's historical
+  Artemis III candidate regions and other polar reference points. Approximate
+  region centres carry coordinate uncertainty and are never presented as
+  surveyed landing coordinates; users can also enter custom coordinates.
 - **Sun and Earth geometry** — topocentric azimuth/elevation from
   astronomy-engine with the IAU-era Moon body-fixed rotation. Visibility
   separates the horizontal plane, the spherical lunar-body limb (curvature dip,
-  finite apparent Sun/Earth disks) and the local terrain horizon. Far-side Earth
-  rays are body-occulted, not labelled as direct communication.
+  finite apparent Sun/Earth disks) and the local terrain horizon. Direct-to-Earth
+  visibility is geometric line-of-sight, not a guaranteed radio link.
 - **Illumination and incidence** — 360° terrain masks are integrated into
   sunrise/sunset and illumination intervals; a validated DEM grid can supply
   local Horn 3×3 slope/aspect for a separately labelled surface-incidence
@@ -92,15 +83,16 @@ and the [API/data contract](docs/api.md).
   carries the app version, report schema version, a SHA-256 analysis
   fingerprint, the effective (sanitized) configuration, and per-row
   provenance. See [scientific-method.md §13](docs/scientific-method.md).
-- **Tutorial and educational views** — a nine-chapter interactive briefing
-  that drives the real planner, an educator mode, a glossary, and 3D Space
-  views (planet time-lapse, stylized vehicle hangar).
+- **Tutorial and educational views** — the nine-chapter interactive briefing
+  drives the real planner; educator mode, a searchable glossary and an optional
+  3D Moon context view help explain the same Sun/Earth geometry. The briefing's
+  visual design and interactive chapters are retained.
 
 ## Typical Project Workflow
 
 A typical CHANDRA session follows these steps:
 
-1. **Select a landing site:** Choose a near-side, far-side or polar region candidate, or define an arbitrary custom latitude / east-longitude coordinate.
+1. **Select a landing site:** Choose a south-polar candidate region or enter custom selenographic coordinates for a focused site analysis.
 2. **Configure the mission:** Set the mission start time in UTC, mission duration, and launch slip.
 3. **Analyze illumination:** Examine sunlight availability and local terrain obstruction at the selected landing site.
 4. **Check Earth visibility:** Review geometric Earth visibility during the selected mission window.
