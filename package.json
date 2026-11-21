@@ -9,6 +9,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "test:browser": "node scripts/browser-test.mjs",
+    "test:layout": "node scripts/layout-smoke.mjs",
     "typecheck": "tsc -b",
     "dev:api": "node scripts/dev-api.mjs",
     "dev:full": "node scripts/dev-full.mjs",
