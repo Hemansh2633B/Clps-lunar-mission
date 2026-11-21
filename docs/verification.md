@@ -584,20 +584,13 @@ Browser evidence: `screenshots/09-real-dem-lab.png`, `screenshots/10-real-dem-mi
   near-side / south-pole / sub-solar / Earth-view camera presets. Earth is direction-only,
   explicitly labelled "not to scale". The lat/lon→vector mapping is unit-tested against the
   equirectangular texture orientation (`tests/space.test.ts`).
-- **Fleet hangar** (`src/components/FleetViewer.tsx` + `src/three/vehicles.ts`): procedural,
-  stylized Starship full stack, Starship HLS lunar lander, and CLPS robotic lander. Orbit/
-  zoom, turntable, side/top/detail presets, a stage-separation slider (stack), engine-plume
-  toggle, and raycaster hover part callouts with a parts list. Models are primitive-based
-  massing studies — **not engineering CAD or flight geometry** — and carry an in-view
-  disclaimer; approximate public dimensions are quoted in the spec panel.
-- Both views live in a lazy-loaded `SpaceView` (header **Space** button / `O` shortcut),
-  mutually exclusive with Terrain Lab and Compare, in a `.workspace.orbital` layout that
-  mirrors the Terrain Lab dark-viewport-in-paper-chrome pattern. Responsive down to 390 px.
-- New unit tests (11): vehicle build/part-tag/plume/bounds/dispose for all three vehicles,
-  stack-only separable stage, HLS legs, and the selenographic mapping. Browser E2E extended
-  with planet + fleet flows and screenshots `09-planet`, `10-fleet-stack`, `11-fleet-hls`.
+- The planet time-lapse remains an optional global context view; it does not replace
+  the planner's local terrain-horizon panorama or its site/date comparison.
+- The out-of-scope vehicle hangar was removed from the application. Its browser
+  flow and procedural vehicle-model tests were removed with it; the selenographic
+  mapping tests for the retained planet view remain.
 - Provenance for the two planet textures (lunar albedo + Earth Blue Marble via the three.js
-  examples, NASA-derived) recorded in `public/assets/PROVENANCE.md`; decorative only.
+  examples, NASA-derived) is recorded in `public/assets/PROVENANCE.md`; decorative only.
 
 ## DEM horizon → mission planner
 
