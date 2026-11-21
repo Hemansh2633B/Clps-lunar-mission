@@ -22,7 +22,7 @@ try {
   assert(await page.locator('#global-lunar-coordinate-map').count() === 0, 'redundant global coordinate grid is removed; the polar map remains the primary map');
   assert(await page.getByRole('button', { name: 'Moon 3D context' }).count() === 1, 'optional Moon 3D context remains available');
   assert(await page.getByRole('button', { name: /Fleet hangar/i }).count() === 0, 'unrelated fleet hangar is removed');
-  assert(await page.locator('.app-header').innerText().then((text) => text.includes('SOUTH POLE LANDING NAVIGATOR')), 'header describes the full lunar mission scope');
+  assert(await page.locator('.app-header').innerText().then((text) => text.includes('SOUTH POLE LANDING NAVIGATOR')), 'header identifies the south-pole challenge scope');
   assert(await page.getByRole('radio', { name: /PLAN/i }).count() === 1, 'Plan mode is available');
   assert(await page.getByRole('radio', { name: /TEACH/i }).count() === 1, 'Teach mode is available');
 
