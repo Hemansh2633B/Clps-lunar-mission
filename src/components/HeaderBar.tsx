@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, Box, Columns2, Database, Download, Keyboard, Settings2, GraduationCap, Gauge, Orbit, HelpCircle, Clock3, ChevronDown } from 'lucide-react';
+import { BookOpen, Box, Columns2, Database, Download, Keyboard, Settings2, GraduationCap, Gauge, HelpCircle, Clock3, ChevronDown, Globe2 } from 'lucide-react';
 import type { AppMode } from '../types/mission';
 import { mjd, wrap180 } from '../engine/constants';
 import { APP_VERSION } from '../version';
@@ -47,7 +47,7 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
           <img src="/assets/patch.png" alt="CHANDRA mission patch" width={42} height={42} style={{ width: 42, height: 42, borderRadius: '50%', border: '1px solid var(--line)', objectFit: 'cover', flex: '0 0 auto' }} />
           <div title="CHANDRA — Sanskrit lunar deity, “the shining one”">
             <div className="display" style={{ fontSize: 19, lineHeight: 1, fontWeight: 600, whiteSpace: 'nowrap' }}>CHANDRA</div>
-            <div className="mono" style={{ fontSize: 9, letterSpacing: '.18em', color: 'var(--ink-soft)', marginTop: 3 }}>LUNAR MISSION ANALYSIS · v{APP_VERSION}</div>
+            <div className="mono" style={{ fontSize: 9, letterSpacing: '.18em', color: 'var(--ink-soft)', marginTop: 3 }}>SOUTH POLE LANDING NAVIGATOR · v{APP_VERSION}</div>
           </div>
         </div>
 
@@ -71,7 +71,7 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
             <button type="button" role="radio" aria-checked={mode === 'planner'} onClick={() => onMode('planner')}><Gauge size={13} /> PLAN</button>
             <button type="button" role="radio" aria-checked={mode === 'educator'} onClick={() => onMode('educator')}><GraduationCap size={13} /> TEACH</button>
           </div>
-          <button className={`btn ${spaceActive ? 'active' : ''}`} onClick={onSpace} title="Space views — planet time-lapse and fleet hangar" aria-label="Space views"><Orbit size={14} /> <span className="tool-label">Space</span> <span className="kbd">O</span></button>
+          <button className={`btn ${spaceActive ? 'active' : ''}`} onClick={onSpace} title="Moon 3D context — global Sun/Earth positions" aria-label="Moon 3D context"><Globe2 size={14} /> <span className="tool-label">Moon 3D</span> <span className="kbd">O</span></button>
           <button className={`btn ${terrainActive ? 'active' : ''}`} onClick={onTerrain} title="Terrain analysis — 3D lab and real DEM workflow" aria-label="Terrain analysis"><Box size={14} /> <span className="tool-label">Terrain</span> <span className="kbd">T</span></button>
           <button className={`btn ${compareMode && !terrainActive && !spaceActive && !dataActive ? 'active' : ''}`} onClick={onCompare} data-tour="compare" title="Comparison — pinned scenarios, confidence-tiered ranking" aria-label="Comparison"><Columns2 size={14} /> <span className="tool-label">Compare</span> <span className="kbd">C</span></button>
           <button className={`btn ${dataActive ? 'active' : ''}`} onClick={onData} aria-pressed={dataActive} title="Lunar Data Hub — sources, provenance, JPL Horizons verification" aria-label="Data Hub"><Database size={14} /> <span className="tool-label">Data</span> <span className="kbd">D</span></button>
