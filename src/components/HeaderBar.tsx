@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, Box, Columns2, Database, Download, Keyboard, Settings2, GraduationCap, Gauge, Orbit, HelpCircle } from 'lucide-react';
+import { BookOpen, Box, Columns2, Database, Download, Keyboard, Settings2, GraduationCap, Gauge, Orbit, HelpCircle, Clock3, ChevronDown } from 'lucide-react';
 import type { AppMode } from '../types/mission';
 import { mjd, wrap180 } from '../engine/constants';
 import { APP_VERSION } from '../version';
@@ -31,6 +31,7 @@ const fmtLon = (v: number) => { const w = wrap180(v); return `${Math.abs(w).toFi
 
 export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrainActive, onTerrain, spaceActive, onSpace, dataActive, onData, onGuide, onHelp, onSettings, onShortcuts, onExport, playing, subSolar, subEarth }: Props) {
   const [exportOpen, setExportOpen] = useState(false);
+  const [clockOpen, setClockOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const close = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setExportOpen(false); };
@@ -46,11 +47,17 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
           <img src="/assets/patch.png" alt="CHANDRA mission patch" width={42} height={42} style={{ width: 42, height: 42, borderRadius: '50%', border: '1px solid var(--line)', objectFit: 'cover', flex: '0 0 auto' }} />
           <div title="CHANDRA — Sanskrit lunar deity, “the shining one”">
             <div className="display" style={{ fontSize: 19, lineHeight: 1, fontWeight: 600, whiteSpace: 'nowrap' }}>CHANDRA</div>
-            <div className="mono" style={{ fontSize: 9, letterSpacing: '.18em', color: 'var(--ink-soft)', marginTop: 3 }}>LUNAR SOUTH POLE DESK · v{APP_VERSION}</div>
+            <div className="mono" style={{ fontSize: 9, letterSpacing: '.18em', color: 'var(--ink-soft)', marginTop: 3 }}>LUNAR MISSION ANALYSIS · v{APP_VERSION}</div>
           </div>
         </div>
 
-        <span className="engine-pill" style={{ flex: '0 0 auto' }} title="Real Sun/Earth ephemeris via astronomy-engine + IAU 2015 Moon rotation"><span className="led sage" />EPHEMERIS: NOMINAL</span>
+        <button type="button" className="clock-toggle" aria-expanded={clockOpen} aria-controls="mission-clock-details" onClick={() => setClockOpen((open) => !open)} title="Show UTC epoch, modified Julian date and lunar sub-points">
+          <Clock3 size={13} />
+          <span>Mission clock</span>
+          <time dateTime={utc}>{utc.slice(0, 16).replace('T', ' ')} UTC</time>
+          <ChevronDown size={12} className={clockOpen ? 'clock-chevron open' : 'clock-chevron'} />
+        </button>
+        <span className="engine-pill" style={{ flex: '0 0 auto' }} title="Sun/Earth ephemeris via astronomy-engine + IAU 2015 Moon rotation"><span className="led sage" />EPHEMERIS: NOMINAL</span>
 
         <span className={`chip ${playing ? 'nominal' : 'neutral'}`} title="Simulation playback" style={{ marginLeft: 4, flex: '0 0 auto' }}>
           <span className={playing ? 'led sage' : ''} style={playing ? undefined : { width: 8, height: 8, borderRadius: '50%', background: 'var(--dim)', display: 'inline-block' }} />
@@ -60,9 +67,9 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
         <div style={{ flex: 1 }} />
 
         <div className="header-tools">
-          <div className="modeswitch" role="radiogroup" aria-label="Operator mode">
-            <button type="button" role="radio" aria-checked={mode === 'planner'} onClick={() => onMode('planner')}><Gauge size={13} /> FLIGHT OPS</button>
-            <button type="button" role="radio" aria-checked={mode === 'educator'} onClick={() => onMode('educator')}><GraduationCap size={13} /> EDUCATOR</button>
+          <div className="modeswitch" role="radiogroup" aria-label="Workspace mode">
+            <button type="button" role="radio" aria-checked={mode === 'planner'} onClick={() => onMode('planner')}><Gauge size={13} /> PLAN</button>
+            <button type="button" role="radio" aria-checked={mode === 'educator'} onClick={() => onMode('educator')}><GraduationCap size={13} /> TEACH</button>
           </div>
           <button className={`btn ${spaceActive ? 'active' : ''}`} onClick={onSpace} title="Space views — planet time-lapse and fleet hangar" aria-label="Space views"><Orbit size={14} /> <span className="tool-label">Space</span> <span className="kbd">O</span></button>
           <button className={`btn ${terrainActive ? 'active' : ''}`} onClick={onTerrain} title="Terrain analysis — 3D lab and real DEM workflow" aria-label="Terrain analysis"><Box size={14} /> <span className="tool-label">Terrain</span> <span className="kbd">T</span></button>
@@ -91,7 +98,8 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
           <button className="btn icon" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts" onClick={onShortcuts}><Keyboard size={15} /></button>
         </div>
       </header>
-      <div className="clock-strip header-clock">
+      {clockOpen && (
+      <div id="mission-clock-details" className="clock-strip header-clock">
         <div className="cluster">
           <div className="k">MISSION EPOCH · SIM</div>
           <div className="v">{utc.slice(11, 19)} <span style={{ color: 'var(--brass)' }}>UTC</span></div>
@@ -113,6 +121,7 @@ export function HeaderBar({ timeMs, mode, onMode, compareMode, onCompare, terrai
           <div className="h">OPTICAL LIBRATION</div>
         </div>
       </div>
+      )}
     </>
   );
 }
