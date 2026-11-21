@@ -65,11 +65,11 @@ Action: navigate by landmark and heading from the top of the workspace.
 
 Expected: one primary heading/wordmark region; site rail, center instruments,
 telemetry rail and story panel (when open) are reachable as labeled
-regions/landmarks; panel headings are in a logical order; the decorative ticker
-is not announced.
+regions/landmarks; panel headings are in a logical order; no decorative scrolling ticker
+is present or announced.
 
 Fail if: multiple unlabeled regions trap navigation, heading order skips levels
-without structure, or the ticker is read as content.
+without structure, or a removed decorative marquee is reintroduced into the accessibility tree.
 
 ### SR-02 · First-run / welcome choice
 
