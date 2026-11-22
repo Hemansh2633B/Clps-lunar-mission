@@ -210,11 +210,13 @@ CI (`.github/workflows/ci.yml`) defines four jobs: quality (typecheck, build,
 unit, Go, geometry, parity), Vercel build validation, browser E2E (four
 Playwright suites), and independent SPICE validation. The SPICE job runs on
 pull requests, manual dispatches, and pushes to `main`; it is intentionally
-skipped on feature-branch pushes. GitHub CI run [#44917565022](https://github.com/Hemansh2633B/Clps-lunar-mission/actions/runs/44917565022)
-for this branch passed quality (including Go `gofmt`, vet and tests), Vercel
-build/function execution, and browser E2E; SPICE was skipped by its branch
-condition. See [ci-governance.md](docs/ci-governance.md) for the check contract
-and run record.
+skipped on feature-branch pushes. On the repair branch (`arena/f5387ff1-clps-lunar-mission`),
+run [#45041540557](https://github.com/Hemansh2633B/Clps-lunar-mission/actions/runs/45041540557)
+passed quality (typecheck, build, unit, geometry, gofmt/vet/Go tests, parity)
+and the Vercel build job, and failed only the browser-E2E job at its stale
+pre-scope steps (Apollo 11/Chang'e 4 references and a `Custom`-tab-vs-footer
+click) — both fixed by the branch's follow-up. See [ci-governance.md](docs/ci-governance.md)
+for the check contract and run record.
 
 ## Architecture
 

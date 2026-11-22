@@ -270,7 +270,7 @@ try {
     const page = await newPage();
     await page.goto(BASE);
     // Save a custom site through the real modal.
-    await page.getByRole('button', { name: /Custom/ }).first().click();
+    await page.getByRole('button', { name: 'Synthesize custom site' }).click();
     await page.waitForSelector('[role="dialog"]');
     await page.getByLabel('Site name').fill('Persisted Peak');
     await page.getByRole('button', { name: /Create site/ }).click();
@@ -285,7 +285,7 @@ try {
     await page.locator('.story-nav').getByRole('button', { name: 'Skip chapter' }).click();
     await page.waitForTimeout(400);
     await page.keyboard.press('Escape'); // collapse the panel; keep the session
-    await page.getByRole('button', { name: /Custom/ }).first().click();
+    await page.getByRole('button', { name: 'Synthesize custom site' }).click();
     await page.waitForSelector('[role="dialog"]');
     await page.getByLabel('Site name').fill('Training Peak');
     await page.getByRole('button', { name: /Create site/ }).click();

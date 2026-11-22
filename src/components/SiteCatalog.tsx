@@ -98,7 +98,7 @@ export function SiteCatalog({ sites, selectedId, onSelect, onCustom, onHorizonTa
             </div>
           )}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <button className="btn sm" onClick={onCustom}><Plus size={12} /> Custom</button>
+            <button className="btn sm" aria-label="Synthesize custom site" onClick={onCustom}><Plus size={12} /> Custom</button>
             <button className="btn sm" onClick={onHorizonTable}><Table2 size={12} /> Horizon</button>
             <button className="btn sm primary" onClick={onPin}><Pin size={12} /> {compareMode ? 'Pin' : 'Pin & compare'}</button>
           </div>

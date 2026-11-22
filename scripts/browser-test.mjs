@@ -97,15 +97,14 @@ try {
   assert(await page.locator('canvas[aria-label*="Stereographic map"]').count() > 0, 'polar map has a text alternative');
   assert(await page.getByLabel('Mission time scrubber').count() === 1, 'time scrubber is labelled + keyboard-operable');
 
-  await page.locator('.site-item', { hasText: 'Apollo 11' }).click();
+  // Challenge scope (South Pole): the catalog shows polar/artemis/custom tabs.
+  // Near-side reference sites (Apollo 11, Chang'e 4) are intentionally out of
+  // scope and must not be selectable here.
+  assert(await page.locator('.site-item', { hasText: 'Apollo 11' }).count() === 0, 'reference sites are out of challenge scope');
+  await page.locator('.site-item', { hasText: 'Malapert Massif' }).click();
   await page.waitForTimeout(900);
-  assert(await page.locator('text=Tranquility Base').count() > 0, 'Apollo 11 selected');
-  await shot(page, '02-apollo11');
-
-  await page.locator('.site-item', { hasText: "Chang'e 4" }).click();
-  await page.waitForSelector('text=NEVER', { timeout: 20000 * SCALE }); // wait for the mission summary, not a fixed delay
-  assert(await page.locator('text=NEVER').count() > 0, 'far side reports NEVER');
-  await shot(page, '03-farside');
+  assert(await page.locator('.site-rail', { hasText: 'Malapert Massif' }).count() > 0, 'Malapert Massif selected');
+  await shot(page, '02-polar');
 
   await page.keyboard.press('c');
   await page.getByRole('button', { name: /Pin current/ }).click();
@@ -124,14 +123,14 @@ try {
   await shot(page, '05-educator');
   await page.keyboard.press('Escape');
 
-  await page.getByRole('button', { name: /Custom/ }).first().click();
+  await page.getByRole('button', { name: 'Synthesize custom site' }).click();
   await page.locator('input[value="Custom polar site"]').fill('Test Ridge Alpha');
   await page.getByRole('button', { name: /Create site/ }).click();
   await page.waitForTimeout(700);
   assert(await page.locator('text=Test Ridge Alpha').count() > 0, 'custom site created');
 
   // Modal keyboard guard: global shortcuts must not fire while a dialog is open.
-  await page.getByRole('button', { name: /Custom/ }).first().click();
+  await page.getByRole('button', { name: 'Synthesize custom site' }).click();
   await page.waitForSelector('[role="dialog"]');
   await page.keyboard.press('t');
   await page.waitForTimeout(200);

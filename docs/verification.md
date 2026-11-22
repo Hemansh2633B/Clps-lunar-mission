@@ -173,6 +173,48 @@ orientation error itself.
   reader.
 - The mission-level effect of the terrain differences in §14.4.
 
+## Post-release build repair — executed evidence (2026-11-21)
+
+Executed on branch `arena/f5387ff1-clps-lunar-mission` after an independent
+review found that the branch's own CI was red and the production build was
+broken at HEAD. No scientific code, numerical output or report schema changed;
+all edits are build/tooling/test hygiene. `APP_VERSION` remains **1.12.0**.
+
+**Root cause.** `src/App.tsx` called a `setCustomInitial` setter that was never
+declared (a leftover from the map-click-to-prefill refactor of `CustomSiteModal`),
+which failed `tsc -b`, the production build and the quality CI job at the
+typecheck step. At runtime the Custom-site button threw `ReferenceError` and the
+modal never opened. The dead `initial` prop on `CustomSiteModal` was removed.
+
+| Gate | Command | Executed result |
+|---|---|---|
+| Typecheck | `npm run typecheck` | **clean** — now also covers `scripts/` (tsconfig `include`) |
+| Unit suites | `npm test` | **393 passed, 40 files** (adds `tests/terrain-api.test.ts`, 10 tests covering the `/api/*` fetch layer) |
+| Production build | `npm run build` | **clean** (`tsc -b && vite build`) |
+| Geometry checks | `npm run test:geometry` | passed |
+| Vercel configuration | `npm run vercel:check` | passed |
+| Responsive layout smoke | `npm run test:layout` | passed (desktop, tablet, 390 px, 320 px) — via the shared browser launcher |
+| Browser E2E (main) | `npm run test:browser` | **PASSED through the terrain-lab section** (guided workflow, accessibility, polar-site selection, pin/compare, educator mode, custom-site creation, modal keyboard guard, JSON export, playback, full terrain-lab flow — grids/shaders/camera/horizon). The real-mode no-DEM and final no-console-errors assertions require the native API, which this sandbox cannot run (no Go toolchain); **CI runs this suite** on GitHub's runners against `dev:full` and is the authoritative gate |
+| Browser E2E (others) | `npm run test:story` / `:exports` / `:datahub` | **NOT RUN here** — no Linux Playwright CDN download in this sandbox; CI runs them on GitHub's runners |
+| Native backend | `npm run test:go` / `npm run test:parity` | **NOT RUN here** — no Go toolchain available in this sandbox; reviewed by inspection only (CI runs them for real) |
+
+Also in this repair: the inline `@sparticuz/chromium` fallback duplicated
+across five browser suites was replaced by the shared
+`scripts/lib/browser.mjs` launcher (all five suites, including the layout
+smoke, now use it and no longer need the Playwright CDN); `test:all` now
+includes `typecheck`; `playwright` is a declared devDependency; `engines`
+declares Node >= 22; dead `eslint-disable` comments were replaced with plain
+comments (no ESLint config exists in the repo); `scripts/horizon-parity.ts`
+fails gracefully when Go is absent; `scripts/go-test.mjs` resolves gofmt
+robustly.
+
+### GitHub Actions runs (this repair)
+
+Pushed as `a7b2053`, with a follow-up fixing stale browser-suite steps (and
+adding `aria-label="Synthesize custom site"` so the footer button is
+selectable by name, distinct from the Custom tab). The branch's CI at
+`a7b2053` (run 45041540557) was 3-of-4 passing — typecheck/build/unit/geometry/Go/parity and the Vercel build job green — with the browser-E2E job red for reasons this follow-up fixes (stale Apollo/Chang'e references and a click on the Custom *tab* instead of the footer *＋ Custom* button). The follow-up's run is recorded in the README.
+
 ## v1.11.0 integrity release — executed evidence
 
 Executed on branch `arena/df057ecf-clps-lunar-mission` from the merged v1.10
