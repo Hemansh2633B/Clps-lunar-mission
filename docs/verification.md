@@ -214,12 +214,22 @@ Pushed as `a7b2053`, with follow-ups fixing stale browser-suite steps, a
 missing `aria-label` for the Custom footer button, and the browser-E2E step's
 patience (a GPU-less runner needs `CHANDRA_E2E_TIMEOUT_SCALE`, 3× — the native
 terrain-lab init exceeds the 30 s default; assertions are unchanged).
-The branch's CI at `a7b2053` (run 45041540557) was 3-of-4 passing —
-typecheck/build/unit/geometry/Go/parity and the Vercel build job green — with
-the browser-E2E job red at its stale Apollo 11 / Chang'e 4 steps (outside the
-South Pole challenge scope) and a click on the Custom tab instead of the
-footer *＋ Custom* button; the follow-up additionally records the
-software-rendered patience in CI. The latest run is recorded in the README.
+Runs at `a7b2053` / `9b66225` / `50a4462` / `9e96563` (ids 45041540557,
+45044430771, 45045172704, 45046359278): the quality job (typecheck, build,
+unit, geometry, gofmt/vet/Go tests, parity) and the Vercel build job are
+**green on every run**; the browser-E2E job is red on every run
+(~40 s into the browser-test, after the layout smoke passes) with per-step CI
+logs not reachable from this sandbox — the stale Apollo 11 / Chang'e 4 steps
+and the Custom-tab click were fixed and locally verified, so the remaining
+failure is undiagnosed here.
+
+### Live production deployment
+
+Production deployment `dpl_HZ2jyqpW4p4hdXxbuP5JcD9B4LHm` (branch head
+`9e965639`, created 2026-11-21) is READY and promoted — replacing the broken
+post-PR-#13 production deployment. A READY production deployment is recorded;
+live-API checks (`/api/health`, `/api/config`, Horizons, LOLA plan, imagery
+layers) are **not** performed from this sandbox (cannot reach the live site).
 
 ## v1.11.0 integrity release — executed evidence
 

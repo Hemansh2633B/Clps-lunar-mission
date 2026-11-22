@@ -318,12 +318,16 @@ Executed evidence per release is recorded in
 [docs/verification.md](docs/verification.md); skipped and not-run gates are
 never reported as passes.
 
-What v1.12 has **not** been shown to do: run on a live Vercel deployment, or
-talk to NASA Moon Trek, the LROC WMS, JPL Horizons, NASA PGDA or Vercel Blob
-for real. Those integrations are tested against recorded responses and local
-stand-ins because the development environment could not reach the services.
-The list, with the opt-in live tests that close it, is in
-[docs/known-issues.md](docs/known-issues.md).
+v1.12 + the build-repair branch has **been shown to deploy live**: the
+production deployment `dpl_HZ2jyqpW4p4hdXxbuP5JcD9B4LHm` (commit `9e965639…`,
+2026-11-21) is READY and promoted, replacing the broken post-PR-#13 production
+deployment (`dpl_GnFVQrcV…`, `ERROR`). What remains unverified is live traffic
+dependent on the external services: NASA Moon Trek imagery, the LROC WMS, JPL
+Horizons, NASA PGDA and Vercel Blob (no store is connected) — see
+[docs/deployment/vercel.md](docs/deployment/vercel.md#verification-status).
+Live-site checks (`/api/health`, `/api/config`, one Horizons query, one LOLA
+plan, imagery layers) have not been performed in this environment; the checklist
+is recorded there.
 
 Manual screen-reader testing (NVDA/VoiceOver) has not been executed; the
 protocol and expected results are in

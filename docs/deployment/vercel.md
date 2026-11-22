@@ -159,13 +159,35 @@ from the deployment's page, or change Settings → Deployment Protection.
 
 ## Verification status
 
-**No live deployment has been made from this repository as of v1.12.0** — and
-the production alias is currently broken: the v1.12.0 production deployment
-(`dcd8949`, commit `dcd8949d`) was superseded by the PR #13 merge, whose
-build failed (the production deployment is in `ERROR` state). The repair
-branch (`arena/f5387ff1-clps-lunar-mission`) produces a READY preview
-deployment on push. What exists is local evidence that the deployable artifact
-is correct:
+**Live production deployment exists since 2026-11-21** (see
+[Post-release live checks](#post-release-live-checks) below): the production
+alias points at the repaired-branch build, which replaced the broken
+post-PR-#13 production deployment (`dpl_GnFVQrcV…`, `ERROR`).
+
+What exists today:
+
+| Checked | How |
+|---|---|
+| `npm run vercel:check` | passed (config, CSP, rewrite order, `.vercelignore`) |
+| `vercel build` + function execution locally | passed (local Lambda-runtime emulator; this is what the old v1.12.0 record showed) |
+| Build on Vercel's own builders and the Go function on real infrastructure | **PASSED — production deployment `dpl_HZ2jyqpW4p4hdXxbuP5JcD9B4LHm` is READY and promoted** (commit `9e965639…`, 2026-11-21) |
+| The console's headers/rewrites as served by Vercel's CDN | **NOT VISIBLY VERIFIED here** — the deployment is READY, but this environment cannot browse the live site |
+| Outbound requests to NASA PGDA and JPL Horizons from Vercel | **NOT TESTED** — needs live traffic |
+| Vercel Blob persistence | **NOT TESTED** — no Blob store is connected to the project |
+| Deployment Protection behaviour | **NOT TESTED here** — `ssoProtection` is `all_except_custom_domains`; boot-time behavior needs a browser session |
+| Live API requests (`/api/health`, `/api/config`, one Horizons query, one LOLA plan, imagery layers) | **NOT TESTED here** — same constraint as above |
+
+### Post-release live checks
+
+The minimum live check after the repair-branch production deployment
+(`dpl_HZ2jyqpW4p4hdXxbuP5JcD9B4LHm`) is: open the site; open the Data Hub and
+confirm the header chip reads `Backend online · vercel`; request
+`/api/health` and `/api/config`; run one Horizons query; plan (not download)
+one LOLA subset; select each remote imagery layer on the Polar Map. Record the
+result here — environment-driven constraints (no direct browser access in
+this sandbox) mean it has not been performed here yet.
+
+What was verified locally (v1.12.0 evidence, unchanged):
 
 | Checked locally | How |
 |---|---|
@@ -174,19 +196,3 @@ is correct:
 | The built function starts and answers through the generated routes | `scripts/vercel-check.mjs --built`: health, config, terrain, horizon, sources, metadata, JSON 404, verify, via a local Lambda-runtime emulator |
 | The function reports itself correctly | `deployment: "vercel"`, storage `local` / `persistent: false`, with the `VERCEL` variable deliberately absent |
 | The console works under the production CSP, and without an API | data-feature browser suite, static-only section |
-
-| Not verified until someone deploys | Why it matters |
-|---|---|
-| The build on Vercel's own builders | Vercel installs its own Go toolchain and Node version there; the local build used local ones. The project's Node.js setting (26.x on the existing `chandra` project) is newer than the Node 22 used in CI |
-| The function on Vercel's infrastructure | Cold start, the real request/response bridge, the 60 s limit, memory under a large acquisition |
-| Outbound requests to NASA PGDA and JPL Horizons from Vercel | Either provider could refuse or throttle cloud addresses |
-| Headers and rewrites as served by Vercel's CDN | Simulated locally from `vercel.json`, not observed |
-| Vercel Blob persistence | Tested against a fake of the Blob API only |
-| Behaviour behind Deployment Protection | The existing project protects all deployments except custom domains |
-
-After a first deployment, the minimum check is: open the site; open the Data
-Hub and confirm the header chip reads `Backend online · vercel`; request
-`/api/health` and `/api/config`; run one Horizons query; plan (not download) one
-LOLA subset; select each remote imagery layer on the Polar Map. Record the
-result here and in [../verification.md](../verification.md).
-
