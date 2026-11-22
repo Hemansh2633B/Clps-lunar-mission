@@ -140,6 +140,14 @@ jobs:
         env:
           CHANDRA_BROWSER_CI: '1'
           BASE_URL: http://localhost:5173/
+          # The CI runner has no GPU, so Chromium renders via SwiftShader: the
+          # initial terrain-lab init (grid + shaders + 3D scene) takes longer than
+          # the 30 s default patience. The default patience was previously the
+          # operative contract for this step and is too tight; the browser-test
+          # header documents CHANDRA_E2E_TIMEOUT_SCALE for software-rendered
+          # browsers. SCALE=3 stretches every wait in this suite without changing
+          # any assertion.
+          CHANDRA_E2E_TIMEOUT_SCALE: '3'
         run: npm run test:browser
       - name: Run story tutorial E2E (personas A–E)
         env:

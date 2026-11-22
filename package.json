@@ -14,7 +14,7 @@
     "dev:api": "node scripts/dev-api.mjs",
     "dev:full": "node scripts/dev-full.mjs",
     "test:geometry": "tsx scripts/geometry-check.ts",
-    "test:all": "npm test && npm run test:go && npm run test:geometry && npm run test:parity",
+    "test:all": "npm run typecheck && npm test && npm run test:go && npm run test:geometry && npm run test:parity",
     "test:parity": "tsx scripts/horizon-parity.ts",
     "test:real-dem": "node scripts/real-dem-browser-test.mjs",
     "test:story": "node scripts/story-browser-test.mjs",
@@ -51,6 +51,10 @@
     "tsx": "^4.23.15",
     "typescript": "~5.8.3",
     "vite": "^7.3.7",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.0",
+    "playwright": "^1.64.1"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

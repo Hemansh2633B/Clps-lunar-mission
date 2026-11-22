@@ -44,7 +44,7 @@ export function useSimulation(site: LandingSite, startMs: number, endMs: number,
         }
       });
     return () => { active = false; releaseSimulation(site, startMs, endMs, config); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Intentionally minimal dependency set — this effect re-derives its inputs from the canonical key above.
   }, [key]);
 
   // Render-time guard: if the key changed before the effect ran, never return data

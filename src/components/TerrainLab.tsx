@@ -420,7 +420,7 @@ export function TerrainLab({ site, timeMs, mode, onCreateSite, notify }: Props) 
   useEffect(() => {
     // Initial demo model so the lab is never an empty placeholder.
     void build({ mode: 'synthetic' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Intentionally minimal dependency set — this effect re-derives its inputs from the canonical key above.
   }, []);
 
   const computeHorizon = useCallback(async () => {

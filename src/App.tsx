@@ -378,7 +378,7 @@ export default function App() {
       // so resuming still offers the explicit Rebuild / Exit recovery choice.
       if (boot.sessionRejection.code !== 'SESSION_STORAGE_UNAVAILABLE') clearSession(appStorage());
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Intentionally minimal dependency set — this effect re-derives its inputs from the canonical key above.
   }, []);
 
   const scenarioResolutions = useMemo(() => {
@@ -514,7 +514,7 @@ export default function App() {
       <div className={`workspace ${compareMode && !terrainView && !spaceView ? 'compare' : ''} ${terrainView ? 'terrain' : ''} ${spaceView ? 'orbital' : ''} ${dataView ? 'datahub' : ''}`}>
         <aside className="site-rail" data-tour="catalog">
           <SiteCatalog sites={sites} selectedId={site.id} onSelect={setSelectedId}
-            onCustom={() => { setCustomInitial(undefined); setCustomOpen(true); }}
+            onCustom={() => setCustomOpen(true)}
             onHorizonTable={() => setHorizonOpen(true)} onPin={pinCurrent} compareMode={compareMode} />
         </aside>
         <main className="center-stack">

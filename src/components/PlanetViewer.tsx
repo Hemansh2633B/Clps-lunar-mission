@@ -242,7 +242,7 @@ export function PlanetViewer({ sites, selectedId, onSelect, timeMs, onTime, mode
       if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);
       threeRef.current = null; delete window.__CHANDRA_PLANET__;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Intentionally minimal dependency set — this effect re-derives its inputs from the canonical key above.
   }, []);
 
   // rebuild markers when sites change

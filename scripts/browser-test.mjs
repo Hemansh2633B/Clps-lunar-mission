@@ -1,9 +1,5 @@
-import { chromium as pw } from 'playwright';
-import sparticuz from '@sparticuz/chromium';
-import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
-import { brotliDecompressSync } from 'node:zlib';
-import { join } from 'node:path';
+import { mkdirSync } from 'node:fs';
+import { launchBrowser } from './lib/browser.mjs';
 
 const BASE = process.env.BASE_URL || 'http://localhost:5173/';
 const SCALE = Number(process.env.CHANDRA_E2E_TIMEOUT_SCALE) || 1;
@@ -14,29 +10,7 @@ const OUT = 'screenshots';
 const shot = (page, name) => page.screenshot({ animations: 'disabled', timeout: 25000, path: `${OUT}/${name}.png` }).catch(() => {});
 mkdirSync(OUT, { recursive: true });
 
-// CI mode uses Playwright's own bundled Chromium (portable across Linux distros).
-// The sandbox blocks Playwright's CDN, so locally we fall back to @sparticuz/chromium
-// (an npm-distributed binary + Amazon Linux 2023 shared libraries, extracted once).
-const CI_BROWSER = process.env.CHANDRA_BROWSER_CI === '1';
-const LIB = '/tmp/al2023/lib';
-if (!CI_BROWSER && !existsSync(join(LIB, 'libnss3.so'))) {
-  const bin = 'node_modules/@sparticuz/chromium/bin';
-  for (const [file, dir] of [['al2023.tar.br', '/tmp/al2023'], ['fonts.tar.br', '/tmp/fonts']]) {
-    mkdirSync(dir, { recursive: true });
-    const tarPath = `/tmp/${file.replace('.br', '')}`;
-    writeFileSync(tarPath, brotliDecompressSync(readFileSync(join(bin, file))));
-    execSync(`tar -xf ${tarPath} -C ${dir}`);
-  }
-}
-
-const browser = CI_BROWSER
-  ? await pw.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] })
-  : await pw.launch({
-      executablePath: process.env.CHROMIUM_PATH || (await sparticuz.executablePath()),
-      args: sparticuz.args,
-      headless: true,
-      env: { ...process.env, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH || '/tmp/al2023/lib', FONTCONFIG_PATH: '/tmp/fonts' },
-    });
+const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 // CHANDRA_E2E_TIMEOUT_SCALE stretches every wait for software-rendered browsers (no GPU), where
 // the first frames after starting playback or opening a 3D view can take a minute to composite.
@@ -123,15 +97,14 @@ try {
   assert(await page.locator('canvas[aria-label*="Stereographic map"]').count() > 0, 'polar map has a text alternative');
   assert(await page.getByLabel('Mission time scrubber').count() === 1, 'time scrubber is labelled + keyboard-operable');
 
-  await page.locator('.site-item', { hasText: 'Apollo 11' }).click();
+  // Challenge scope (South Pole): the catalog shows polar/artemis/custom tabs.
+  // Near-side reference sites (Apollo 11, Chang'e 4) are intentionally out of
+  // scope and must not be selectable here.
+  assert(await page.locator('.site-item', { hasText: 'Apollo 11' }).count() === 0, 'reference sites are out of challenge scope');
+  await page.locator('.site-item', { hasText: 'Malapert Massif' }).click();
   await page.waitForTimeout(900);
-  assert(await page.locator('text=Tranquility Base').count() > 0, 'Apollo 11 selected');
-  await shot(page, '02-apollo11');
-
-  await page.locator('.site-item', { hasText: "Chang'e 4" }).click();
-  await page.waitForSelector('text=NEVER', { timeout: 20000 * SCALE }); // wait for the mission summary, not a fixed delay
-  assert(await page.locator('text=NEVER').count() > 0, 'far side reports NEVER');
-  await shot(page, '03-farside');
+  assert(await page.locator('.site-rail', { hasText: 'Malapert Massif' }).count() > 0, 'Malapert Massif selected');
+  await shot(page, '02-polar');
 
   await page.keyboard.press('c');
   await page.getByRole('button', { name: /Pin current/ }).click();
@@ -150,14 +123,14 @@ try {
   await shot(page, '05-educator');
   await page.keyboard.press('Escape');
 
-  await page.getByRole('button', { name: /Custom/ }).first().click();
+  await page.getByRole('button', { name: 'Synthesize custom site' }).click();
   await page.locator('input[value="Custom polar site"]').fill('Test Ridge Alpha');
   await page.getByRole('button', { name: /Create site/ }).click();
   await page.waitForTimeout(700);
   assert(await page.locator('text=Test Ridge Alpha').count() > 0, 'custom site created');
 
   // Modal keyboard guard: global shortcuts must not fire while a dialog is open.
-  await page.getByRole('button', { name: /Custom/ }).first().click();
+  await page.getByRole('button', { name: 'Synthesize custom site' }).click();
   await page.waitForSelector('[role="dialog"]');
   await page.keyboard.press('t');
   await page.waitForTimeout(200);

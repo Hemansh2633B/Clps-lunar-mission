@@ -126,7 +126,7 @@ export function useStoryTutorial(
   useEffect(() => {
     if (!active || progress?.status !== 'active' || debrief || recoveryNeeded) return;
     if (chapter.view) actions.ensureView(chapter.view);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Intentionally minimal dependency set — this effect re-derives its inputs from the canonical key above.
   }, [active, progress?.chapter, debrief, recoveryNeeded]);
 
   const comparison = useMemo(() => comparisonWitness({

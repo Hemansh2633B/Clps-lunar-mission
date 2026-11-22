@@ -21,36 +21,15 @@
  * Playwright download events are asserted for every export — the app itself only
  * claims "initiated" (the browser save dialog is not observable from page script).
  */
-import { chromium as pw } from 'playwright';
-import sparticuz from '@sparticuz/chromium';
-import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
-import { brotliDecompressSync } from 'node:zlib';
-import { join } from 'node:path';
+import { mkdirSync, readFileSync } from 'node:fs';
+import { launchBrowser } from './lib/browser.mjs';
 
 const BASE = process.env.BASE_URL || 'http://localhost:5173/';
 // package.json is the single source of truth for the application version (src/version.ts).
 const APP_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 const OUT = 'screenshots';
 mkdirSync(OUT, { recursive: true });
-const CI_BROWSER = process.env.CHANDRA_BROWSER_CI === '1';
-const LIB = '/tmp/al2023/lib';
-if (!CI_BROWSER && !existsSync(join(LIB, 'libnss3.so'))) {
-  const bin = 'node_modules/@sparticuz/chromium/bin';
-  for (const [file, dir] of [['al2023.tar.br', '/tmp/al2023'], ['fonts.tar.br', '/tmp/fonts']]) {
-    mkdirSync(dir, { recursive: true });
-    const tarPath = `/tmp/${file.replace('.br', '')}`;
-    writeFileSync(tarPath, brotliDecompressSync(readFileSync(join(bin, file))));
-    execSync(`tar -xf ${tarPath} -C ${dir}`);
-  }
-}
-const browser = CI_BROWSER
-  ? await pw.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] })
-  : await pw.launch({
-      executablePath: process.env.CHROMIUM_PATH || (await sparticuz.executablePath()),
-      args: sparticuz.args, headless: true,
-      env: { ...process.env, LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH || '/tmp/al2023/lib', FONTCONFIG_PATH: '/tmp/fonts' },
-    });
+const browser = await launchBrowser();
 
 const assert = (cond, msg) => { if (!cond) throw new Error(`ASSERT FAILED: ${msg}`); };
 const allErrors = [];
@@ -291,7 +270,7 @@ try {
     const page = await newPage();
     await page.goto(BASE);
     // Save a custom site through the real modal.
-    await page.getByRole('button', { name: /Custom/ }).first().click();
+    await page.getByRole('button', { name: 'Synthesize custom site' }).click();
     await page.waitForSelector('[role="dialog"]');
     await page.getByLabel('Site name').fill('Persisted Peak');
     await page.getByRole('button', { name: /Create site/ }).click();
@@ -306,7 +285,7 @@ try {
     await page.locator('.story-nav').getByRole('button', { name: 'Skip chapter' }).click();
     await page.waitForTimeout(400);
     await page.keyboard.press('Escape'); // collapse the panel; keep the session
-    await page.getByRole('button', { name: /Custom/ }).first().click();
+    await page.getByRole('button', { name: 'Synthesize custom site' }).click();
     await page.waitForSelector('[role="dialog"]');
     await page.getByLabel('Site name').fill('Training Peak');
     await page.getByRole('button', { name: /Create site/ }).click();
