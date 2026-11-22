@@ -210,10 +210,16 @@ robustly.
 
 ### GitHub Actions runs (this repair)
 
-Pushed as `a7b2053`, with a follow-up fixing stale browser-suite steps (and
-adding `aria-label="Synthesize custom site"` so the footer button is
-selectable by name, distinct from the Custom tab). The branch's CI at
-`a7b2053` (run 45041540557) was 3-of-4 passing — typecheck/build/unit/geometry/Go/parity and the Vercel build job green — with the browser-E2E job red for reasons this follow-up fixes (stale Apollo/Chang'e references and a click on the Custom *tab* instead of the footer *＋ Custom* button). The follow-up's run is recorded in the README.
+Pushed as `a7b2053`, with follow-ups fixing stale browser-suite steps, a
+missing `aria-label` for the Custom footer button, and the browser-E2E step's
+patience (a GPU-less runner needs `CHANDRA_E2E_TIMEOUT_SCALE`, 3× — the native
+terrain-lab init exceeds the 30 s default; assertions are unchanged).
+The branch's CI at `a7b2053` (run 45041540557) was 3-of-4 passing —
+typecheck/build/unit/geometry/Go/parity and the Vercel build job green — with
+the browser-E2E job red at its stale Apollo 11 / Chang'e 4 steps (outside the
+South Pole challenge scope) and a click on the Custom tab instead of the
+footer *＋ Custom* button; the follow-up additionally records the
+software-rendered patience in CI. The latest run is recorded in the README.
 
 ## v1.11.0 integrity release — executed evidence
 

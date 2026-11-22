@@ -192,8 +192,10 @@ accordingly; the lists in §1, §5 and §7 describe v1.11.
   (`CHANDRA_LIVE_TESTS=1`) and never run in CI.
 - Go tests that need the real-LOLA verification fixture skip in CI and report
   as skipped.
-- `CHANDRA_E2E_TIMEOUT_SCALE` is not set in CI: the browser suites run with
-  their default patience there.
+- The browser-E2E step runs with `CHANDRA_E2E_TIMEOUT_SCALE: '3'` (software-
+  rendered headless Chromium on a GPU-less runner); the responsive-layout smoke
+  and the other suites run with their default patience. The scaling changes
+  how long a wait tolerates, never what it asserts.
 
 **Local suite contract** (replaces the block in §5):
 

@@ -139,9 +139,10 @@ from the deployment's page, or change Settings → Deployment Protection.
 
 ## Node and Go versions
 
-- **Node.** The build needs Node 22 or newer. CI builds with Node 22. Vercel
-  uses the project's Node.js Version setting unless `package.json` declares
-  `engines.node`; this repository does not declare it.
+- **Node.** The build needs Node 22 or newer. CI builds with Node 22 and
+  `package.json` declares `engines: { "node": ">=22" }`. The `chandra` project
+  is configured with Node.js 26.x; the project's Node.js setting is the one
+  Vercel applies, so production builds run newer than CI.
 - **Go.** `go.mod` declares `go 1.23` with `toolchain go1.24.11`. Vercel's Go
   builder installs the toolchain it needs.
 

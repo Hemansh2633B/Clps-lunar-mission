@@ -215,8 +215,11 @@ run [#45041540557](https://github.com/Hemansh2633B/Clps-lunar-mission/actions/ru
 passed quality (typecheck, build, unit, geometry, gofmt/vet/Go tests, parity)
 and the Vercel build job, and failed only the browser-E2E job at its stale
 pre-scope steps (Apollo 11/Chang'e 4 references and a `Custom`-tab-vs-footer
-click) — both fixed by the branch's follow-up. See [ci-governance.md](docs/ci-governance.md)
-for the check contract and run record.
+click); those are fixed by the branch's follow-up, which also sets the
+documented `CHANDRA_E2E_TIMEOUT_SCALE: '3'` on the browser-E2E step (a
+GPU-less runner needs 3× patience for the terrain-lab init; assertions are
+unchanged). See [ci-governance.md](docs/ci-governance.md) for the check contract
+and run record.
 
 ## Architecture
 
