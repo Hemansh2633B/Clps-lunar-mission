@@ -159,8 +159,13 @@ from the deployment's page, or change Settings → Deployment Protection.
 
 ## Verification status
 
-**No live deployment has been made from this repository as of v1.12.0.** What
-exists is local evidence that the deployable artifact is correct:
+**No live deployment has been made from this repository as of v1.12.0** — and
+the production alias is currently broken: the v1.12.0 production deployment
+(`dcd8949`, commit `dcd8949d`) was superseded by the PR #13 merge, whose
+build failed (the production deployment is in `ERROR` state). The repair
+branch (`arena/f5387ff1-clps-lunar-mission`) produces a READY preview
+deployment on push. What exists is local evidence that the deployable artifact
+is correct:
 
 | Checked locally | How |
 |---|---|
