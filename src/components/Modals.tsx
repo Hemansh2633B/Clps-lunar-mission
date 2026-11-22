@@ -53,10 +53,10 @@ export interface CustomSiteInput {
   sectors?: number[];
 }
 
-export function CustomSiteModal({ onClose, onCreate, initial }: { onClose: () => void; onCreate: (input: CustomSiteInput) => void; initial?: { lat: number; lon: number } }) {
+export function CustomSiteModal({ onClose, onCreate }: { onClose: () => void; onCreate: (input: CustomSiteInput) => void }) {
   const [name, setName] = useState('Custom polar site');
-  const [lat, setLat] = useState(initial?.lat ?? -89.0);
-  const [lon, setLon] = useState(initial?.lon ?? 0);
+  const [lat, setLat] = useState(-89.0);
+  const [lon, setLon] = useState(0);
   const [elev, setElev] = useState(0);
   const [preset, setPreset] = useState<CustomTerrainPreset>('crater-rim');
   const [advanced, setAdvanced] = useState(false);

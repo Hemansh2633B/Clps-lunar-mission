@@ -231,7 +231,7 @@ export function ComparisonMatrix({ scenarios, sites, onUpdate, onRemove, onPin, 
       if (r.summary.feasibilityScore > score) { score = r.summary.feasibilityScore; best = r.id; }
     }
     return { bestId: best, bestIndicative: topRank < CONF_RANK.measured };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Intentionally minimal dependency set — this effect re-derives its inputs from the canonical key above.
   }, [scenarios, sites]);
   return (
     <section className="panel" style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>

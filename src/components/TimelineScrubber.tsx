@@ -68,7 +68,7 @@ export function TimelineScrubber(props: Props) {
       if (start != null) out[track.key].push({ x: xOf(start), w: Math.max(1, xOf(win.endMs) - xOf(start)) });
     }
     return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Intentionally minimal dependency set — this effect re-derives its inputs from the canonical key above.
   }, [sim, win.startMs, win.endMs]);
 
   const ticks = useMemo(() => {

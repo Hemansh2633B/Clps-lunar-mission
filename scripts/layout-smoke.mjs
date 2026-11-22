@@ -1,7 +1,7 @@
-import { chromium } from 'playwright';
+import { launchBrowser } from './lib/browser.mjs';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:5173/';
-const browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
 page.setDefaultTimeout(30000);
 

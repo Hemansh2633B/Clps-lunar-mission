@@ -11,7 +11,13 @@ import { horizonFromGrid } from '../src/terrain/horizon';
 // @ts-expect-error plain ESM helper without type declarations
 import { buildCommand } from './go-bin.mjs';
 
-const binary: string = buildCommand('chandra-horizon');
+let binary;
+try {
+  binary = buildCommand('chandra-horizon');
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+}
 
 for (const [lat, lon, radius, quality, azStep, eye] of [
   [-89.5, 45, 5, 'medium', 2, 2],

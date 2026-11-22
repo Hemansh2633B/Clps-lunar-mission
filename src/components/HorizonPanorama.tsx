@@ -75,7 +75,7 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions, 
     }
     pts.push(`L${ML + PW},${MT + PH} L${ML},${MT + PH} Z`);
     return pts.join(' ');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Intentionally minimal dependency set — this effect re-derives its inputs from the canonical key above.
   }, [site, azStart, azSpan, elMin, elMax, options.showTerrain]);
 
   const tracks = useMemo(() => {
@@ -102,7 +102,7 @@ export function HorizonPanorama({ site, current, sim, mode, options, onOptions, 
       earth: build((s) => ({ az: s.earth.azimuthDeg, el: s.earth.elevationDeg })),
       relay: sim.samples.some((s) => s.relay) ? build((s) => ({ az: s.relay?.azimuthDeg ?? 0, el: s.relay?.elevationDeg ?? -90 })) : [],
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Intentionally minimal dependency set — this effect re-derives its inputs from the canonical key above.
   }, [sim, options.showTracks, azStart, azSpan, elMin, elMax]);
 
   const sunX = xOf(current.sun.azimuthDeg);
