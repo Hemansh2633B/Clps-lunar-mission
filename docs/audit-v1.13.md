@@ -79,3 +79,25 @@
 | axe, responsive screenshots and bundle measurement | NOT RUN | No browser/build tooling. |
 
 **Conclusion:** the largest confirmed P0 mismatch is that battery behavior remains deeply wired through configuration, engine, integration, tests and exports. The second is that finite-disk occultation by the lunar body exists, but terrain-relative partial-disk illumination does not. These findings drive W1 and W3; neither is already complete.
+
+
+## Second-pass inspection (2026-11-23)
+
+The first pass was deliberately conservative. A second targeted read of the transition, ephemeris, test and CI files adds the following precision:
+
+- **Existing combined transition support is real:** `findTransitions` evaluates `sun`, `earth` and `combined` states, and the existing test suite covers transition stress behavior. Do not rebuild this detector for W4.
+- **The forward fallback remains Sun-only:** `findNextSunCrossings` samples at two-hour intervals and refines the first sunrise and sunset over a default 35-day horizon. It does not return the next simultaneous Sun+Earth interval, and it is not itself a cancellable worker search.
+- **Finite-disk treatment is explicitly separated:** `computeEphemeris` computes instantaneous Sun/Earth angular radii and lunar-limb occultation fractions. `visibilityFor` still decides visibility using the target-centre elevation against the maximum of the terrain horizon and spherical limb. The current `bodyOccultation` fraction therefore cannot be relabelled as terrain-relative disk visibility.
+- **The current test suite has useful lunar-limb analytic cases:** `tests/occultation-relay.test.ts` checks point/disk clear, partial and occulted states, monotonic overlap, angular radii, below-datum clamping and relay ray/sphere behavior. W3 still needs a separate terrain-mask disk test; the existing tests do not establish that behavior.
+- **CI wiring is more substantial than the first pass established:** `.github/workflows/ci.yml` defines quality, Vercel build-output, independent SPICE validation and browser E2E jobs. The quality job runs typecheck, production build, unit tests, geometry checks, Go tests, TS/Go horizon parity and static Vercel checks. Browser E2E includes responsive layout smoke and browser suites. This is source inspection only; none of those jobs has been run by this agent.
+- **Branch trigger caveat:** the workflow's push trigger includes `main` and `arena/**`; pull requests targeting `main` are included. A direct push to `feat/challenge-upgrade-v1.13` is not covered by the shown push filter. CI should be observed on a PR or explicitly dispatched through an authorized GitHub Actions path before treating the branch as validated.
+
+### Revised W4 decomposition
+
+1. Keep `findTransitions` as the canonical refined transition engine.
+2. Add a bounded next-combined-window search that evaluates the `combined` state (Sun AND Earth) and reuses `refineCrossing`.
+3. Return a typed interval with explicit horizon/cap semantics; do not fabricate an interval when none is found.
+4. Put the search behind the existing worker request/cancellation pattern only after inspecting that contract, then surface progress and a UTC countdown.
+5. Test ongoing-at-start, future opening, closing, no-window horizon, and bounded-work/cancellation cases.
+
+No implementation or runtime check was performed as part of this second-pass audit. Existing combined-transition support is not evidence that W4 is complete.
